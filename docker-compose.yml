@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: academy-db
+    environment:
+      POSTGRES_DB: academy
+      POSTGRES_USER: academy
+      POSTGRES_PASSWORD: changeme
+      TZ: Asia/Seoul
+    # 기본값은 5432. 호스트에 다른 PostgreSQL이 떠 있으면 .env에서 DB_PORT로 바꾼다.
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - academy-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U academy -d academy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  academy-pgdata:
