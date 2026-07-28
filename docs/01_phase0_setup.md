@@ -406,11 +406,11 @@ Phase 1의 DDL과 1:1로 대응합니다. **임의로 바꾸면 부팅이 실패
 | 상속 | 엔티티 | 근거 |
 |---|---|---|
 | `BaseTimeEntity`<br>(15개) | `User` `Student` `ClassRoom` `Lesson` `HomeworkTemplate` `Homework`<br>`Submission` `Feedback` `ExamSchedule` `Score` `Notice` `Clinic` `ClinicReservation` `OnlineTest` `OnlineTestSubmission` | `created_at`·`updated_at` 둘 다 `NOT NULL DEFAULT now()` |
-| `BaseCreatedEntity`<br>(8개) | `School` `Teacher` `Parent` `SignupCode` `Enrollment`<br>`SubmissionPhoto` `Material` `ClinicChangeRequest` | `created_at`만 존재 |
+| `BaseCreatedEntity`<br>(7개) | `Teacher` `Parent` `SignupCode` `Enrollment`<br>`SubmissionPhoto` `Material` `ClinicChangeRequest` | `created_at`만 존재 |
 | `BaseCreatedEntity`<br>+ 직접 선언 (1개) | `Attendance` | 아래 참조 |
 | 상속 없음 (1개) | `LessonView` | `first_viewed_at`·`last_viewed_at`만 있고 감사 컬럼이 없음 |
 
-합이 **25개**로 Phase 1의 테이블 수와 일치해야 합니다. 숫자가 안 맞으면 빠진 엔티티가 있는 것입니다.
+합이 **24개**로 Phase 1의 테이블 수와 일치해야 합니다. 숫자가 안 맞으면 빠진 엔티티가 있는 것입니다.
 Phase 2에서 추가되는 `RefreshToken`(`created_at`만)은 `BaseCreatedEntity`이며 이 표에 없습니다.
 
 **`Attendance`는 `BaseTimeEntity`를 상속하면 안 됩니다.**

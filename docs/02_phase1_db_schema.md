@@ -70,12 +70,6 @@ CREATE TABLE users (
     CONSTRAINT ck_users_status CHECK (status IN ('ACTIVE','INACTIVE'))
 );
 
-CREATE TABLE schools (
-    id         BIGSERIAL PRIMARY KEY,
-    name       VARCHAR(100) NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-
 CREATE TABLE teachers (
     id         BIGSERIAL PRIMARY KEY,
     user_id    BIGINT      NOT NULL UNIQUE REFERENCES users(id),
@@ -93,19 +87,15 @@ CREATE TABLE students (
     name         VARCHAR(50) NOT NULL,                      -- 학생 이름. users와 무관하게 항상 존재
     user_id      BIGINT      UNIQUE REFERENCES users(id),   -- 회원가입 전에는 NULL
     parent_id    BIGINT      REFERENCES parents(id),
-    school_id    BIGINT      NOT NULL REFERENCES schools(id),
-    grade        SMALLINT    NOT NULL,
     status       VARCHAR(20) NOT NULL DEFAULT 'ENROLLED',
     withdrawn_at DATE,
     memo         TEXT,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT ck_students_grade  CHECK (grade BETWEEN 1 AND 3),
     CONSTRAINT ck_students_status CHECK (status IN ('ENROLLED','WITHDRAWN'))
 );
 
-CREATE INDEX idx_students_parent       ON students(parent_id);
-CREATE INDEX idx_students_school_grade ON students(school_id, grade);
+CREATE INDEX idx_students_parent ON students(parent_id);
 
 CREATE TABLE signup_codes (
     id          BIGSERIAL PRIMARY KEY,
@@ -134,7 +124,7 @@ CREATE INDEX idx_signup_codes_student ON signup_codes(student_id, target_role);
 ```
 [주 경로] 반 코드로 학생이 직접 가입
   선생님이 반 생성 → class_rooms.join_code 발급 → 수업에서 반 전체에 구두 전달
-    → 학생이 코드 + 이름 + 본인번호 + 학부모번호 입력  (학교·학년은 코드에서 유도)
+    → 학생이 코드 + 이름 + 본인번호 + 학부모번호 입력
        → students(name) + users(STUDENT) + enrollments(그 반) 생성
        → signup_codes(PARENT) 1장 자동 발급
     → 선생님이 T-2에서 그 코드를 확인해 학부모에게 전달
@@ -210,8 +200,6 @@ login_id = phone.replaceAll("[^0-9]", "")
 CREATE TABLE class_rooms (
     id               BIGSERIAL PRIMARY KEY,
     name             VARCHAR(100) NOT NULL,
-    school_id        BIGINT       NOT NULL REFERENCES schools(id),  -- 한 반은 한 학교
-    grade            SMALLINT     NOT NULL,                         -- 한 반은 한 학년
     teacher_id       BIGINT       NOT NULL REFERENCES teachers(id),
     join_code        VARCHAR(10)  NOT NULL UNIQUE,   -- 반 가입 코드. 학생이 회원가입 시 입력
     join_code_active BOOLEAN      NOT NULL DEFAULT true,
@@ -224,13 +212,11 @@ CREATE TABLE class_rooms (
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT ck_class_rooms_status CHECK (status IN ('ACTIVE','CLOSED')),
-    CONSTRAINT ck_class_rooms_dow    CHECK (day_of_week BETWEEN 1 AND 7),
-    CONSTRAINT ck_class_rooms_grade  CHECK (grade BETWEEN 1 AND 3)
+    CONSTRAINT ck_class_rooms_dow    CHECK (day_of_week BETWEEN 1 AND 7)
 );
 
 CREATE UNIQUE INDEX uq_class_rooms_name
     ON class_rooms(name) WHERE status = 'ACTIVE';
-CREATE INDEX idx_class_rooms_school_grade ON class_rooms(school_id, grade);
 
 CREATE TABLE enrollments (
     id            BIGSERIAL PRIMARY KEY,
@@ -247,26 +233,33 @@ CREATE INDEX idx_enrollments_class ON enrollments(class_room_id, left_at);
 CREATE INDEX idx_enrollments_student ON enrollments(student_id);
 ```
 
-### 반은 학교 하나 · 학년 하나에 속합니다
+### 반이 유일한 묶음 단위입니다
 
-**한 반의 학생은 전원 같은 학교, 같은 학년입니다.** 그래서 `class_rooms`가 `school_id`와
-`grade`를 가집니다. 반 이름(`name`)은 선생님이 T-3 화면에서 자유롭게 정하고, 정규반/특강반
-같은 고정 구분(`type`)은 두지 않습니다.
+**학교와 학년은 시스템에 없습니다.** `schools` 테이블도, `students.grade`도, `class_rooms.grade`도
+없습니다. 학생을 묶는 단위는 **반 하나뿐**이고, 반은 이름(`name`)만 가집니다.
 
-**이 규칙의 가장 큰 효과는 회원가입입니다.** 반 코드가 이미 학교와 학년을 알고 있으므로
-가입 화면에서 둘 다 묻지 않습니다(아래 `join_code` 항목). 학생이 학교를 잘못 고르면
-자료실에서 남의 학교 기출이 보이고 시험 D-day도 어긋나는데, **묻지 않으면 그 사고가
-원천적으로 없습니다.**
+같은 학교·같은 학년끼리 한 반으로 묶는 것은 **선생님이 반을 어떻게 구성하느냐의 문제**이지
+스키마가 강제할 일이 아닙니다. 선생님이 T-3에서 반을 자유롭게 만들고 이름으로 구분합니다.
+`고2 심화반`, `A고 3학년 목요일반`처럼 필요한 정보를 이름에 넣으면 됩니다.
 
-- `학교`·`학년`은 `students`에도 그대로 있습니다. 시험 D-day와 자료실 공개 범위가 이 값을 씁니다.
-  반에서 유도할 수 있지만, 반이 없는 학생(배정 전·퇴원 후)도 있어 학생 쪽이 원본입니다.
-- **반 배정 시 학생의 학교·학년이 반과 같은지 검사하고, 다르면 차단하세요.**
-  경고만 하고 통과시키면 자료실 노출 범위가 조용히 어긋납니다.
+**그래서 범위를 가진 세 테이블이 전부 반을 가리킵니다.**
+
+| 테이블 | 범위 |
+|---|---|
+| `exam_schedules` | `class_room_id` — 반별 시험 일정 |
+| `materials` | `PUBLIC` 또는 `class_room_id` |
+| `notices` | `ALL` 또는 `class_room_id` |
+
+같은 학교·학년에 반이 여러 개면 시험 일정과 자료를 **반마다 따로 넣어야 합니다.**
+반 개수를 선생님이 조정하는 구조라 이건 감수하는 비용입니다. 한 반만 빠뜨리는 사고가
+실제로 생기므로, T-11·T-9 화면에서 **반 다중 선택**을 지원하세요.
+
+- 학교·학년을 묻지 않으니 **회원가입 입력이 이름과 번호 2개뿐입니다.**
+- **반 배정에 일치 검사가 없습니다.** 비교할 값이 없습니다. 어떤 학생이든 어떤 반에 넣습니다.
 - `uq_class_rooms_name`은 **활성 반끼리만** 이름 중복을 막습니다. 종료(`CLOSED`)된 반의 이름은
-  다음 학기에 다시 쓸 수 있습니다. 학교가 달라도 활성 반끼리는 이름이 겹칠 수 없습니다.
-- **학년 진급(T-12) 때 반의 `grade`도 학생과 함께 올라갑니다.** 반은 그대로 유지되고,
-  이름만 선생님이 직접 고칩니다. 3학년 반은 졸업이라 올리지 않습니다
-  (`ck_class_rooms_grade`에 걸립니다).
+  다음 학기에 다시 쓸 수 있습니다.
+- **학년 일괄 진급(T-12)은 없습니다.** 올릴 값이 없습니다. 새 학년에는 선생님이 반을 새로
+  만들거나 이름을 고칩니다.
 
 **부분 유니크 인덱스(`WHERE left_at IS NULL`)의 이유:** 같은 반을 나갔다가 다시 들어오는 경우를 허용하되, 동시에 두 번 등록되는 것은 막습니다.
 
@@ -281,8 +274,8 @@ CREATE INDEX idx_enrollments_student ON enrollments(student_id);
 선생님이 반 생성 (T-3)   →  join_code "HK7F2Q" 발급
                              ↓ 오프라인으로 반 전체에 전달
 학생이 /signup           →  코드 + 이름 + 본인번호 + 학부모번호
-                             ↓ 한 트랜잭션 (학교·학년은 반에서 복사)
-                            students(name, school_id, grade) + users(STUDENT)
+                             ↓ 한 트랜잭션
+                            students(name) + users(STUDENT)
                             + enrollments(그 반) + signup_codes(PARENT) 1장 자동 발급
 ```
 
@@ -474,26 +467,24 @@ CREATE TABLE feedbacks (
 
 ```sql
 CREATE TABLE exam_schedules (
-    id         BIGSERIAL PRIMARY KEY,
-    school_id  BIGINT      NOT NULL REFERENCES schools(id),
-    grade      SMALLINT    NOT NULL,
-    year       SMALLINT    NOT NULL,
-    semester   SMALLINT    NOT NULL,
-    exam_type  VARCHAR(20) NOT NULL,
-    start_date DATE        NOT NULL,
-    end_date   DATE        NOT NULL,
-    scope_note TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id            BIGSERIAL PRIMARY KEY,
+    class_room_id BIGINT      NOT NULL REFERENCES class_rooms(id),
+    year          SMALLINT    NOT NULL,
+    semester      SMALLINT    NOT NULL,
+    exam_type     VARCHAR(20) NOT NULL,
+    start_date    DATE        NOT NULL,
+    end_date      DATE        NOT NULL,
+    scope_note    TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_exam_type     CHECK (exam_type IN ('MIDTERM','FINAL')),
-    CONSTRAINT ck_exam_semester CHECK (semester IN (1,2)),
-    CONSTRAINT ck_exam_grade    CHECK (grade BETWEEN 1 AND 3)
+    CONSTRAINT ck_exam_semester CHECK (semester IN (1,2))
 );
 
 CREATE UNIQUE INDEX uq_exam_schedules
-    ON exam_schedules(school_id, grade, year, semester, exam_type);
+    ON exam_schedules(class_room_id, year, semester, exam_type);
 CREATE INDEX idx_exam_schedules_lookup
-    ON exam_schedules(school_id, grade, start_date);
+    ON exam_schedules(class_room_id, start_date);
 
 CREATE TABLE scores (
     id               BIGSERIAL PRIMARY KEY,
@@ -543,7 +534,7 @@ SET raw_score = EXCLUDED.raw_score,
 온라인 테스트 자동 반영도 같은 제약을 지납니다. 재응시가 없어(`uq_online_test_submissions`)
 행이 1개만 생기지만, 제약이 있으면 그 가정이 깨져도 그래프는 안전합니다.
 
-`exam_schedules`가 학생·학부모 홈 화면 D-day의 근거 데이터입니다. 학교가 2곳이므로 같은 학년이라도 학교별로 날짜가 다릅니다.
+`exam_schedules`가 학생·학부모 홈 화면 D-day의 근거 데이터입니다. 반마다 따로 넣으므로, 같은 시험이라도 반이 여러 개면 그 수만큼 행이 생깁니다.
 
 `score_type` 세 가지입니다.
 
@@ -570,8 +561,6 @@ CREATE TABLE materials (
     s3_key        VARCHAR(500) NOT NULL,
     file_name     VARCHAR(255) NOT NULL,
     bytes         BIGINT,
-    school_id     BIGINT       REFERENCES schools(id),
-    grade         SMALLINT,
     class_room_id BIGINT       REFERENCES class_rooms(id),
     visibility    VARCHAR(20)  NOT NULL DEFAULT 'CLASS',
     year          SMALLINT     NOT NULL,
@@ -583,31 +572,34 @@ CREATE TABLE materials (
         CHECK (category IN ('LESSON','TEXTBOOK','PAST_EXAM','ETC')),
     CONSTRAINT ck_materials_visibility
         CHECK (visibility IN ('PUBLIC','CLASS')),
-    CONSTRAINT ck_materials_grade CHECK (grade BETWEEN 1 AND 3),
     CONSTRAINT ck_materials_month CHECK (month BETWEEN 1 AND 12),
-    CONSTRAINT ck_materials_week  CHECK (week  BETWEEN 1 AND 5)
+    CONSTRAINT ck_materials_week  CHECK (week  BETWEEN 1 AND 5),
+    -- CLASS면 반이 있어야 하고, PUBLIC이면 없어야 한다
+    CONSTRAINT ck_materials_scope CHECK (
+        (visibility = 'CLASS'  AND class_room_id IS NOT NULL) OR
+        (visibility = 'PUBLIC' AND class_room_id IS NULL))
 );
 
 CREATE INDEX idx_materials_scope
-    ON materials(school_id, grade, category, created_at DESC);
+    ON materials(class_room_id, category, created_at DESC);
 CREATE INDEX idx_materials_week
-    ON materials(year, month, week, school_id, grade);
+    ON materials(year, month, week, class_room_id);
 
 CREATE TABLE notices (
     id            BIGSERIAL PRIMARY KEY,
     title         VARCHAR(200) NOT NULL,
     content       TEXT         NOT NULL,
     scope         VARCHAR(20)  NOT NULL,
-    school_id     BIGINT       REFERENCES schools(id),
-    grade         SMALLINT,
     class_room_id BIGINT       REFERENCES class_rooms(id),
     pinned        BOOLEAN      NOT NULL DEFAULT false,
     published_at  TIMESTAMPTZ,
     created_by    BIGINT       NOT NULL REFERENCES teachers(id),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CONSTRAINT ck_notices_scope
-        CHECK (scope IN ('ALL','SCHOOL','GRADE','CLASS'))
+    CONSTRAINT ck_notices_scope CHECK (scope IN ('ALL','CLASS')),
+    CONSTRAINT ck_notices_target CHECK (
+        (scope = 'CLASS' AND class_room_id IS NOT NULL) OR
+        (scope = 'ALL'   AND class_room_id IS NULL))
 );
 
 CREATE INDEX idx_notices_published
@@ -615,7 +607,7 @@ CREATE INDEX idx_notices_published
 
 ```
 
-`materials`의 `school_id + grade`가 내신형 구조의 핵심입니다. A고 2학년 학생은 자기 학교 기출만 보이고 B고 자료는 쿼리에서 제외됩니다.
+`materials`의 `class_room_id`가 공개 범위의 전부입니다. `PUBLIC`이면 전체 재원생, 아니면 그 반 재원생만 봅니다.
 
 **자료실은 학생 화면(S-8) 전용입니다.** 학부모에게는 노출하지 않습니다.
 
@@ -876,10 +868,9 @@ INSERT INTO clinic_reservations (clinic_id, student_id) VALUES (:clinicId, :stud
 
 ## 3. V2__seed.sql
 
-**학교는 시드에 넣지 않습니다.** 선생님이 `POST /api/teacher/schools`로 직접 등록합니다.
-학교 수정 엔드포인트가 없어서, 임시 이름으로 시드하면 화면에서 고칠 방법이 없습니다.
+시드는 **선생님 계정 하나뿐**입니다. 학교·학년 개념이 없으므로 넣을 기준 데이터가 없습니다.
 
-반이 `school_id`를 요구하므로 **학교 → 반 → (코드 배포) → 학생 가입** 순서로 진행합니다.
+운영 순서는 **반 생성 → 코드 배포 → 학생 가입**입니다.
 
 ```sql
 -- 선생님 계정 (비밀번호는 최초 로그인 후 변경)
@@ -890,8 +881,6 @@ VALUES ('TEACHER', '01000000000', '$2a$10$REPLACE_WITH_BCRYPT_HASH', '이관우'
 INSERT INTO teachers (user_id)
 SELECT id FROM users WHERE login_id = '01000000000';
 ```
-
-**학교 이름은 실제 학교명으로 교체해야 합니다.** 값이 확정되지 않았으므로 임시로 두고, 실제 운영 전에 UPDATE하거나 시드를 수정하세요.
 
 **선생님 계정의 `login_id`·`phone`도 실제 강사 번호로 교체하세요.** `01000000000`으로 두면 운영에서 로그인할 수 없습니다.
 
@@ -987,7 +976,7 @@ ChangeRequestStatus { PENDING, APPROVED, REJECTED }
 
 ## 5. 완료 조건 (DoD)
 
-- [ ] `V1__init.sql` 실행으로 **25개** 테이블이 생성된다
+- [ ] `V1__init.sql` 실행으로 **24개** 테이블이 생성된다
 - [ ] `reviews` 테이블이 존재하지 않는다 (1차 제외)
 - [ ] **`students.name`이 `NOT NULL`로 존재한다** (미가입 학생도 이름을 가짐)
 - [ ] **`class_rooms.join_code`가 `NOT NULL UNIQUE`이고 `join_code_active`가 있다**
@@ -1001,7 +990,7 @@ ChangeRequestStatus { PENDING, APPROVED, REJECTED }
 - [ ] **`correct_choices`에 빈 배열 `{}`을 넣으면 CHECK에 걸린다** (coalesce 확인)
 - [ ] **`score_type`만 넣고 `subject`를 비우면 CHECK에 걸린다** (`ck_online_tests_subject`)
 - [ ] **`scores`에 `UNIQUE (student_id, score_type, subject, exam_name, exam_date)`가 존재한다**
-- [ ] `V2__seed.sql`로 학교 2건, 선생님 1건이 입력된다
+- [ ] `V2__seed.sql`로 선생님 1건이 입력된다
 - [ ] `ddl-auto: validate` 상태로 애플리케이션이 정상 부팅된다
 - [ ] 모든 엔티티의 enum에 `@Enumerated(EnumType.STRING)`이 있다
 - [ ] 모든 `@ManyToOne`이 `FetchType.LAZY`다
@@ -1015,8 +1004,8 @@ ChangeRequestStatus { PENDING, APPROVED, REJECTED }
 
 ```sql
 -- 테이블 수 확인 (flyway_schema_history 제외)
---   V1까지: 25개
---   V3(refresh_tokens, Phase 2)까지: 26개
+--   V1까지: 24개
+--   V3(refresh_tokens, Phase 2)까지: 25개
 SELECT count(*) FROM information_schema.tables
 WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history';
 

@@ -18,7 +18,7 @@ Claude Code가 이 폴더의 문서를 읽고 구현합니다. **반드시 `00_R
 | `07_phase6_video_scores_exams.md` | 수업 레포트, 주차별 성적, D-day | Phase 3 |
 | `08_phase7_materials_notices_home.md` | 자료실(학생), 공지, 홈, 대시보드 | Phase 4~6 |
 | `09_phase8_deploy.md` | EC2, Docker, S3, 도메인, HTTPS | Phase 7 |
-| `10_api_reference.md` | **전체 API 명세 (128개 엔드포인트)** | 상시 참조 |
+| `10_api_reference.md` | **전체 API 명세 (125개 엔드포인트)** | 상시 참조 |
 
 `10_api_reference.md`는 Phase가 아니라 상시 참조용입니다. 엔드포인트 경로나 요청·응답이 Phase 문서와 다르면 **API 레퍼런스가 기준**입니다.
 
@@ -35,10 +35,8 @@ Phase 4·5·6은 서로 독립적이므로 순서를 바꿔도 됩니다. Phase 
 | 항목 | 값 |
 |---|---|
 | 강사 | 1명 |
-| 학교 | 2개교 |
-| 학년 | 각 1~3학년 (총 6개 코호트) |
 | 학생 | 약 200명 |
-| 반 | 학교 하나 · 학년 하나에 속함. 이름은 선생님이 직접 지정 |
+| 반 | 선생님이 이름을 직접 정해 자유롭게 생성. 개수도 자유 |
 
 **이 규모를 전제로 설계되어 있습니다.** 200명 기준이므로 캐싱, 샤딩, 읽기 복제본, 비동기 큐 같은 대규모 대응 구조는 넣지 마세요. 단순한 구조가 정답입니다.
 
@@ -66,7 +64,7 @@ Phase 4·5·6은 서로 독립적이므로 순서를 바꿔도 됩니다. Phase 
 선생님이 반 생성 (T-3)
   → class_rooms.join_code 발급 ("HK7F2Q") → 수업에서 반 전체에 전달
      → 학생이 /signup: 코드 + 이름 + 본인번호 + 보호자번호
-        → students(name, 학교·학년은 반에서 복사) + users(STUDENT) + enrollments(그 반)
+        → students(name) + users(STUDENT) + enrollments(그 반)
         → signup_codes(PARENT) 1장 자동 발급
      → 선생님이 T-2에서 그 코드를 확인해 학부모에게 전달
         → 학부모가 /signup: 코드 + 본인 번호 → users(PARENT) + parents
@@ -250,7 +248,7 @@ controller → service → repository → entity
 | 패키지 | 클래스 |
 |---|---|
 | `controller/auth` | `AuthController` |
-| `controller/teacher` | `TeacherDashboardController`, `TeacherSchoolController`, `TeacherStudentController`, `TeacherClassRoomController`, `TeacherLessonController`, `TeacherAttendanceController`, `TeacherHomeworkController`, `TeacherSubmissionController`, `TeacherScoreController`, `TeacherExamScheduleController`, `TeacherMaterialController`, `TeacherNoticeController`, `TeacherClinicController`, `TeacherOnlineTestController` |
+| `controller/teacher` | `TeacherDashboardController`, `TeacherStudentController`, `TeacherClassRoomController`, `TeacherLessonController`, `TeacherAttendanceController`, `TeacherHomeworkController`, `TeacherSubmissionController`, `TeacherScoreController`, `TeacherExamScheduleController`, `TeacherMaterialController`, `TeacherNoticeController`, `TeacherClinicController`, `TeacherOnlineTestController` |
 | `controller/student` | `StudentHomeController`, `StudentLessonController`, `StudentAttendanceController`, `StudentHomeworkController`, `StudentScoreController`, `StudentMaterialController`, `StudentClinicController`, `StudentOnlineTestController` |
 | `controller/parent` | `ParentChildController`, `ParentMeController` |
 | `controller/shared` | `NoticeController`, `HealthController` |
@@ -259,7 +257,7 @@ controller → service → repository → entity
 
 ```
 AuthService  TokenService  ParentLinkService
-SchoolService  StudentService  ParentService
+StudentService  ParentService
 ClassRoomService  EnrollmentService
 LessonService  LessonViewService  AttendanceService
 HomeworkTemplateService  HomeworkService  SubmissionService  FeedbackService
@@ -273,7 +271,7 @@ HomeService  DashboardService
 **repository** (평면, 엔티티당 1개)
 
 ```
-UserRepository  SchoolRepository  TeacherRepository  ParentRepository
+UserRepository  TeacherRepository  ParentRepository
 StudentRepository  SignupCodeRepository
 ClassRoomRepository  EnrollmentRepository
 LessonRepository  LessonViewRepository  AttendanceRepository
@@ -288,7 +286,7 @@ ClinicRepository  ClinicReservationRepository  ClinicChangeRequestRepository
 **entity** (평면, 테이블당 1개)
 
 ```
-User  School  Teacher  Parent  Student  SignupCode
+User  Teacher  Parent  Student  SignupCode
 ClassRoom  Enrollment  Lesson  LessonView  Attendance
 HomeworkTemplate  Homework  Submission  SubmissionPhoto  Feedback
 ExamSchedule  Score  Material  Notice
@@ -538,7 +536,7 @@ score = 획득 배점 / 전체 배점 × 100   (소수 둘째 자리 반올림)
 
 ---
 
-## 8. 화면 목록 (총 33개)
+## 8. 화면 목록 (총 32개)
 
 Phase별 상세는 각 문서에 있습니다. 여기는 전체 목록입니다.
 
@@ -593,7 +591,6 @@ Phase별 상세는 각 문서에 있습니다. 여기는 전체 목록입니다.
 | T-9 | 주차별 자료실 관리 | 7 |
 | T-10 | 공지 관리 | 7 |
 | T-11 | 시험 일정 관리 | 6 |
-| T-12 | 학년 일괄 진급 | 3 |
 | T-13 | 클리닉 관리 | 4 |
 | T-14 | 온라인 테스트 관리 | 6 |
 

@@ -2,7 +2,7 @@
 
 **선행 조건:** Phase 2
 **목표:** 선생님이 학생을 등록하고 반에 배정하고 수업일을 만들 수 있다. 이후 Phase의 데이터 기반이 완성된다.
-**화면:** T-2, T-3, T-4, T-12
+**화면:** T-2, T-3, T-4
 
 ---
 
@@ -21,11 +21,10 @@
 | DELETE | `/api/teacher/students/{studentId}` | **삭제** (운영 기록 없을 때만) |
 | POST | `/api/teacher/students/{studentId}/signup-code` | 회원가입 코드 재발급 |
 | POST | `/api/teacher/students/{studentId}/reset-password` | 비밀번호 초기화 |
-| GET | `/api/teacher/schools` | 학교 목록 |
 
 ### GET `/api/teacher/students`
 
-쿼리 파라미터: `schoolId`, `grade`, `classRoomId`, `status`, `keyword`, `sort`, `page`, `size`
+쿼리 파라미터: `classRoomId`, `status`, `keyword`, `sort`, `page`, `size`
 
 ```json
 {
@@ -34,7 +33,6 @@
     "items": [
       {
         "studentId": 88, "name": "서동환",
-        "schoolName": "A고등학교", "grade": 2,
         "classRooms": ["고2 심화반", "썸머 집중반"],
         "studentPhone": "01011112222", "studentSignedUp": true,
         "parentPhone": "01098765432", "parentLinked": false,
@@ -79,8 +77,6 @@
 // Request
 {
   "name": "서동환",
-  "schoolId": 1,
-  "grade": 2,
   "studentPhone": "01011112222",
   "parentPhone": "01098765432",
   "memo": "독해 보강 필요",
@@ -279,57 +275,6 @@ private static final String CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 화면에는 초대코드와 마찬가지로 **복사 버튼**을 두세요.
 
-### POST `/api/teacher/students/promote` (T-12)
-
-학년 일괄 진급입니다.
-
-```json
-// Request
-{ "schoolId": 1, "dryRun": true }
-
-// Response
-{
-  "success": true,
-  "data": {
-    "dryRun": true,
-    "grade1to2": 31, "grade2to3": 28,
-    "grade3Graduating": 25,
-    "classRoomsPromoted": [
-      { "classRoomId": 3, "name": "고1 기초반", "gradeFrom": 1, "gradeTo": 2 },
-      { "classRoomId": 5, "name": "고2 심화반", "gradeFrom": 2, "gradeTo": 3 }
-    ]
-  }
-}
-```
-
-**동작**
-
-- 3학년 → 졸업 처리 대상으로 집계만 하고 **자동 퇴원시키지 않습니다.** 목록을 반환해 선생님이 개별 확인하게 하세요.
-- 2학년 → 3학년, 1학년 → 2학년 일괄 상향
-- **활성 반(`status = 'ACTIVE'`)의 `grade`도 같은 트랜잭션에서 함께 올립니다**
-- `dryRun: true`면 변경하지 않고 예상 결과만 반환
-
-**학생만 올리면 안 됩니다.** 반의 학년은 그대로인데 학생만 올라가면 다음 날부터
-전원이 자기 반과 학년이 어긋나, 방금 만든 배정 검증(2-4)에 전부 걸립니다.
-
-| 대상 | 1학년 | 2학년 | 3학년 |
-|---|---|---|---|
-| `students.grade` | → 2 | → 3 | 그대로 (졸업 대상 집계만) |
-| `class_rooms.grade` | → 2 | → 3 | **그대로** |
-
-**3학년 반을 4로 올리지 마세요.** `ck_class_rooms_grade CHECK (grade BETWEEN 1 AND 3)`에
-걸려 진급 전체가 롤백됩니다. 3학년은 진급이 아니라 졸업이므로 반도 그대로 두고,
-학생을 개별 퇴원시킨 뒤 반을 `close`합니다.
-
-**반 이름은 서버가 바꾸지 않습니다.** `고1 기초반`이 2학년 반이 되어도 이름은 그대로이고,
-선생님이 T-3에서 직접 고칩니다. **이름에서 학년을 파싱해 자동 변경하지 마세요** —
-`목요일반`·`수요일 A`처럼 학년이 안 들어간 이름이 대부분이라 규칙을 만들 수 없습니다.
-진급 결과 화면에 `classRoomsPromoted`를 띄우고 각 반의 이름 수정 링크를 붙이세요.
-
-**`dryRun`을 반드시 구현하세요.** 200명의 학년을 한 번에 바꾸는 작업이고 되돌리기 어렵습니다. 확인 화면 없이 실행되면 사고입니다.
-
-`dryRun: false` 실행 시 감사 로그를 남기세요 (누가 언제 몇 명을 진급시켰는지).
-
 ---
 
 ## 2. 반 관리 (T-3)
@@ -338,10 +283,10 @@ private static final String CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 | Method | Endpoint | 설명 |
 |---|---|---|
-| GET | `/api/teacher/class-rooms` | 목록 (`schoolId`·`grade` 필터) |
+| GET | `/api/teacher/class-rooms` | 목록 |
 | POST | `/api/teacher/class-rooms` | 생성 |
 | GET | `/api/teacher/class-rooms/{classRoomId}` | 상세 |
-| PATCH | `/api/teacher/class-rooms/{classRoomId}` | 이름·시간 수정 (학교·학년은 배정 학생이 없을 때만) |
+| PATCH | `/api/teacher/class-rooms/{classRoomId}` | 이름·시간 수정 |
 | DELETE | `/api/teacher/class-rooms/{classRoomId}` | **삭제** (기록 없을 때만) |
 | POST | `/api/teacher/class-rooms/{classRoomId}/close` | 종료 처리 |
 | POST | `/api/teacher/class-rooms/{classRoomId}/join-code` | **가입 코드 재발급 · 여닫기** |
@@ -355,8 +300,6 @@ private static final String CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 // Request
 {
   "name": "고2 심화반",
-  "schoolId": 1,
-  "grade": 2,
   "dayOfWeek": 3,
   "startTime": "19:00",
   "termStart": "2026-03-02",
@@ -370,23 +313,16 @@ private static final String CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   "data": {
     "classRoomId": 3,
     "name": "고2 심화반",
-    "schoolId": 1,
-    "schoolName": "A고등학교",
-    "grade": 2,
     "joinCode": "HK7F2Q",
     "joinCodeActive": true
   }
 }
 ```
 
-**반은 학교 하나·학년 하나에 속합니다.** `schoolId`와 `grade`가 필수이고, 이름은 선생님이
-자유롭게 정합니다. 이 두 값이 회원가입 때 학생에게 복사되므로(Phase 2) 틀리면 반 전체가
-잘못된 자료실·시험일정을 보게 됩니다. **생성 후 수정은 배정된 학생이 없을 때만 허용하세요.**
+**반에 학교·학년이 없습니다.** 학교·학년은 시스템 전체에 없는 개념입니다(`02_phase1_db_schema.md` 2-2).
+선생님이 이름을 직접 정하고, 필요한 정보는 `A고 2학년 목요일반`처럼 이름에 넣습니다.
 
-**학교를 먼저 등록해야 반을 만들 수 있습니다.** 시드에 학교가 없으므로
-`POST /api/teacher/schools`가 선행입니다.
-
-필수는 `name`·`schoolId`·`grade` 셋입니다. 나머지는 전부 선택입니다. 요일·시간을 비워 두면
+필수는 `name` 하나입니다. 나머지는 전부 선택입니다. 요일·시간을 비워 두면
 `POST /lessons/bulk`(정기 수업일 일괄 생성)를 쓸 수 없으니, 정기반이면 채우도록 UI에서 유도하세요.
 
 **활성 반끼리 이름이 겹치면 409 `DUPLICATE_RESOURCE`.** 종료된 반의 이름은 다시 쓸 수 있습니다
@@ -481,12 +417,8 @@ SELECT count(*) FROM homeworks   WHERE class_room_id = :classRoomId;
 
 이미 활성 상태로 배정된 학생은 무시하고 나머지만 추가합니다 (409를 던지지 말고 멱등하게 처리). `enrollments`에 `WHERE left_at IS NULL` 부분 유니크 인덱스가 있으므로 중복 삽입은 DB에서도 막힙니다.
 
-**학교·학년이 반과 다른 학생은 차단하세요.** 하나라도 어긋나면 409 `DUPLICATE_RESOURCE`가
-아니라 400 `VALIDATION_FAILED`이고, 어떤 학생이 왜 걸렸는지 응답에 담아 주세요.
-한 반은 전원 같은 학교·같은 학년입니다(`02_phase1_db_schema.md` 2-2).
-
-경고만 하고 통과시키면 안 됩니다. 그 학생은 반 화면에는 보이는데 자료실에서는 다른 학교
-기출을 받고 시험 D-day도 다른 날짜가 떠서, 발견될 때까지 오래 걸립니다.
+**일치 검사는 없습니다.** 반에 학교·학년이 없어 비교할 값 자체가 없습니다.
+어떤 학생이든 어떤 반에 넣을 수 있고, 한 학생이 여러 반에 속할 수도 있습니다.
 
 ### DELETE `.../students/{studentId}`
 
@@ -500,7 +432,7 @@ SELECT count(*) FROM homeworks   WHERE class_room_id = :classRoomId;
   "data": {
     "classRoom": { "id": 3, "name": "고2 심화반" },
     "students": [
-      { "studentId": 88, "name": "서동환", "grade": 2, "joinedAt": "2026-03-02" }
+      { "studentId": 88, "name": "서동환", "joinedAt": "2026-03-02" }
     ]
   }
 }
@@ -647,14 +579,13 @@ https://www.youtube.com/embed/{videoId}
 
 | ID | 경로 | 핵심 UI |
 |---|---|---|
-| T-2 | `/teacher/students` | 목록 + 학교·학년·반 필터 + 검색. **미가입 학생·학부모 강조** |
+| T-2 | `/teacher/students` | 목록 + 반 필터 + 검색. **미가입 학생·학부모 강조** |
 | T-2 | `/teacher/students/new` | 등록 폼. 저장 후 **코드 2장** 모달 표시 |
 | T-2 | `/teacher/students/:id` | 상세 + 수정 + 퇴원 + 코드 재발급 + **비밀번호 초기화** |
-| T-3 | `/teacher/class-rooms` | 반 목록 + **학교·학년** + **가입 코드와 열림 상태** |
+| T-3 | `/teacher/class-rooms` | 반 목록 + **가입 코드와 열림 상태** |
 | T-3 | `/teacher/class-rooms/:id` | 명단 + 학생 배정·해제 + **코드 복사·재발급·닫기** |
 | T-4 | `/teacher/lessons` | **주차 선택** → 반 선택 → 수업일 목록 (작성 여부·공개 여부 표시) |
 | T-4 | `/teacher/lessons/:id` | 수업 내용 작성 폼 + 공개 버튼 |
-| T-12 | `/teacher/promote` | 진급 미리보기 → 확인 → 실행 → **학년 오른 반 목록 + 이름 수정 링크** |
 
 ### 5-2. 회원가입 코드 전달 UX
 
@@ -713,8 +644,7 @@ https://{도메인}/signup
 - [ ] 퇴원 학생은 로그인이 차단된다
 - [ ] 퇴원 학생이 `class-rooms/{classRoomId}/students` 명단에서 사라진다
 - [ ] `asOf` 파라미터로 과거 시점 명단을 조회할 수 있다
-- [ ] 반 생성 시 학교·학년이 필수이고, 학교가 하나도 없으면 반을 만들 수 없다
-- [ ] 반과 학교·학년이 다른 학생을 배정하면 400으로 차단된다
+- [ ] 반을 이름만으로 생성·수정할 수 있다 (학교·학년 입력란이 없음)
 - [ ] 활성 반끼리 이름이 겹치면 409가 반환된다
 - [ ] **반 생성 응답에 `joinCode`가 포함되고, 혼동 문자(`0 O 1 I L`)가 없다**
 - [ ] **`joinCode`가 `signup_codes.code`와 겹치지 않는다** (양쪽 조회 확인)
@@ -730,10 +660,6 @@ https://{도메인}/signup
 - [ ] `published_at`이 `null`인 수업은 학생·학부모 API에서 조회되지 않는다
 - [ ] YouTube URL 3가지 형식이 모두 파싱되어 `videoId`가 반환된다
 - [ ] 수업에 `year`·`month`·`week`가 저장되고, 주차로 목록을 필터링할 수 있다
-- [ ] 진급 API의 `dryRun: true`가 데이터를 변경하지 않고 예상 결과만 반환한다
-- [ ] 진급 후 학생과 반의 학년이 같다 (진급 직후 배정 검증에 걸리는 학생이 0명)
-- [ ] 3학년 반의 `grade`는 진급 후에도 3이다 (4로 올리려다 롤백되지 않는다)
-- [ ] 3학년은 자동 퇴원되지 않고 대상 목록만 반환된다
 - [ ] `findActiveStudents` 쿼리가 별도 메서드로 분리되어 있다
 - [ ] **`findActiveStudents`가 `ORDER BY e.student.name`이다** (`e.student.user.name` 아님)
 - [ ] **미가입 학생(`user_id IS NULL`)이 반 명단과 출석부에 이름과 함께 나온다**
@@ -747,8 +673,7 @@ https://{도메인}/signup
 - `DELETE /api/teacher/students/{studentId}`는 **반 코드로 들어온 제3자 전용**입니다. 그만둔 학생을 정리하는 용도로 쓰지 마세요. 과거 출석·성적 통계가 사라집니다.
 - 삭제 차단 조건을 "`submissions` 행이 있으면"으로 구현하지 마세요. 출제 시 전원의 행이 미리 생겨서 아무도 지울 수 없습니다. `status <> 'NOT_SUBMITTED'`로 판단하세요.
 - 영상 파일 업로드 기능을 만들지 마세요. YouTube URL 문자열만 저장합니다.
-- 진급을 스케줄러로 자동 실행하지 마세요. 선생님이 확인 후 수동 실행합니다.
-- 반에 유형(정규/특강) 구분을 넣지 마세요. 학교·학년 외에는 이름 하나로 관리합니다.
+- 반에 학교·학년·유형(정규/특강)을 넣지 마세요. 이름 하나로 관리합니다.
 - 수업·배정 이력이 있는 반을 삭제하지 마세요. `close`만 허용합니다.
 - 엑셀 일괄 업로드를 만들지 마세요. 요구사항에 없고, 200명은 한 번만 등록하면 됩니다. 필요하면 추후 별도 협의 항목입니다.
 - 출석·숙제 로직을 이 Phase에서 구현하지 마세요. Phase 4, 5입니다.

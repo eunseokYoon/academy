@@ -12,19 +12,22 @@
 
 ### 1-1. 공개 범위 규칙
 
-`materials`의 `school_id`, `grade`, `class_room_id`, `visibility` 조합으로 결정됩니다.
+`materials`의 `visibility`와 `class_room_id`로 결정됩니다. **차원이 둘뿐입니다.**
 
-| visibility | school_id / grade | 노출 대상 |
+| visibility | class_room_id | 노출 대상 |
 |---|---|---|
-| `PUBLIC` | `null` | 로그인한 전체 사용자 (학교·학년 무관) |
-| `CLASS` | `null` | 로그인한 전체 재원생 |
-| `CLASS` | 값 있음 | 해당 학교·학년 재원생만 |
-| `CLASS` | + `class_room_id` | 해당 반 재원생만 |
+| `PUBLIC` | `null` | 로그인한 전체 재원생 |
+| `CLASS` | 값 있음 | 해당 반 재원생만 |
 
-**`school_id + grade`가 내신형 구조의 핵심입니다.** A고 2학년 학생은 자기 학교 기출만 보이고 B고 자료는 쿼리에서 아예 제외됩니다.
+DB의 `ck_materials_scope`가 이 두 조합만 허용합니다. `PUBLIC`인데 반이 채워져 있거나
+`CLASS`인데 비어 있으면 INSERT가 실패합니다.
+
+**같은 자료를 여러 반에 주려면 반마다 행을 만듭니다.** 학교·학년 개념이 없어 한 번에
+묶을 수 없습니다. **업로드 화면에서 반을 다중 선택하고 한 번의 저장으로 여러 행을 만드세요.**
+S3에는 파일을 한 번만 올리고 `s3_key`를 공유하면 됩니다.
 
 **비로그인 공개는 없습니다.** `/api/student/materials/**`는 로그인한 학생 전용입니다.
-`PUBLIC`은 "학교·학년 제한 없음"이지 "누구나"가 아닙니다.
+`PUBLIC`은 "반 제한 없음"이지 "누구나"가 아닙니다.
 
 ### 1-2. API
 
@@ -66,14 +69,10 @@
 
 **조회 쿼리**
 
-**세 차원을 각각 독립으로 봅니다.** 채워져 있는 차원만 검사하고, 비어 있는 차원은 통과입니다.
-
 ```sql
 SELECT m.* FROM materials m
 WHERE (m.visibility = 'PUBLIC'
-    OR ( (m.school_id     IS NULL OR m.school_id     = :schoolId)
-     AND (m.grade         IS NULL OR m.grade         = :grade)
-     AND (m.class_room_id IS NULL OR m.class_room_id IN (:myClassRoomIds)) ))
+    OR m.class_room_id IN (:myClassRoomIds))
   AND (:category IS NULL OR m.category = :category)
 ORDER BY m.created_at DESC;
 ```
@@ -84,19 +83,9 @@ ORDER BY m.created_at DESC;
 
 응답에 `s3Key`를 포함하지 마세요. 내부 저장 경로가 노출됩니다.
 
-> ⚠️ **분기를 `school_id` 기준으로 묶지 마세요.** 아래처럼 쓰면 반 전용 자료가 사라집니다.
->
-> ```sql
-> OR (m.school_id = :schoolId AND (m.grade IS NULL OR m.grade = :grade)
->     AND (m.class_room_id IS NULL OR m.class_room_id IN (:myClassRoomIds)))  -- ❌
-> ```
->
-> `visibility = 'CLASS'`, `school_id = NULL`, `class_room_id = 3`인 자료는
-> `m.school_id = :schoolId`에서 `NULL = 1` → NULL이 되어 탈락합니다. **아무에게도 안 보입니다.**
->
-> 그리고 이건 흔한 입력입니다. **반이 이미 학교·학년을 갖고 있어서**(`02_phase1_db_schema.md` 2-2)
-> 선생님이 "고2 심화반 전용 자료"를 올릴 때 학교를 따로 채울 이유가 없습니다.
-> 위 표의 4번째 줄(`CLASS` + `class_room_id` → 해당 반 재원생만)이 그대로 죽습니다.
+> ⚠️ **`PUBLIC` 분기를 빠뜨리지 마세요.** `m.class_room_id IN (:myClassRoomIds)`만 쓰면
+> 전체 공개 자료가 아무에게도 안 보입니다. `PUBLIC`은 `class_room_id`가 `NULL`이라
+> `IN`에 걸리지 않습니다.
 
 ### GET `/api/student/materials/{materialId}/download-url`
 
@@ -139,9 +128,7 @@ presigned URL 유효기간은 5분입니다. `Content-Disposition: attachment; f
   "s3Key": "materials/2026/05/{uuid}.pdf",
   "fileName": "A고_2학년_중간기출.pdf",
   "bytes": 3210544,
-  "schoolId": 1,
-  "grade": 2,
-  "classRoomId": null,
+  "classRoomId": 3,
   "visibility": "CLASS",
   "year": 2026, "month": 5, "week": 4
 }
@@ -178,24 +165,20 @@ presigned URL 유효기간은 5분입니다. `Content-Disposition: attachment; f
 {
   "title": "[SUMMER] 고1 영어 구문독해 선행 안내",
   "content": "...",
-  "scope": "GRADE",
-  "schoolId": 1,
-  "grade": 1,
-  "classRoomId": null,
+  "scope": "CLASS",
+  "classRoomId": 3,
   "pinned": false
 }
 ```
 
-`scope`: `ALL` / `SCHOOL` / `GRADE` / `CLASS`
+`scope`: `ALL` / `CLASS`
 
-`scope`에 따라 필수 필드가 달라집니다.
+| scope | 필수 | 대상 |
+|---|---|---|
+| `ALL` | 없음 | 전체 재원생과 학부모 |
+| `CLASS` | `classRoomId` | 그 반 재원생과 학부모 |
 
-| scope | 필수 |
-|---|---|
-| `ALL` | 없음 |
-| `SCHOOL` | `schoolId` |
-| `GRADE` | `schoolId`, `grade` |
-| `CLASS` | `classRoomId` |
+여러 반에 같은 공지를 내려면 반마다 행을 만듭니다. 발행 화면에서 반을 다중 선택하세요.
 
 불일치하면 400 `VALIDATION_FAILED`. 서버에서 검증하세요.
 
@@ -218,7 +201,7 @@ public PageResponse<NoticeSummaryResponse> list(Long studentId, Pageable pageabl
 `studentId`를 받는 API에 예외는 없습니다.
 
 공지 자체는 개인 데이터가 아니지만, 검증이 없으면 남의 자녀 `studentId`로 그 학생의
-학교·학년·반 범위 공지를 조회할 수 있습니다. 그리고 이 규칙에 한 곳이라도 구멍을 내면
+반 범위 공지를 조회할 수 있습니다. 그리고 이 규칙에 한 곳이라도 구멍을 내면
 다음 사람이 따라 합니다.
 
 `studentId`가 없으면(학생 본인 호출) `studentAccessGuard.requireSelf()`를 씁니다.
@@ -256,7 +239,6 @@ public PageResponse<NoticeSummaryResponse> list(Long studentId, Pageable pageabl
   "data": {
     "student": {
       "id": 88, "name": "서동환",
-      "schoolName": "A고등학교", "grade": 2,
       "classRooms": ["고2 심화반", "썸머 집중반"]
     },
     "nextExam": {
@@ -294,7 +276,7 @@ public PageResponse<NoticeSummaryResponse> list(Long studentId, Pageable pageabl
 {
   "success": true,
   "data": {
-    "student": { "name": "서동환", "schoolName": "A고등학교", "grade": 2 },
+    "student": { "name": "서동환" },
     "nextLesson": { "lessonDate": "2026-06-03", "dDay": 5,
                     "classRoomName": "고2 심화반" },
     "nextExam": { "examType": "FINAL", "startDate": "2026-06-25", "dDay": 27 },
@@ -450,10 +432,10 @@ KW-Study 메뉴는 넣지 마세요. 공부 시간 기록이 1차 범위 밖이�
 
 - [ ] **자료실이 학생에게만 열려 있다** (학부모 토큰으로 호출 시 403)
 - [ ] 업로드 시 `year`·`month`·`week`가 저장되고, 선생님이 고른 값 그대로다
-- [ ] A고 2학년 학생에게 B고 자료가 조회되지 않는다
-- [ ] `school_id`가 `null`인 자료는 전체 학생에게 조회된다
+- [ ] 다른 반 전용 자료가 조회되지 않는다
+- [ ] `visibility = 'PUBLIC'`인 자료는 전체 재원생에게 조회된다
 - [ ] `class_room_id`가 지정된 자료는 해당 반 학생에게만 조회된다
-- [ ] **`school_id`가 `null`이고 `class_room_id`만 지정된 자료가 그 반 학생에게 보인다**
+- [ ] **`PUBLIC` 자료와 반 전용 자료가 한 목록에 함께 나온다** (`PUBLIC` 분기 누락 확인)
       (차원별 독립 검사 확인. 가장 틀리기 쉬운 조합)
 - [ ] **활성 배정이 없는 학생이 목록을 조회해도 SQL 오류가 나지 않는다** (빈 `IN` 처리)
 - [ ] **목록에 나오지 않는 `materialId`로 download-url을 호출하면 403이 반환된다**
@@ -463,7 +445,7 @@ KW-Study 메뉴는 넣지 마세요. 공부 시간 기록이 1차 범위 밖이�
 
 ### 공지
 
-- [ ] `scope`별 필수 필드 검증이 동작한다 (`GRADE`인데 `grade` 없으면 400)
+- [ ] `scope`별 필수 필드 검증이 동작한다 (`CLASS`인데 `classRoomId` 없으면 400)
 - [ ] `published_at`이 `null`인 공지가 학생·학부모에게 보이지 않는다
 - [ ] `pinned` 공지가 항상 상단에 온다
 - [ ] **학부모 A가 학부모 B의 자녀 `studentId`로 `/api/notices`를 호출하면 403이 반환된다**

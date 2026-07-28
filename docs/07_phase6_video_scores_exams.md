@@ -155,7 +155,7 @@ SET last_viewed_at = now(),
 
 | Method | Endpoint | 설명 |
 |---|---|---|
-| GET | `/api/teacher/exam-schedules?schoolId&year` | 목록 |
+| GET | `/api/teacher/exam-schedules?classRoomId&year` | 목록 |
 | POST | `/api/teacher/exam-schedules` | 등록 |
 | PATCH | `/api/teacher/exam-schedules/{examScheduleId}` | 수정 |
 | DELETE | `/api/teacher/exam-schedules/{examScheduleId}` | 삭제 |
@@ -164,8 +164,7 @@ SET last_viewed_at = now(),
 
 ```json
 {
-  "schoolId": 1,
-  "grade": 2,
+  "classRoomId": 3,
   "year": 2026,
   "semester": 1,
   "examType": "FINAL",
@@ -175,7 +174,11 @@ SET last_viewed_at = now(),
 }
 ```
 
-`exam_schedules`에 `UNIQUE (school_id, grade, year, semester, exam_type)`가 있습니다. 중복 등록 시 409 `DUPLICATE_RESOURCE`.
+`exam_schedules`에 `UNIQUE (class_room_id, year, semester, exam_type)`가 있습니다. 중복 등록 시 409 `DUPLICATE_RESOURCE`.
+
+**같은 시험이라도 반마다 따로 등록합니다.** 학교·학년 개념이 없어 한 번에 묶을 수 없습니다.
+같은 학교 같은 학년 반이 3개면 3번 등록해야 하므로, **화면에서 반 다중 선택을 지원하고
+한 번의 저장으로 여러 행을 만드세요.** 한 반만 빠지면 그 반 학생들의 D-day가 비어 있게 됩니다.
 
 **여기 등록된 일정이 학생·학부모 홈 화면 D-day의 유일한 근거입니다.** 등록이 안 되어 있으면 D-day가 표시되지 않습니다.
 
@@ -183,9 +186,9 @@ SET last_viewed_at = now(),
 
 ```java
 public Optional<NextExamResponse> findNextExam(Student student) {
-    return examScheduleRepository.findFirstBySchoolIdAndGradeAndStartDateGreaterThanEqualOrderByStartDate(
-            student.getSchool().getId(),
-            student.getGrade(),
+    // 학생이 속한 모든 재원 반의 일정 중 가장 가까운 것
+    return examScheduleRepository.findFirstByClassRoomIdInAndStartDateGreaterThanEqualOrderByStartDate(
+            enrollmentRepository.findActiveClassRoomIds(student.getId(), LocalDate.now(KST)),
             LocalDate.now(KST))
         .map(e -> new NextExamResponse(
             e.getExamType(), e.getStartDate(), e.getScopeNote(),
@@ -193,7 +196,9 @@ public Optional<NextExamResponse> findNextExam(Student student) {
 }
 ```
 
-**학교가 2곳이므로 같은 학년이라도 학교별로 날짜가 다릅니다.** 반드시 `student.getSchool().getId()`로 필터링하세요. 이것을 빠뜨리면 A고 학생에게 B고 시험 날짜가 표시됩니다.
+**학생이 여러 반에 속할 수 있습니다.** 재원 중인 반 전체를 대상으로 가장 가까운 일정 하나를 고릅니다.
+`findFirst...`로 한 건만 가져오되, 반 목록을 `enrollments`에서 `left_at IS NULL` 조건으로 뽑으세요.
+퇴원한 반의 일정이 섞이면 지난 학기 시험이 D-day로 뜹니다.
 
 다자녀 학부모는 자녀별로 다른 D-day를 봅니다. 자녀 선택에 따라 값이 바뀌어야 합니다.
 
@@ -203,8 +208,8 @@ public Optional<NextExamResponse> findNextExam(Student student) {
 
 | Method | Endpoint | 설명 |
 |---|---|---|
-| GET | `/api/student/exam-schedules` | 본인 학교·학년 일정 |
-| GET | `/api/parent/children/{studentId}/exam-schedules` | 자녀 학교·학년 일정 |
+| GET | `/api/student/exam-schedules` | 본인 반 일정 |
+| GET | `/api/parent/children/{studentId}/exam-schedules` | 자녀 반 일정 |
 
 ```json
 {
@@ -443,7 +448,7 @@ P-4 그래프에 점이 두 개 찍히지 않습니다.
 
 ```
 [학생 정보 카드]
-서○환 · A고등학교 · 고2 · 고2 심화반
+서○환 · 고2 심화반
 
 [NEW] 2026.05.20  수업
 ┌─────────────────────────┐
@@ -494,15 +499,17 @@ P-4 그래프에 점이 두 개 찍히지 않습니다.
 
 ### 5-3. T-11 시험 일정
 
-학교 × 학년 격자로 등록 현황을 보여주세요.
+반 × 시험 격자로 등록 현황을 보여주세요.
 
 ```
-        1학년        2학년        3학년
-A고    중간 ✓ 기말 ✓  중간 ✓ 기말 ✓  중간 ✓ 기말 −
-B고    중간 ✓ 기말 −  중간 ✓ 기말 −  중간 − 기말 −
+              1학기 중간   1학기 기말   2학기 중간   2학기 기말
+고2 심화반        ✓            ✓            ✓            −
+고2 목요일반      ✓            ✓            −            −
+고3 집중반        ✓            −            −            −
 ```
 
-미등록 칸이 눈에 보여야 합니다. 등록이 빠지면 해당 학생들의 D-day가 표시되지 않습니다.
+미등록 칸이 눈에 보여야 합니다. 등록이 빠지면 그 반 학생들의 D-day가 표시되지 않습니다.
+**반이 늘어날수록 빠뜨리기 쉬우므로 등록 화면에서 반을 다중 선택하게 만드세요.**
 
 ### 5-4. P-4 테스트 결과 (그래프)
 
@@ -579,7 +586,7 @@ void 미공개_수업은_학생에게_보이지_않는다() { }
 void 시청_기록은_upsert되고_watch_seconds가_누적된다() { }
 
 @Test
-void D_day는_학생의_학교_기준으로_계산된다() { }
+void D_day는_학생이_속한_반_기준으로_계산된다() { }
 
 @Test
 void 시험_일정이_없으면_D_day는_null이다() { }

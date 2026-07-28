@@ -9,7 +9,7 @@
 
 **총 129개 엔드포인트.** 인증 6 / 선생님 86 / 학생 25 / 학부모 9 / 공통 3
 
-선생님 86개 내역: 대시보드·학교 3 / 학생 **10** / 반 **10** / 수업 8 / 출석 4 / **온라인 테스트 8** / **클리닉 10** / 숙제 14 / 성적·시험 9 / 자료·공지 10
+선생님 86개 내역: 대시보드 1 / 학생 **9** / 반 **10** / 수업 8 / 출석 4 / **온라인 테스트 8** / **클리닉 10** / 숙제 14 / 성적·시험 9 / 자료·공지 10
 
 반 코드 가입으로 두 개가 늘었습니다.
 
@@ -73,11 +73,10 @@
 | `GET /teacher/lessons/{lessonId}/views` | 반 인원 30명 내외 |
 | `GET /teacher/class-rooms/{classRoomId}/students` | 반 인원 30명 내외 |
 | `GET /parent/children` | 자녀 수 (보통 1~2) |
-| `GET /teacher/schools` | 2개 |
 | `GET /teacher/attendance/pending` | 미확정 수업 수 |
 | `GET /teacher/homeworks/pending` | 미확인 숙제 수 |
-| `GET /student/exam-schedules` | 학년당 연 4건 |
-| `GET /parent/children/{studentId}/exam-schedules` | 학년당 연 4건 |
+| `GET /student/exam-schedules` | 반당 연 4건 |
+| `GET /parent/children/{studentId}/exam-schedules` | 반당 연 4건 |
 | `GET /teacher/clinics` | 기간 조회. 주 단위로 봄 |
 | `GET /teacher/clinics/{clinicId}/reservations` | 클리닉 정원만큼 |
 | `GET /teacher/clinic-change-requests` | 대기 중인 요청만 |
@@ -237,13 +236,11 @@
 
 ### 선생님 (84)
 
-**대시보드·학교 (3)**
+**대시보드 (1)**
 
 | Method | Path |
 |---|---|
 | GET | `/teacher/dashboard` |
-| GET | `/teacher/schools` |
-| POST | `/teacher/schools` |
 
 **학생 (10)**
 
@@ -258,7 +255,6 @@
 | POST | `/teacher/students/{studentId}/signup-code` |
 | POST | `/teacher/students/{studentId}/reset-password` |
 | DELETE | `/teacher/students/{studentId}` |
-| POST | `/teacher/students/promote` |
 
 **반 (10)**
 
@@ -458,7 +454,6 @@ Set-Cookie: refreshToken=eyJ...; HttpOnly; Secure; SameSite=Lax; Path=/api/auth;
 // Req
 { "code": "HK7F2Q", "name": "서동환",
   "phone": "01011112222", "parentPhone": "01098765432" }
-// 학교·학년은 받지 않는다. 반 코드가 이미 알고 있어 서버가 반에서 복사한다.
 
 // Res 200
 { "success": true, "data": {
@@ -473,7 +468,7 @@ Set-Cookie: refreshToken=eyJ...; HttpOnly; Secure; SameSite=Lax; Path=/api/auth;
 2. `join_code_active = false`거나 `status = 'CLOSED'` → 400 `INVITE_CODE_INVALID`
 3. 두 번호 정규화. `phone == parentPhone`이면 409 `DUPLICATE_RESOURCE`
 4. `phone`이 이미 `users.login_id`면 409 `DUPLICATE_RESOURCE`
-5. `students` 생성 (`name`, `school_id`, `grade`)
+5. `students` 생성 (`name`)
 6. `users`(STUDENT, `login_id = phone`, `BCrypt("0000")`, `must_change_password = true`) → `students.user_id` 연결
 7. `enrollments` 생성 (그 반, `joined_at = 오늘`)
 8. `signup_codes`(PARENT, `phone = parentPhone`, 7일) **1장 자동 발급**
@@ -481,7 +476,7 @@ Set-Cookie: refreshToken=eyJ...; HttpOnly; Secure; SameSite=Lax; Path=/api/auth;
 **8번이 학부모 연결의 시작점입니다.** 선생님이 T-2에서 확인해 학부모에게 전달합니다.
 **학부모는 반 코드를 쓸 수 없습니다** — 어느 학생의 부모인지 알 수 없기 때문입니다.
 
-`name`은 **`students.name`**에 저장합니다. 학교·학년은 학생이 고릅니다(반에는 없는 정보).
+`name`은 **`students.name`**에 저장합니다.
 
 > ⚠️ **반 코드에는 전화번호 대조가 없습니다.** 20명이 나눠 쓰는 값이라 특정인에게 묶을 수
 > 없습니다. **코드를 아는 사람은 누구나 가입합니다.** 2번 검사(`join_code_active`)가
@@ -553,7 +548,7 @@ C-4 화면은 반 코드 폼과 개인 코드 폼을 나눠 두는 것으로 충
 
 ### 4-2. 학생
 
-**GET `/teacher/students`** — `schoolId` `grade` `classRoomId` `status` `keyword` `sort` `page` `size`
+**GET `/teacher/students`** — `classRoomId` `status` `keyword` `sort` `page` `size`
 
 `sort`: `name`(기본) | `recent`(`students.created_at DESC`). 응답에 `createdAt` 포함.
 
@@ -563,7 +558,6 @@ C-4 화면은 반 코드 폼과 개인 코드 폼을 나눠 두는 것으로 충
 ```jsonc
 { "items": [ {
   "studentId": 88, "name": "서동환",
-  "schoolName": "A고등학교", "grade": 2,
   "classRooms": ["고2 심화반", "썸머 집중반"],
   "studentPhone": "01011112222", "studentSignedUp": true,
   "parentPhone": "01098765432", "parentLinked": false,
@@ -577,7 +571,7 @@ C-4 화면은 반 코드 폼과 개인 코드 폼을 나눠 두는 것으로 충
 
 ```jsonc
 // Req
-{ "name": "서동환", "schoolId": 1, "grade": 2,
+{ "name": "서동환",
   "studentPhone": "01011112222", "parentPhone": "01098765432",
   "memo": null, "classRoomIds": [3, 7] }
 
@@ -709,80 +703,18 @@ FK 순서를 지키세요.
 
 이미 `ENROLLED`인 학생에게 호출하면 400 `VALIDATION_FAILED`.
 
-**POST `/teacher/students/promote`**
-
-```jsonc
-// Req
-{ "schoolId": 1, "dryRun": true }
-
-// Res
-{ "dryRun": true, "grade1to2": 31, "grade2to3": 28, "grade3Graduating": 25,
-  "classRoomsPromoted": [
-    { "classRoomId": 3, "name": "고1 기초반", "gradeFrom": 1, "gradeTo": 2 },
-    { "classRoomId": 5, "name": "고2 심화반", "gradeFrom": 2, "gradeTo": 3 }
-  ] }
-```
-
-3학년은 **자동 퇴원시키지 않고** 대상 목록만 반환합니다. `dryRun`은 반드시 구현하세요.
-
-**학생과 반의 학년을 같은 트랜잭션에서 함께 올립니다.** 학생만 올리면 다음 날부터
-모든 학생이 자기 반과 학년이 어긋나 배정 검증(4-3)에 걸립니다.
-
-| 대상 | 1학년 | 2학년 | 3학년 |
-|---|---|---|---|
-| `students.grade` | → 2 | → 3 | 그대로 (졸업 대상 집계만) |
-| `class_rooms.grade` (`status='ACTIVE'`) | → 2 | → 3 | **그대로** |
-
-**3학년 반을 4로 올리지 마세요.** `ck_class_rooms_grade CHECK (grade BETWEEN 1 AND 3)`에
-걸려 진급 전체가 롤백됩니다. 3학년은 진급이 아니라 졸업이라 반도 그대로 두고,
-학생을 개별 퇴원시킨 뒤 선생님이 반을 `close`합니다.
-
-**반 이름은 서버가 건드리지 않습니다.** `고1 기초반`이 2학년 반이 되어도 이름은 그대로라
-선생님이 T-3에서 직접 고칩니다. 이름에서 학년을 파싱해 바꾸려 하지 마세요 —
-`목요일반`처럼 학년이 안 들어간 이름이 대부분입니다.
-응답의 `classRoomsPromoted`를 화면에 띄워 이름 수정을 유도하세요.
-
-### 4-2-1. 학교
-
-**GET `/teacher/schools`** — 페이징 없음
-
-```jsonc
-[ { "schoolId": 1, "name": "A고등학교", "studentCount": 104 },
-  { "schoolId": 2, "name": "B고등학교", "studentCount": 93 } ]
-```
-
-**POST `/teacher/schools`**
-
-```jsonc
-// Req
-{ "name": "C고등학교" }
-
-// Res
-{ "schoolId": 3, "name": "C고등학교" }
-```
-
-`schools.name`이 UNIQUE라 중복 시 409 `DUPLICATE_RESOURCE`.
-
-**시드에 학교가 없습니다.** 운영 시작 시 선생님이 이 API로 직접 등록합니다.
-`class_rooms.school_id`가 필수라 **학교가 없으면 반을 만들 수 없습니다.**
-
-삭제는 없습니다 — `students.school_id`·`class_rooms.school_id`가 참조하고 있어
-지우면 데이터가 끊깁니다. 이름 수정이 필요하면 `PATCH`를 추가하지 말고 DB에서
-직접 고치세요. 연 1회도 안 쓰는 기능입니다.
-
 ### 4-3. 반
 
 **POST `/teacher/class-rooms`**
 
 ```jsonc
-{ "name": "고2 심화반", "schoolId": 1, "grade": 2,
-  "dayOfWeek": 3, "startTime": "19:00",
+{ "name": "고2 심화반", "dayOfWeek": 3, "startTime": "19:00",
   "termStart": "2026-03-02", "termEnd": "2027-02-28", "memo": null }
 ```
 
-**반은 학교 하나·학년 하나에 속합니다.** 유형(정규/특강) 구분은 없고 이름은 자유입니다.
-필수는 `name`·`schoolId`·`grade` 셋이고 나머지는 선택입니다.
-이 두 값이 가입 시 학생에게 복사되므로 **배정된 학생이 있으면 수정을 막으세요.**
+**반에 학교·학년·유형이 없습니다.** 학교·학년은 시스템 전체에 없는 개념입니다.
+선생님이 이름을 직접 정하고, 필요하면 `A고 2학년 목요일반`처럼 이름에 넣습니다.
+필수는 `name` 하나이고 나머지는 선택입니다.
 
 활성 반끼리 이름이 겹치면 409 `DUPLICATE_RESOURCE` (`uq_class_rooms_name`,
 `WHERE status = 'ACTIVE'` 부분 인덱스라 종료된 반 이름은 재사용 가능).
@@ -803,8 +735,7 @@ FK 순서를 지키세요.
 ```
 
 이미 배정된 학생은 무시하고 나머지만 추가 (멱등).
-**학교·학년이 반과 다른 학생은 400 `VALIDATION_FAILED`로 차단합니다.** 어느 학생이
-왜 걸렸는지 응답에 담으세요. 통과시키면 그 학생만 다른 학교 기출과 시험일정을 받습니다.
+학교·학년 일치 검사는 없습니다. 비교할 값 자체가 없습니다.
 
 **DELETE `.../students/{studentId}`** — 행 삭제가 아니라 `left_at = 오늘` 기록.
 
@@ -1057,12 +988,13 @@ WHERE homework_id = :homeworkId AND status <> 'NOT_SUBMITTED';
 **POST `/teacher/exam-schedules`**
 
 ```jsonc
-{ "schoolId": 1, "grade": 2, "year": 2026, "semester": 1,
+{ "classRoomId": 3, "year": 2026, "semester": 1,
   "examType": "FINAL", "startDate": "2026-06-25", "endDate": "2026-06-30",
   "scopeNote": "교과서 5~8과, 부교재 전 범위" }
 ```
 
-`UNIQUE (school_id, grade, year, semester, exam_type)` → 중복 409.
+`UNIQUE (class_room_id, year, semester, exam_type)` → 중복 409.
+**반마다 따로 등록합니다.** 화면에서 반 다중 선택을 지원하세요.
 **여기 등록된 일정이 D-day의 유일한 근거입니다.**
 
 ### 4-8. 자료·공지
@@ -1072,7 +1004,7 @@ WHERE homework_id = :homeworkId AND status <> 'NOT_SUBMITTED';
 ```jsonc
 { "title": "A고 2학년 1학기 중간 기출", "category": "PAST_EXAM",
   "s3Key": "materials/2026/05/{uuid}.pdf", "fileName": "A고_2학년_중간기출.pdf",
-  "bytes": 3210544, "schoolId": 1, "grade": 2,
+  "bytes": 3210544,
   "classRoomId": null, "visibility": "CLASS" }
 ```
 
@@ -1083,7 +1015,7 @@ WHERE homework_id = :homeworkId AND status <> 'NOT_SUBMITTED';
 
 ```jsonc
 { "title": "[SUMMER] 고1 영어 구문독해 선행 안내", "content": "...",
-  "scope": "GRADE", "schoolId": 1, "grade": 1, "classRoomId": null, "pinned": false }
+  "scope": "CLASS", "classRoomId": 3, "pinned": false }
 ```
 
 `scope`별 필수 필드를 서버에서 검증합니다.
@@ -1091,8 +1023,6 @@ WHERE homework_id = :homeworkId AND status <> 'NOT_SUBMITTED';
 | scope | 필수 |
 |---|---|
 | `ALL` | 없음 |
-| `SCHOOL` | `schoolId` |
-| `GRADE` | `schoolId`, `grade` |
 | `CLASS` | `classRoomId` |
 
 ### 4-9. 온라인 테스트
@@ -1367,7 +1297,6 @@ S-7 화면 상단의 학생 정보 카드입니다. 성적은 `/student/scores`�
 
 ```jsonc
 { "studentId": 88, "name": "서동환",
-  "schoolName": "A고등학교", "grade": 2,
   "classRooms": [ { "classRoomId": 3, "name": "고2 심화반" },
                   { "classRoomId": 7, "name": "썸머 집중반" } ],
   "phone": "010-****-2222",
@@ -1384,7 +1313,7 @@ S-7 화면 상단의 학생 정보 카드입니다. 성적은 `/student/scores`�
 ### GET `/student/home`
 
 ```jsonc
-{ "student": { "name": "서동환", "schoolName": "A고등학교", "grade": 2 },
+{ "student": { "name": "서동환" },
   "nextLesson": { "lessonDate": "2026-06-03", "dDay": 5, "classRoomName": "고2 심화반" },
   "nextExam": { "examType": "FINAL", "startDate": "2026-06-25", "dDay": 27 },
   "currentHomeworks": [
@@ -1490,17 +1419,13 @@ SET last_viewed_at = now(),
 
 ```sql
 WHERE (m.visibility = 'PUBLIC'
-    OR ( (m.school_id     IS NULL OR m.school_id     = :schoolId)
-     AND (m.grade         IS NULL OR m.grade         = :grade)
-     AND (m.class_room_id IS NULL OR m.class_room_id IN (:myClassRoomIds)) ))
+    OR m.class_room_id IN (:myClassRoomIds))
   AND (:category IS NULL OR m.category = :category)
 ORDER BY m.created_at DESC
 ```
 
-**분기를 `school_id` 기준으로 묶지 마세요.** `m.school_id = :schoolId`를 AND의 앞단에 두면
-`school_id`가 `NULL`이고 `class_room_id`만 지정된 자료가 `NULL = 1` → NULL로 탈락해
-**아무에게도 안 보입니다.** 반이 이미 학교·학년을 갖고 있어 반 전용 자료에 학교를 따로
-채울 이유가 없고, 그래서 이 조합이 실제로 자주 나옵니다.
+**`PUBLIC` 분기를 빠뜨리지 마세요.** `class_room_id IN (...)`만 쓰면 전체 공개 자료가
+아무에게도 안 보입니다. `PUBLIC`은 `class_room_id`가 `NULL`이라 `IN`에 걸리지 않습니다.
 
 `:myClassRoomIds`는 학생의 현재 활성 `enrollments`에서 가져옵니다. **빈 리스트일 수 있습니다.**
 빈 `IN ()`은 SQL 오류이므로 더미 값을 넣거나 조건을 빼세요.
@@ -1594,8 +1519,8 @@ ORDER BY m.created_at DESC
 ### GET `/parent/children`
 
 ```jsonc
-[ { "studentId": 88, "name": "서동환", "schoolName": "A고등학교", "grade": 2 },
-  { "studentId": 92, "name": "서동희", "schoolName": "A고등학교", "grade": 1 } ]
+[ { "studentId": 88, "name": "서동환" },
+  { "studentId": 92, "name": "서동희" } ]
 ```
 
 `status = ENROLLED`인 자녀만.
@@ -1605,7 +1530,7 @@ ORDER BY m.created_at DESC
 여러 도메인을 조합합니다. **단일 API로 묶으세요.** 프론트에서 6개를 병렬 호출하면 로딩이 지저분해집니다.
 
 ```jsonc
-{ "student": { "id": 88, "name": "서동환", "schoolName": "A고등학교", "grade": 2,
+{ "student": { "id": 88, "name": "서동환",
                "classRooms": ["고2 심화반", "썸머 집중반"] },
   "nextExam": { "examType": "FINAL", "startDate": "2026-06-25", "dDay": 27 },
   "nextLessonDate": "2026-06-03",
@@ -1619,7 +1544,7 @@ ORDER BY m.created_at DESC
 
 각 값은 `null`일 수 있습니다. 시험 일정 미등록이면 `nextExam: null` → 프론트가 카드를 숨깁니다. **0이나 임의 값을 넣지 마세요.**
 
-`nextExam`은 **학생의 학교 기준**입니다. 학교가 2곳이라 자녀마다 다릅니다.
+`nextExam`은 **학생이 속한 반 기준**입니다. 재원 중인 반들의 일정 중 가장 가까운 것 하나입니다.
 
 ### GET `/parent/children/{studentId}/attendances?year=2026&month=5`
 
@@ -1752,7 +1677,7 @@ DB에 **문자열로 저장**합니다. `@Enumerated(EnumType.STRING)` 필수.
 | `ScoreType` | `WORD` `INTERNAL` `MOCK` |
 | `MaterialCategory` | `LESSON` `TEXTBOOK` `PAST_EXAM` `ETC` |
 | `MaterialVisibility` | `PUBLIC` `CLASS` |
-| `NoticeScope` | `ALL` `SCHOOL` `GRADE` `CLASS` |
+| `NoticeScope` | `ALL` `CLASS` |
 | `OnlineTestStatus` | `IN_PROGRESS` `SUBMITTED` |
 | `ClinicStatus` | `OPEN` `CLOSED` |
 | `ReservationStatus` | `RESERVED` `CANCELED` `MOVED` |
