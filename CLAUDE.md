@@ -91,8 +91,10 @@ Compose에 `logging` max-size 걸기(안 걸면 로그가 디스크를 채워 �
 그래서 `students.user_id`가 nullable이고, **`student.getUser()`는 null일 수 있다.** null 검사 빼먹지 마라.
 
 **가입 주 경로는 반 코드다.** 선생님이 반을 만들면 `class_rooms.join_code`가 발급되고,
-수업에서 반 전체에 구두로 알린다. 학생이 코드 + 이름 + 학교 + 학년 + 본인번호 + 보호자번호로
+수업에서 반 전체에 구두로 알린다. 학생이 코드 + 이름 + 본인번호 + 보호자번호로
 가입하면 `students`(name 포함) + `users` + `enrollments`가 한 번에 생기고 그 반에 자동 배정된다.
+**학교·학년은 묻지 않는다.** 한 반은 한 학교·한 학년이라 반 코드가 이미 알고 있다.
+`class_rooms.school_id`·`grade`를 `students`로 복사해라. 요청 본문으로 받으면 반과 어긋난다.
 동시에 `signup_codes`(PARENT) 1장이 발급되고, 선생님이 T-2에서 확인해 학부모에게 전달한다.
 보조 경로로 선생님 직접 등록(`POST /api/teacher/students` + 코드 2장)이 남아 있다.
 

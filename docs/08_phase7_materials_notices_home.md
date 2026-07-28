@@ -94,8 +94,8 @@ ORDER BY m.created_at DESC;
 > `visibility = 'CLASS'`, `school_id = NULL`, `class_room_id = 3`인 자료는
 > `m.school_id = :schoolId`에서 `NULL = 1` → NULL이 되어 탈락합니다. **아무에게도 안 보입니다.**
 >
-> 그리고 이건 흔한 입력입니다. **반에는 학교·학년이 없어서**(`02_phase1_db_schema.md` 2-2)
-> 선생님이 "고2 심화반 전용 자료"를 올릴 때 학교를 채울 이유가 없습니다.
+> 그리고 이건 흔한 입력입니다. **반이 이미 학교·학년을 갖고 있어서**(`02_phase1_db_schema.md` 2-2)
+> 선생님이 "고2 심화반 전용 자료"를 올릴 때 학교를 따로 채울 이유가 없습니다.
 > 위 표의 4번째 줄(`CLASS` + `class_room_id` → 해당 반 재원생만)이 그대로 죽습니다.
 
 ### GET `/api/student/materials/{materialId}/download-url`

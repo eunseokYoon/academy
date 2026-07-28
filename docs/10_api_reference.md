@@ -456,8 +456,9 @@ Set-Cookie: refreshToken=eyJ...; HttpOnly; Secure; SameSite=Lax; Path=/api/auth;
 
 ```jsonc
 // Req
-{ "code": "HK7F2Q", "name": "서동환", "schoolId": 1, "grade": 2,
+{ "code": "HK7F2Q", "name": "서동환",
   "phone": "01011112222", "parentPhone": "01098765432" }
+// 학교·학년은 받지 않는다. 반 코드가 이미 알고 있어 서버가 반에서 복사한다.
 
 // Res 200
 { "success": true, "data": {
@@ -715,10 +716,31 @@ FK 순서를 지키세요.
 { "schoolId": 1, "dryRun": true }
 
 // Res
-{ "dryRun": true, "grade1to2": 31, "grade2to3": 28, "grade3Graduating": 25 }
+{ "dryRun": true, "grade1to2": 31, "grade2to3": 28, "grade3Graduating": 25,
+  "classRoomsPromoted": [
+    { "classRoomId": 3, "name": "고1 기초반", "gradeFrom": 1, "gradeTo": 2 },
+    { "classRoomId": 5, "name": "고2 심화반", "gradeFrom": 2, "gradeTo": 3 }
+  ] }
 ```
 
 3학년은 **자동 퇴원시키지 않고** 대상 목록만 반환합니다. `dryRun`은 반드시 구현하세요.
+
+**학생과 반의 학년을 같은 트랜잭션에서 함께 올립니다.** 학생만 올리면 다음 날부터
+모든 학생이 자기 반과 학년이 어긋나 배정 검증(4-3)에 걸립니다.
+
+| 대상 | 1학년 | 2학년 | 3학년 |
+|---|---|---|---|
+| `students.grade` | → 2 | → 3 | 그대로 (졸업 대상 집계만) |
+| `class_rooms.grade` (`status='ACTIVE'`) | → 2 | → 3 | **그대로** |
+
+**3학년 반을 4로 올리지 마세요.** `ck_class_rooms_grade CHECK (grade BETWEEN 1 AND 3)`에
+걸려 진급 전체가 롤백됩니다. 3학년은 진급이 아니라 졸업이라 반도 그대로 두고,
+학생을 개별 퇴원시킨 뒤 선생님이 반을 `close`합니다.
+
+**반 이름은 서버가 건드리지 않습니다.** `고1 기초반`이 2학년 반이 되어도 이름은 그대로라
+선생님이 T-3에서 직접 고칩니다. 이름에서 학년을 파싱해 바꾸려 하지 마세요 —
+`목요일반`처럼 학년이 안 들어간 이름이 대부분입니다.
+응답의 `classRoomsPromoted`를 화면에 띄워 이름 수정을 유도하세요.
 
 ### 4-2-1. 학교
 
@@ -741,22 +763,26 @@ FK 순서를 지키세요.
 
 `schools.name`이 UNIQUE라 중복 시 409 `DUPLICATE_RESOURCE`.
 
-**학교는 2곳으로 시작합니다.** 이 API는 시드 학교명이 실제와 다를 때 고치거나
-드물게 학교가 늘 때 쓰는 용도입니다. 삭제는 없습니다 — `students.school_id`가
-참조하고 있어 지우면 학생 데이터가 끊깁니다. 이름 수정이 필요하면
-`PATCH`를 추가하지 말고 DB에서 직접 고치세요. 연 1회도 안 쓰는 기능입니다.
+**시드에 학교가 없습니다.** 운영 시작 시 선생님이 이 API로 직접 등록합니다.
+`class_rooms.school_id`가 필수라 **학교가 없으면 반을 만들 수 없습니다.**
+
+삭제는 없습니다 — `students.school_id`·`class_rooms.school_id`가 참조하고 있어
+지우면 데이터가 끊깁니다. 이름 수정이 필요하면 `PATCH`를 추가하지 말고 DB에서
+직접 고치세요. 연 1회도 안 쓰는 기능입니다.
 
 ### 4-3. 반
 
 **POST `/teacher/class-rooms`**
 
 ```jsonc
-{ "name": "고2 심화반", "dayOfWeek": 3, "startTime": "19:00",
+{ "name": "고2 심화반", "schoolId": 1, "grade": 2,
+  "dayOfWeek": 3, "startTime": "19:00",
   "termStart": "2026-03-02", "termEnd": "2027-02-28", "memo": null }
 ```
 
-**반에 학교·학년·유형이 없습니다.** 선생님이 이름을 직접 정합니다.
-필수는 `name` 하나이고 나머지는 선택입니다. `학교`·`학년`은 학생에만 있습니다.
+**반은 학교 하나·학년 하나에 속합니다.** 유형(정규/특강) 구분은 없고 이름은 자유입니다.
+필수는 `name`·`schoolId`·`grade` 셋이고 나머지는 선택입니다.
+이 두 값이 가입 시 학생에게 복사되므로 **배정된 학생이 있으면 수정을 막으세요.**
 
 활성 반끼리 이름이 겹치면 409 `DUPLICATE_RESOURCE` (`uq_class_rooms_name`,
 `WHERE status = 'ACTIVE'` 부분 인덱스라 종료된 반 이름은 재사용 가능).
@@ -776,7 +802,9 @@ FK 순서를 지키세요.
 { "studentIds": [88, 91, 97], "joinedAt": "2026-03-02" }
 ```
 
-이미 배정된 학생은 무시하고 나머지만 추가 (멱등). 학교·학년 불일치는 **경고만 하고 차단하지 않습니다.**
+이미 배정된 학생은 무시하고 나머지만 추가 (멱등).
+**학교·학년이 반과 다른 학생은 400 `VALIDATION_FAILED`로 차단합니다.** 어느 학생이
+왜 걸렸는지 응답에 담으세요. 통과시키면 그 학생만 다른 학교 기출과 시험일정을 받습니다.
 
 **DELETE `.../students/{studentId}`** — 행 삭제가 아니라 `left_at = 오늘` 기록.
 
@@ -1471,8 +1499,8 @@ ORDER BY m.created_at DESC
 
 **분기를 `school_id` 기준으로 묶지 마세요.** `m.school_id = :schoolId`를 AND의 앞단에 두면
 `school_id`가 `NULL`이고 `class_room_id`만 지정된 자료가 `NULL = 1` → NULL로 탈락해
-**아무에게도 안 보입니다.** 반에는 학교·학년이 없으므로 반 전용 자료에 학교를 채울 이유가
-없고, 그래서 이 조합이 실제로 자주 나옵니다.
+**아무에게도 안 보입니다.** 반이 이미 학교·학년을 갖고 있어 반 전용 자료에 학교를 따로
+채울 이유가 없고, 그래서 이 조합이 실제로 자주 나옵니다.
 
 `:myClassRoomIds`는 학생의 현재 활성 `enrollments`에서 가져옵니다. **빈 리스트일 수 있습니다.**
 빈 `IN ()`은 SQL 오류이므로 더미 값을 넣거나 조건을 빼세요.

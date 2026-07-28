@@ -292,8 +292,6 @@ C-2 화면은 **로그인 상태에서의 "비밀번호 변경"만** 담당합�
 {
   "code": "HK7F2Q",
   "name": "서동환",
-  "schoolId": 1,
-  "grade": 2,
   "phone": "01011112222",
   "parentPhone": "01098765432"
 }
@@ -317,7 +315,7 @@ C-2 화면은 **로그인 상태에서의 "비밀번호 변경"만** 담당합�
 2. `join_code_active = false`거나 `status = 'CLOSED'`면 400 `INVITE_CODE_INVALID`
 3. 두 번호 정규화(숫자만). `phone == parentPhone`이면 409 `DUPLICATE_RESOURCE`
 4. `phone`이 이미 `users.login_id`면 409 `DUPLICATE_RESOURCE`
-5. `students` 생성 — `name`, `school_id`, `grade`, `user_id = null`, `parent_id = null`
+5. `students` 생성 — `name`, `school_id`·`grade`는 **그 반의 값을 복사**, `user_id = null`, `parent_id = null`
 6. `users`(STUDENT, `login_id = phone`, `BCrypt("0000")`, `must_change_password = true`) 생성 후 `students.user_id` 연결
 7. `enrollments` 생성 (`class_room_id` = 그 반, `joined_at = 오늘`)
 8. `signup_codes`(PARENT, `phone = parentPhone`, 유효기간 7일) **1장 자동 발급**
@@ -329,8 +327,11 @@ C-2 화면은 **로그인 상태에서의 "비밀번호 변경"만** 담당합�
 **`name`은 `students.name`에 저장합니다.** `users.name`에도 같은 값이 들어가지만
 (NOT NULL이라) 화면에 쓰는 값은 언제나 `students.name`입니다.
 
-**학교·학년은 학생이 고릅니다.** 반에는 학교·학년이 없어서 코드에서 유추할 수 없습니다.
-학교가 2곳이라 드롭다운이면 충분하고, 잘못 고르면 선생님이 T-2에서 고칩니다.
+**학교·학년은 묻지 않습니다.** 한 반은 한 학교·한 학년이므로(`02_phase1_db_schema.md` 2-2)
+반 코드가 이미 둘 다 알고 있습니다. `class_rooms.school_id`·`grade`를 `students`에 복사하세요.
+
+**요청 본문에 `schoolId`·`grade`를 받지 마세요.** 받으면 학생이 반과 다른 값을 보내
+자료실 노출 범위와 시험 D-day가 어긋납니다. 서버가 코드에서 정하는 값입니다.
 
 > ⚠️ **반 코드에는 전화번호 대조가 없습니다.** 20명이 나눠 쓰는 값이라 특정인에게 묶을 수
 > 없기 때문입니다. 즉 **코드를 아는 사람은 누구나 가입할 수 있습니다.**
@@ -477,11 +478,11 @@ if (me.mustChangePassword() && !isPasswordChangeRequest(request)) {
 [기본] 반 코드로 가입
   반 코드      [HK7F2Q]
   이름         [서동환]
-  학교         [A고등학교 ▾]
-  학년         [2학년 ▾]
   내 전화번호   [010-1111-2222]
   보호자 번호   [010-9876-5432]
   [가입하기]
+
+  ※ 학교·학년 입력란을 두지 마세요. 반 코드가 이미 알고 있습니다.
 
   ─────────────────────────
   선생님께 개인 코드를 받으셨나요?  → [개인 코드로 가입]

@@ -19,7 +19,7 @@ docker compose ps          # healthy 확인 후 진행
 | 파일 | 내용 |
 |---|---|
 | `V1__init.sql` | 전체 테이블 + 인덱스 |
-| `V2__seed.sql` | 학교 2개, 선생님 계정 1개 |
+| `V2__seed.sql` | 선생님 계정 1개 |
 
 ### 주차(週次) 모델 — 먼저 읽으세요
 
@@ -134,7 +134,7 @@ CREATE INDEX idx_signup_codes_student ON signup_codes(student_id, target_role);
 ```
 [주 경로] 반 코드로 학생이 직접 가입
   선생님이 반 생성 → class_rooms.join_code 발급 → 수업에서 반 전체에 구두 전달
-    → 학생이 코드 + 이름 + 학교 + 학년 + 본인번호 + 학부모번호 입력
+    → 학생이 코드 + 이름 + 본인번호 + 학부모번호 입력  (학교·학년은 코드에서 유도)
        → students(name) + users(STUDENT) + enrollments(그 반) 생성
        → signup_codes(PARENT) 1장 자동 발급
     → 선생님이 T-2에서 그 코드를 확인해 학부모에게 전달
@@ -210,6 +210,8 @@ login_id = phone.replaceAll("[^0-9]", "")
 CREATE TABLE class_rooms (
     id               BIGSERIAL PRIMARY KEY,
     name             VARCHAR(100) NOT NULL,
+    school_id        BIGINT       NOT NULL REFERENCES schools(id),  -- 한 반은 한 학교
+    grade            SMALLINT     NOT NULL,                         -- 한 반은 한 학년
     teacher_id       BIGINT       NOT NULL REFERENCES teachers(id),
     join_code        VARCHAR(10)  NOT NULL UNIQUE,   -- 반 가입 코드. 학생이 회원가입 시 입력
     join_code_active BOOLEAN      NOT NULL DEFAULT true,
@@ -222,11 +224,13 @@ CREATE TABLE class_rooms (
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT ck_class_rooms_status CHECK (status IN ('ACTIVE','CLOSED')),
-    CONSTRAINT ck_class_rooms_dow    CHECK (day_of_week BETWEEN 1 AND 7)
+    CONSTRAINT ck_class_rooms_dow    CHECK (day_of_week BETWEEN 1 AND 7),
+    CONSTRAINT ck_class_rooms_grade  CHECK (grade BETWEEN 1 AND 3)
 );
 
 CREATE UNIQUE INDEX uq_class_rooms_name
     ON class_rooms(name) WHERE status = 'ACTIVE';
+CREATE INDEX idx_class_rooms_school_grade ON class_rooms(school_id, grade);
 
 CREATE TABLE enrollments (
     id            BIGSERIAL PRIMARY KEY,
@@ -243,18 +247,26 @@ CREATE INDEX idx_enrollments_class ON enrollments(class_room_id, left_at);
 CREATE INDEX idx_enrollments_student ON enrollments(student_id);
 ```
 
-### 반은 선생님이 자유롭게 만듭니다
+### 반은 학교 하나 · 학년 하나에 속합니다
 
-`class_rooms`에 **`school_id`·`grade`·`type`이 없습니다.** 선생님이 T-3 화면에서 이름을 직접 정해
-추가·수정·삭제합니다. 정규반/특강반 같은 고정 구분도 두지 않습니다.
+**한 반의 학생은 전원 같은 학교, 같은 학년입니다.** 그래서 `class_rooms`가 `school_id`와
+`grade`를 가집니다. 반 이름(`name`)은 선생님이 T-3 화면에서 자유롭게 정하고, 정규반/특강반
+같은 고정 구분(`type`)은 두지 않습니다.
 
-학교·학년으로 반을 묶으면 "고2 심화반"처럼 조합이 강제되고, 학교가 섞인 특강이나
-수준별 분반을 만들 때마다 예외 처리가 필요합니다. **이름 하나로 두는 편이 실제 운영에 맞습니다.**
+**이 규칙의 가장 큰 효과는 회원가입입니다.** 반 코드가 이미 학교와 학년을 알고 있으므로
+가입 화면에서 둘 다 묻지 않습니다(아래 `join_code` 항목). 학생이 학교를 잘못 고르면
+자료실에서 남의 학교 기출이 보이고 시험 D-day도 어긋나는데, **묻지 않으면 그 사고가
+원천적으로 없습니다.**
 
-- `학교`·`학년`은 **학생(`students`)에만** 남습니다. 시험 D-day와 자료실 공개 범위가 이 값을 씁니다.
-- 반 배정 시 학교·학년 일치 검사를 하지 마세요. 비교할 대상이 없습니다.
+- `학교`·`학년`은 `students`에도 그대로 있습니다. 시험 D-day와 자료실 공개 범위가 이 값을 씁니다.
+  반에서 유도할 수 있지만, 반이 없는 학생(배정 전·퇴원 후)도 있어 학생 쪽이 원본입니다.
+- **반 배정 시 학생의 학교·학년이 반과 같은지 검사하고, 다르면 차단하세요.**
+  경고만 하고 통과시키면 자료실 노출 범위가 조용히 어긋납니다.
 - `uq_class_rooms_name`은 **활성 반끼리만** 이름 중복을 막습니다. 종료(`CLOSED`)된 반의 이름은
-  다음 학기에 다시 쓸 수 있습니다.
+  다음 학기에 다시 쓸 수 있습니다. 학교가 달라도 활성 반끼리는 이름이 겹칠 수 없습니다.
+- **학년 진급(T-12) 때 반의 `grade`도 학생과 함께 올라갑니다.** 반은 그대로 유지되고,
+  이름만 선생님이 직접 고칩니다. 3학년 반은 졸업이라 올리지 않습니다
+  (`ck_class_rooms_grade`에 걸립니다).
 
 **부분 유니크 인덱스(`WHERE left_at IS NULL`)의 이유:** 같은 반을 나갔다가 다시 들어오는 경우를 허용하되, 동시에 두 번 등록되는 것은 막습니다.
 
@@ -268,10 +280,10 @@ CREATE INDEX idx_enrollments_student ON enrollments(student_id);
 ```
 선생님이 반 생성 (T-3)   →  join_code "HK7F2Q" 발급
                              ↓ 오프라인으로 반 전체에 전달
-학생이 /signup           →  코드 + 이름 + 학교 + 학년 + 본인번호 + 학부모번호
-                             ↓ 한 트랜잭션
-                            students(name) + users(STUDENT) + enrollments(그 반)
-                            + signup_codes(PARENT) 1장 자동 발급
+학생이 /signup           →  코드 + 이름 + 본인번호 + 학부모번호
+                             ↓ 한 트랜잭션 (학교·학년은 반에서 복사)
+                            students(name, school_id, grade) + users(STUDENT)
+                            + enrollments(그 반) + signup_codes(PARENT) 1장 자동 발급
 ```
 
 코드 생성 규칙은 `signup_codes`와 같습니다. 6자리, 혼동 문자(`0 O 1 I L`) 제외.
@@ -290,7 +302,7 @@ private static final String CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 | 대상 | 특정 학생 1명 (또는 그 학부모) | 반 전체 |
 | 수명 | 7일, 1회용 (`used_at`) | 반이 살아 있는 동안. `join_code_active`로 여닫음 |
 | 본인 확인 | 발급 시 등록된 전화번호와 대조 | **없음** |
-| 가입 시 추가 입력 | 없음 (학부모는 이름) | 이름·학교·학년·본인번호·학부모번호 |
+| 가입 시 추가 입력 | 없음 (학부모는 이름) | 이름·본인번호·학부모번호 |
 
 **`join_code_active`가 이 방식의 유일한 방어선입니다.**
 
@@ -864,9 +876,12 @@ INSERT INTO clinic_reservations (clinic_id, student_id) VALUES (:clinicId, :stud
 
 ## 3. V2__seed.sql
 
-```sql
-INSERT INTO schools (name) VALUES ('A고등학교'), ('B고등학교');
+**학교는 시드에 넣지 않습니다.** 선생님이 `POST /api/teacher/schools`로 직접 등록합니다.
+학교 수정 엔드포인트가 없어서, 임시 이름으로 시드하면 화면에서 고칠 방법이 없습니다.
 
+반이 `school_id`를 요구하므로 **학교 → 반 → (코드 배포) → 학생 가입** 순서로 진행합니다.
+
+```sql
 -- 선생님 계정 (비밀번호는 최초 로그인 후 변경)
 -- login_id는 전화번호입니다. 실제 강사 번호로 교체하세요.
 INSERT INTO users (role, login_id, password_hash, name, phone)
