@@ -1,0 +1,247 @@
+import { useEffect, useState } from "react";
+import { Modal } from "../../../shared/components/Modal";
+import { TextField } from "../../../shared/components/TextField";
+import type { AttendanceStatus } from "../../../shared/attendance/types";
+import { EXCEPTION_STATUSES, STATUS_LABEL } from "../../../shared/attendance/types";
+import type { AttendanceException } from "../api";
+
+export interface RosterRow {
+  studentId: number;
+  name: string;
+  status: AttendanceStatus;
+  memo: string | null;
+}
+
+interface Props {
+  rows: RosterRow[];
+  confirmed: boolean;
+  pending: boolean;
+  error: string | null;
+  onConfirm: (exceptions: AttendanceException[]) => void;
+  /** page는 하단 고정 버튼(T-5), inline은 흐름 안 버튼(모달 안에서 쓰는 T-13). */
+  variant?: "page" | "inline";
+}
+
+/**
+ * T-5와 T-13이 공유하는 출석 입력. 기본값이 출석이라 <b>안 온 학생만</b> 탭한다.
+ * 20명 반이면 보통 결석이 0~2명이라 20번 탭할 일을 2번으로 줄인다.
+ *
+ * <p>확정 전 중간 상태는 이 컴포넌트 안에만 있다. 서버에 저장하지 않는다 —
+ * attendances에 미리 쓰면 캘린더의 "확정됨" 판정이 무너진다.
+ */
+export function RosterEditor({
+  rows,
+  confirmed,
+  pending,
+  error,
+  onConfirm,
+  variant = "page",
+}: Props) {
+  const [draft, setDraft] = useState<RosterRow[]>(rows);
+  const [editing, setEditing] = useState<RosterRow | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  useEffect(() => setDraft(rows), [rows]);
+
+  const exceptions = draft.filter((row) => row.status !== "PRESENT");
+
+  function apply(studentId: number, status: AttendanceStatus, memo: string | null) {
+    setDraft((prev) =>
+      prev.map((row) => (row.studentId === studentId ? { ...row, status, memo } : row)),
+    );
+    setEditing(null);
+  }
+
+  function submit() {
+    setAsking(false);
+    onConfirm(
+      exceptions.map((row) => ({
+        studentId: row.studentId,
+        status: row.status,
+        memo: row.memo?.trim() || null,
+      })),
+    );
+  }
+
+  return (
+    <div className={`space-y-3 ${variant === "page" ? "pb-24" : ""}`}>
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {draft.map((row) => (
+          <li key={row.studentId}>
+            <button
+              type="button"
+              onClick={() => setEditing(row)}
+              className={`w-full rounded-xl border p-3 text-left ${
+                row.status === "PRESENT"
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-amber-300 bg-amber-50"
+              }`}
+            >
+              <span className="block text-sm font-medium text-slate-900">{row.name}</span>
+              <span className="block text-xs text-slate-600">{STATUS_LABEL[row.status]}</span>
+              {row.memo && (
+                <span className="mt-0.5 block truncate text-xs text-slate-400">{row.memo}</span>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {draft.length === 0 && (
+        <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
+          이 날짜에 재원 중인 학생이 없습니다.
+        </p>
+      )}
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {draft.length > 0 && (
+        <div
+          className={
+            variant === "page"
+              ? "fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white p-3"
+              : ""
+          }
+        >
+          <div
+            className={
+              variant === "page" ? "mx-auto w-full max-w-screen-sm md:max-w-screen-xl" : ""
+            }
+          >
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setAsking(true)}
+              className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white
+                         disabled:opacity-50"
+            >
+              {/* 예외 인원 수를 버튼에 띄우면 실수를 알아챈다 */}
+              {confirmed
+                ? "수정 저장"
+                : exceptions.length === 0
+                  ? "전원 출석으로 확정"
+                  : `출석 확정 (${summarize(exceptions)})`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <StatusPicker
+          row={editing}
+          onClose={() => setEditing(null)}
+          onApply={(status, memo) => apply(editing.studentId, status, memo)}
+        />
+      )}
+
+      {asking && (
+        <Modal title="출석을 확정할까요?" onClose={() => setAsking(false)}>
+          <p className="text-sm text-slate-600">
+            {exceptions.length === 0
+              ? `${draft.length}명 전원을 출석으로 확정합니다.`
+              : `${summarize(exceptions)}으로 확정합니다. 나머지 ${
+                  draft.length - exceptions.length
+                }명은 출석입니다.`}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            확정하면 학생·학부모 캘린더에 바로 반영됩니다. 나중에 다시 고칠 수 있습니다.
+          </p>
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAsking(false)}
+              className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm
+                         text-slate-700"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
+            >
+              확정
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 탭하면 4개 선택지가 뜬다. 탭할 때마다 출석→지각→결석으로 순환시키면
+ * 한 번 지나쳤을 때 세 번 더 눌러야 한다.
+ */
+function StatusPicker({
+  row,
+  onClose,
+  onApply,
+}: {
+  row: RosterRow;
+  onClose: () => void;
+  onApply: (status: AttendanceStatus, memo: string | null) => void;
+}) {
+  const [status, setStatus] = useState<AttendanceStatus>(row.status);
+  const [memo, setMemo] = useState(row.memo ?? "");
+
+  return (
+    <Modal title={row.name} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setStatus("PRESENT")}
+          className={`rounded-lg border px-3 py-3 text-sm ${
+            status === "PRESENT"
+              ? "border-slate-900 bg-slate-900 text-white"
+              : "border-slate-300 text-slate-700"
+          }`}
+        >
+          출석
+        </button>
+        {EXCEPTION_STATUSES.map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setStatus(value)}
+            className={`rounded-lg border px-3 py-3 text-sm ${
+              status === value
+                ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-300 text-slate-700"
+            }`}
+          >
+            {STATUS_LABEL[value]}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3">
+        <TextField
+          label="메모"
+          placeholder="학부모 사전 연락 등"
+          hint="결석 사유를 남겨 두면 나중에 문의가 왔을 때 확인할 수 있습니다."
+          value={memo}
+          onChange={(e) => setMemo(e.target.value)}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onApply(status, status === "PRESENT" ? null : memo.trim() || null)}
+        className="mt-4 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
+      >
+        적용
+      </button>
+    </Modal>
+  );
+}
+
+function summarize(exceptions: RosterRow[]): string {
+  const counts = new Map<AttendanceStatus, number>();
+  for (const row of exceptions) {
+    counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([status, count]) => `${STATUS_LABEL[status]} ${count}명`)
+    .join(", ");
+}

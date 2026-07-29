@@ -1,10 +1,13 @@
 import { Navigate } from "react-router-dom";
+import { FullScreenLoader } from "../components/FullScreenLoader";
+import { homePathOf, useAuth } from "./AuthContext";
 
-/**
- * Phase 2에서 로그인한 사용자의 역할에 따라
- * /student · /parent · /teacher로 보내도록 교체한다.
- * 지금은 로그인 상태가 없으므로 항상 /login이다.
- */
+/** 루트(/) 진입점. 역할별 홈으로 보낸다. */
 export function RoleRedirect() {
-  return <Navigate to="/login" replace />;
+  const { user, loading } = useAuth();
+
+  if (loading) return <FullScreenLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/password" replace />;
+  return <Navigate to={homePathOf(user.role)} replace />;
 }

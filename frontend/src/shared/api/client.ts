@@ -5,6 +5,8 @@ import type { ApiResponse } from "./types";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
+  // 리프레시 토큰이 HttpOnly 쿠키라 교차 출처 요청에도 쿠키를 실어야 한다.
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
