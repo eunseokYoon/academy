@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.util.InviteCodeIssuer;
 import com.njwenglish.dto.auth.SignupRequest;
 import com.njwenglish.dto.auth.SignupResponse;
 import com.njwenglish.entity.ClassRoom;
@@ -63,7 +64,8 @@ class SignupServiceTest {
     @BeforeEach
     void setUp() {
         ParentLinkService parentLinkService = new ParentLinkService(
-            userRepository, parentRepository, signupCodeRepository, classRoomRepository,
+            userRepository, parentRepository, signupCodeRepository,
+            new InviteCodeIssuer(signupCodeRepository, classRoomRepository),
             passwordEncoder);
         signupService = new SignupService(signupCodeRepository, classRoomRepository,
             userRepository, studentRepository, enrollmentRepository, parentLinkService,

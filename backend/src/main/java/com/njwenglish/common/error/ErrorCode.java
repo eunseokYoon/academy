@@ -21,6 +21,8 @@ public enum ErrorCode {
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),
     SUBMISSION_EXISTS(HttpStatus.CONFLICT, "제출한 학생이 있어 삭제할 수 없습니다."),
     STUDENT_HAS_RECORDS(HttpStatus.CONFLICT, "운영 기록이 있어 삭제할 수 없습니다. 퇴원 처리를 사용해 주세요."),
+    CLASS_ROOM_HAS_RECORDS(HttpStatus.CONFLICT, "수업·배정 기록이 있어 삭제할 수 없습니다. 종료 처리를 사용해 주세요."),
+    LESSON_HAS_RECORDS(HttpStatus.CONFLICT, "출석·숙제·시청 기록이 있어 삭제할 수 없습니다."),
     INVITE_CODE_INVALID(HttpStatus.BAD_REQUEST, "초대코드가 유효하지 않습니다."),
     INVITE_CODE_USED(HttpStatus.BAD_REQUEST, "이미 사용된 초대코드입니다."),
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "이미 존재하는 데이터입니다."),

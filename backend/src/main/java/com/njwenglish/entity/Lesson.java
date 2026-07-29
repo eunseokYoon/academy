@@ -81,4 +81,43 @@ public class Lesson extends BaseTimeEntity {
 
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
+
+    /** 수업일만 먼저 만든다. 내용은 비어 있고 PENDING·미공개 상태다. */
+    public static Lesson create(ClassRoom classRoom, LocalDate lessonDate,
+                                short year, short month, short week) {
+        Lesson lesson = new Lesson();
+        lesson.classRoom = classRoom;
+        lesson.lessonDate = lessonDate;
+        lesson.year = year;
+        lesson.month = month;
+        lesson.week = week;
+        lesson.attendanceStatus = LessonAttendanceStatus.PENDING;
+        return lesson;
+    }
+
+    public void changeWeek(short year, short month, short week) {
+        this.year = year;
+        this.month = month;
+        this.week = week;
+    }
+
+    /** 내용 수정은 공개 상태를 건드리지 않는다. 공개는 publish()로만 이루어진다. */
+    public void writeContent(String title, String videoUrl, String content,
+                             String keyPoints, String nextPreview) {
+        this.title = title;
+        this.videoUrl = videoUrl;
+        this.content = content;
+        this.keyPoints = keyPoints;
+        this.nextPreview = nextPreview;
+    }
+
+    public boolean isPublished() {
+        return publishedAt != null;
+    }
+
+    public void publish(OffsetDateTime now) {
+        if (publishedAt == null) {
+            this.publishedAt = now;
+        }
+    }
 }

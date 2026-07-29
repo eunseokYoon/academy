@@ -88,4 +88,26 @@ public class User extends BaseTimeEntity {
         this.passwordHash = passwordHash;
         this.mustChangePassword = false;
     }
+
+    /**
+     * 선생님이 초기화한 비밀번호. 본인이 정한 값이 아니므로 변경 강제 상태로 되돌린다.
+     * 호출부에서 리프레시 토큰도 전부 폐기해야 한다 — 분실이 곧 유출일 수 있다.
+     */
+    public void resetPassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.mustChangePassword = true;
+    }
+
+    public void rename(String name) {
+        this.name = name;
+    }
+
+    /** 퇴원 처리. 로그인 자체가 막힌다. */
+    public void deactivate() {
+        this.status = UserStatus.INACTIVE;
+    }
+
+    public void activate() {
+        this.status = UserStatus.ACTIVE;
+    }
 }

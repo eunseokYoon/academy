@@ -5,6 +5,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.JwtTokenProvider;
 import com.njwenglish.entity.RefreshToken;
 import com.njwenglish.entity.User;
+import com.njwenglish.entity.enums.UserStatus;
 import com.njwenglish.repository.RefreshTokenRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -45,6 +46,10 @@ public class TokenService {
             .orElseThrow(() -> new BusinessException(ErrorCode.TOKEN_EXPIRED));
 
         if (!stored.isUsable(OffsetDateTime.now())) {
+            throw new BusinessException(ErrorCode.TOKEN_EXPIRED);
+        }
+        // 퇴원 처리는 토큰을 폐기하지만, 그 사이 발급된 것이 남아 있어도 여기서 막힌다
+        if (stored.getUser().getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.TOKEN_EXPIRED);
         }
         return stored.getUser();

@@ -74,4 +74,28 @@ public class Student extends BaseTimeEntity {
     public void linkParent(Parent parent) {
         this.parent = parent;
     }
+
+    public void rename(String name) {
+        this.name = name;
+    }
+
+    public void changeMemo(String memo) {
+        this.memo = memo;
+    }
+
+    public boolean isEnrolled() {
+        return status == StudentStatus.ENROLLED;
+    }
+
+    /** 데이터는 지우지 않는다. 과거 출석·성적은 그대로 두고 상태만 바꾼다. */
+    public void withdraw(LocalDate withdrawnAt) {
+        this.status = StudentStatus.WITHDRAWN;
+        this.withdrawnAt = withdrawnAt;
+    }
+
+    /** 퇴원의 역연산이지만 반 배정은 되살리지 않는다. 그 반이 이미 끝났을 수 있다. */
+    public void restore() {
+        this.status = StudentStatus.ENROLLED;
+        this.withdrawnAt = null;
+    }
 }

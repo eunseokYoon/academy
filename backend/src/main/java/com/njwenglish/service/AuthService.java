@@ -13,6 +13,7 @@ import com.njwenglish.dto.auth.MeResponse;
 import com.njwenglish.dto.auth.PasswordChangeRequest;
 import com.njwenglish.dto.auth.UserSummaryResponse;
 import com.njwenglish.entity.User;
+import com.njwenglish.entity.enums.UserStatus;
 import com.njwenglish.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,6 +43,10 @@ public class AuthService {
             .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+        }
+        // 퇴원 처리된 계정. 사유를 구분해 알려주면 그 번호가 등록돼 있었다는 사실이 새어 나간다
+        if (user.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 

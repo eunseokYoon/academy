@@ -2,13 +2,12 @@ package com.njwenglish.service;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
-import com.njwenglish.common.util.InviteCodes;
+import com.njwenglish.common.util.InviteCodeIssuer;
 import com.njwenglish.entity.Parent;
 import com.njwenglish.entity.SignupCode;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.User;
 import com.njwenglish.entity.enums.UserRole;
-import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.ParentRepository;
 import com.njwenglish.repository.SignupCodeRepository;
 import com.njwenglish.repository.UserRepository;
@@ -29,7 +28,7 @@ public class ParentLinkService {
     private final UserRepository userRepository;
     private final ParentRepository parentRepository;
     private final SignupCodeRepository signupCodeRepository;
-    private final ClassRoomRepository classRoomRepository;
+    private final InviteCodeIssuer inviteCodeIssuer;
     private final PasswordEncoder passwordEncoder;
 
     /**
@@ -39,7 +38,7 @@ public class ParentLinkService {
     @Transactional
     public SignupCode issueParentCode(Student student, String normalizedParentPhone) {
         return signupCodeRepository.save(SignupCode.issue(
-            student, UserRole.PARENT, generateUniqueCode(), normalizedParentPhone,
+            student, UserRole.PARENT, inviteCodeIssuer.issue(), normalizedParentPhone,
             OffsetDateTime.now()));
     }
 
@@ -72,15 +71,5 @@ public class ParentLinkService {
         User user = userRepository.save(User.create(UserRole.PARENT, normalizedPhone, name,
             passwordEncoder.encode(User.INITIAL_PASSWORD)));
         return parentRepository.save(Parent.create(user));
-    }
-
-    /** 개인 코드와 반 코드는 같은 입력란을 쓰므로 두 테이블 모두와 겹치면 안 된다. */
-    private String generateUniqueCode() {
-        String code;
-        do {
-            code = InviteCodes.generate();
-        } while (signupCodeRepository.existsByCode(code)
-            || classRoomRepository.existsByJoinCode(code));
-        return code;
     }
 }

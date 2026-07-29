@@ -52,4 +52,13 @@ public class Enrollment extends BaseCreatedEntity {
         enrollment.joinedAt = joinedAt;
         return enrollment;
     }
+
+    public boolean isActive() {
+        return leftAt == null;
+    }
+
+    /** 배정 해제·퇴원. 행을 지우지 않는다 — 과거 수업·출석이 이 학생과 이어져 있다. */
+    public void leave(LocalDate leftAt) {
+        this.leftAt = leftAt;
+    }
 }

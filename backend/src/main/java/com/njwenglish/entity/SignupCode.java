@@ -78,4 +78,9 @@ public class SignupCode extends BaseCreatedEntity {
     public void markUsed(OffsetDateTime now) {
         this.usedAt = now;
     }
+
+    /** 선생님이 번호를 잘못 입력한 경우. 코드 문자열은 이미 전달됐을 수 있어 그대로 둔다. */
+    public void changePhone(String normalizedPhone) {
+        this.phone = normalizedPhone;
+    }
 }

@@ -67,4 +67,64 @@ public class ClassRoom extends BaseTimeEntity {
 
     @Column(columnDefinition = "TEXT")
     private String memo;
+
+    /**
+     * joinCode는 서버가 만든 값만 받는다. 선생님이 직접 정하면 「고2반」처럼
+     * 추측 가능한 값이 들어가고, 반 코드는 전화번호 대조가 없어 그대로 뚫린다.
+     */
+    public static ClassRoom create(Teacher teacher, String name, String joinCode,
+                                   Short dayOfWeek, LocalTime startTime,
+                                   LocalDate termStart, LocalDate termEnd, String memo) {
+        ClassRoom classRoom = new ClassRoom();
+        classRoom.teacher = teacher;
+        classRoom.name = name;
+        classRoom.joinCode = joinCode;
+        classRoom.joinCodeActive = true;
+        classRoom.dayOfWeek = dayOfWeek;
+        classRoom.startTime = startTime;
+        classRoom.termStart = termStart;
+        classRoom.termEnd = termEnd;
+        classRoom.memo = memo;
+        classRoom.status = ClassRoomStatus.ACTIVE;
+        return classRoom;
+    }
+
+    /** 이름 변경은 과거 기록에도 소급 적용된다. lessons·attendances가 이 행을 참조한다. */
+    public void rename(String name) {
+        this.name = name;
+    }
+
+    public void changeSchedule(Short dayOfWeek, LocalTime startTime) {
+        this.dayOfWeek = dayOfWeek;
+        this.startTime = startTime;
+    }
+
+    public void changeTerm(LocalDate termStart, LocalDate termEnd) {
+        this.termStart = termStart;
+        this.termEnd = termEnd;
+    }
+
+    public void changeMemo(String memo) {
+        this.memo = memo;
+    }
+
+    /** 학기가 끝난 반. 삭제와 달리 수업·출석 기록이 남는다. 코드도 함께 닫는다. */
+    public void close() {
+        this.status = ClassRoomStatus.CLOSED;
+        this.joinCodeActive = false;
+    }
+
+    public boolean isActive() {
+        return status == ClassRoomStatus.ACTIVE;
+    }
+
+    /** 재발급하면 이전 코드는 즉시 무효다. 이미 가입한 학생의 enrollments는 그대로다. */
+    public void regenerateJoinCode(String joinCode) {
+        this.joinCode = joinCode;
+    }
+
+    /** 등록 기간이 끝나면 닫는다. 이 값이 반 코드 가입의 유일한 방어선이다. */
+    public void changeJoinCodeActive(boolean active) {
+        this.joinCodeActive = active;
+    }
 }
