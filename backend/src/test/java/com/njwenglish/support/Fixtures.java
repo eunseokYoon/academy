@@ -2,11 +2,17 @@ package com.njwenglish.support;
 
 import com.njwenglish.common.security.AuthUser;
 import com.njwenglish.entity.ClassRoom;
+import com.njwenglish.entity.Clinic;
+import com.njwenglish.entity.ClinicReservation;
+import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Parent;
 import com.njwenglish.entity.Student;
+import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.User;
 import com.njwenglish.entity.enums.ClassRoomStatus;
 import com.njwenglish.entity.enums.UserRole;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +57,34 @@ public final class Fixtures {
     /** 열려 있는 정상 반. */
     public static ClassRoom openClassRoom(Long id, String name, String joinCode) {
         return classRoom(id, name, joinCode, true, ClassRoomStatus.ACTIVE);
+    }
+
+    /** Teacher에는 생성 팩토리가 없다(시드로만 생긴다). 테스트에서만 리플렉션으로 만든다. */
+    public static Teacher teacherEntity(Long id) {
+        Teacher teacher = BeanUtils.instantiateClass(Teacher.class);
+        ReflectionTestUtils.setField(teacher, "id", id);
+        return teacher;
+    }
+
+    public static Lesson lesson(Long id, ClassRoom classRoom, LocalDate lessonDate) {
+        Lesson lesson = Lesson.create(classRoom, lessonDate,
+            (short) lessonDate.getYear(), (short) lessonDate.getMonthValue(), (short) 1);
+        ReflectionTestUtils.setField(lesson, "id", id);
+        return lesson;
+    }
+
+    public static Clinic clinic(Long id, LocalDate date, LocalTime startTime, Short capacity) {
+        Clinic clinic = Clinic.open(teacherEntity(1L), date, startTime,
+            startTime.plusHours(1), capacity, null);
+        ReflectionTestUtils.setField(clinic, "id", id);
+        return clinic;
+    }
+
+    public static ClinicReservation reservation(Long id, Clinic clinic, Student student,
+                                                Teacher assignedBy) {
+        ClinicReservation reservation = ClinicReservation.reserve(clinic, student, assignedBy);
+        ReflectionTestUtils.setField(reservation, "id", id);
+        return reservation;
     }
 
     public static Parent parent(Long id, User user) {

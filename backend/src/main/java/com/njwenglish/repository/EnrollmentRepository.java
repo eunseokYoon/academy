@@ -50,6 +50,20 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
         """)
     long countActiveStudents(@Param("classRoomId") Long classRoomId);
 
+    /**
+     * 특정 날짜 기준 재원 인원. 미확정 수업 목록이 "그날 몇 명이었는지"를 보여줘야 하는데
+     * 오늘 기준으로 세면 지난달 수업의 인원이 지금 인원으로 뜬다.
+     */
+    @Query("""
+        SELECT COUNT(e) FROM Enrollment e
+        WHERE e.classRoom.id = :classRoomId
+          AND e.joinedAt <= :targetDate
+          AND (e.leftAt IS NULL OR e.leftAt > :targetDate)
+          AND e.student.status = 'ENROLLED'
+        """)
+    long countActiveStudentsOn(@Param("classRoomId") Long classRoomId,
+                               @Param("targetDate") LocalDate targetDate);
+
     /** 목록 화면에서 학생별 반 이름을 채운다. 한 번에 가져와야 20행 × 1쿼리가 안 된다. */
     @Query("""
         SELECT e FROM Enrollment e JOIN FETCH e.classRoom c

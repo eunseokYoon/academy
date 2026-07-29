@@ -64,4 +64,44 @@ public class ClinicReservation extends BaseTimeEntity {
 
     @Column(name = "checked_at")
     private OffsetDateTime checkedAt;
+
+    /**
+     * assignedBy가 null이면 학생 본인 신청(S-9), 값이 있으면 선생님 배정(T-13)이다.
+     * 명단에서 "왜 여기 있냐"는 문의에 답하려면 이 구분이 남아야 한다.
+     */
+    public static ClinicReservation reserve(Clinic clinic, Student student, Teacher assignedBy) {
+        ClinicReservation reservation = new ClinicReservation();
+        reservation.clinic = clinic;
+        reservation.student = student;
+        reservation.assignedBy = assignedBy;
+        reservation.status = ReservationStatus.RESERVED;
+        return reservation;
+    }
+
+    /** 행을 지우지 않는다. 부분 유니크 인덱스가 RESERVED만 보므로 나중에 다시 신청할 수 있다. */
+    public void cancel() {
+        this.status = ReservationStatus.CANCELED;
+    }
+
+    /** 변경 요청 승인 시 기존 예약에 붙는다. 취소(CANCELED)와 구분해야 이력이 남는다. */
+    public void moveOut() {
+        this.status = ReservationStatus.MOVED;
+    }
+
+    /** 클리닉 출석 확정. attendances 테이블은 건드리지 않는다. */
+    public void checkAttendance(AttendanceStatus attendStatus, String memo,
+                                Teacher teacher, OffsetDateTime now) {
+        this.attendStatus = attendStatus;
+        this.memo = memo;
+        this.checkedBy = teacher;
+        this.checkedAt = now;
+    }
+
+    public boolean isReserved() {
+        return status == ReservationStatus.RESERVED;
+    }
+
+    public boolean isAssignedByTeacher() {
+        return assignedBy != null;
+    }
 }

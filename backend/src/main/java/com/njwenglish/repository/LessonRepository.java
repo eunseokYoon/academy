@@ -35,6 +35,17 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         """, nativeQuery = true)
     boolean hasRecords(@Param("lessonId") Long lessonId);
 
+    /**
+     * 미확정 수업. 미래 수업일도 PENDING이라 오늘까지로 잘라야 한다 —
+     * 안 자르면 아직 오지도 않은 날이 "출석 확정해야 할 수업"으로 뜬다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l JOIN FETCH l.classRoom c
+        WHERE l.lessonDate <= :today AND l.attendanceStatus = 'PENDING'
+        ORDER BY l.lessonDate DESC, c.name ASC
+        """)
+    List<Lesson> findPendingUntil(@Param("today") LocalDate today);
+
     /** T-4 목록. 반·기간·주차가 전부 선택이라 null이면 조건을 통과시킨다. */
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c

@@ -65,4 +65,33 @@ public class ClinicChangeRequest extends BaseCreatedEntity {
 
     @Column(name = "decided_at")
     private OffsetDateTime decidedAt;
+
+    /** targetClinic이 null이면 취소 요청이다. reasonCode는 필수라 호출부에서 이미 검증돼 있어야 한다. */
+    public static ClinicChangeRequest create(ClinicReservation reservation, Student student,
+                                             Clinic targetClinic, String reasonCode,
+                                             String reasonNote) {
+        ClinicChangeRequest request = new ClinicChangeRequest();
+        request.reservation = reservation;
+        request.student = student;
+        request.targetClinic = targetClinic;
+        request.reasonCode = reasonCode;
+        request.reasonNote = reasonNote;
+        request.status = ChangeRequestStatus.PENDING;
+        return request;
+    }
+
+    public void decide(boolean approve, Teacher teacher, OffsetDateTime now) {
+        this.status = approve ? ChangeRequestStatus.APPROVED : ChangeRequestStatus.REJECTED;
+        this.decidedBy = teacher;
+        this.decidedAt = now;
+    }
+
+    public boolean isPending() {
+        return status == ChangeRequestStatus.PENDING;
+    }
+
+    /** targetClinic이 없으면 시간 이동이 아니라 취소 요청이다. */
+    public boolean isCancelRequest() {
+        return targetClinic == null;
+    }
 }

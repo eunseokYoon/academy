@@ -58,4 +58,40 @@ public class Clinic extends BaseTimeEntity {
 
     @Column(columnDefinition = "TEXT")
     private String memo;
+
+    public static Clinic open(Teacher teacher, LocalDate clinicDate, LocalTime startTime,
+                              LocalTime endTime, Short capacity, String memo) {
+        Clinic clinic = new Clinic();
+        clinic.teacher = teacher;
+        clinic.clinicDate = clinicDate;
+        clinic.startTime = startTime;
+        clinic.endTime = endTime;
+        clinic.capacity = capacity;
+        clinic.memo = memo;
+        clinic.status = ClinicStatus.OPEN;
+        return clinic;
+    }
+
+    /** capacity를 null로 바꾸면 인원 제한 없음이다. 호출부가 "안 보냄"과 "null로 지정"을 구분해야 한다. */
+    public void reschedule(LocalDate clinicDate, LocalTime startTime, LocalTime endTime,
+                           Short capacity, String memo) {
+        this.clinicDate = clinicDate;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.capacity = capacity;
+        this.memo = memo;
+    }
+
+    public void changeStatus(ClinicStatus status) {
+        this.status = status;
+    }
+
+    public boolean isOpen() {
+        return status == ClinicStatus.OPEN;
+    }
+
+    /** capacity가 null이면 제한 없음이라 언제나 여유가 있다. */
+    public boolean isFull(long reservedCount) {
+        return capacity != null && reservedCount >= capacity;
+    }
 }

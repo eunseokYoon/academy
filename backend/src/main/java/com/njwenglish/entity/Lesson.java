@@ -115,6 +115,20 @@ public class Lesson extends BaseTimeEntity {
         return publishedAt != null;
     }
 
+    /**
+     * 출석 확정. 재확정도 정상 흐름이라 409를 던지지 않고 확정 시각만 갱신한다.
+     * 이 값이 CONFIRMED가 되어야 캘린더가 색을 입힌다.
+     */
+    public void confirmAttendance(Teacher teacher, OffsetDateTime now) {
+        this.attendanceStatus = LessonAttendanceStatus.CONFIRMED;
+        this.attendanceConfirmedAt = now;
+        this.attendanceConfirmedBy = teacher;
+    }
+
+    public boolean isAttendanceConfirmed() {
+        return attendanceStatus == LessonAttendanceStatus.CONFIRMED;
+    }
+
     public void publish(OffsetDateTime now) {
         if (publishedAt == null) {
             this.publishedAt = now;
