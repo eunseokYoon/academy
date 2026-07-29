@@ -36,6 +36,9 @@ app:
     secret: ${JWT_SECRET}
     access-token-validity-seconds: 1800        # 30분
     refresh-token-validity-seconds: 1209600    # 14일
+    # 리프레시 쿠키의 Secure 플래그. 로컬(http)에서는 false여야 쿠키가 저장된다.
+    # 운영에서는 REFRESH_COOKIE_SECURE=true로 반드시 켤 것.
+    refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:false}
   s3:
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
