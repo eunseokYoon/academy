@@ -43,6 +43,12 @@ export async function post<T>(url: string, body?: object): Promise<T> {
   return res.data.data;
 }
 
+/** 온라인 테스트 답안 임시 저장이 유일한 PUT 경로다 (전체 배열 교체). */
+export async function put<T>(url: string, body?: object): Promise<T> {
+  const res = await api.put<ApiResponse<T>>(url, body);
+  return res.data.data;
+}
+
 export async function patch<T>(url: string, body?: object): Promise<T> {
   const res = await api.patch<ApiResponse<T>>(url, body);
   return res.data.data;

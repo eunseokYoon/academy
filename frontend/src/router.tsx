@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import { RequireAuth, RoleGuard } from "./shared/auth/RoleGuard";
 import { RoleRedirect } from "./shared/auth/RoleRedirect";
 import LoginPage from "./routes/auth/LoginPage";
@@ -9,13 +9,27 @@ import PrivacyPage from "./routes/auth/PrivacyPage";
 import StudentLayout from "./routes/student/StudentLayout";
 import StudentAttendancePage from "./routes/student/StudentAttendancePage";
 import StudentClinicPage from "./routes/student/StudentClinicPage";
+import StudentHomePage from "./routes/student/StudentHomePage";
+import StudentMaterialPage from "./routes/student/StudentMaterialPage";
+import StudentNoticePage from "./routes/student/StudentNoticePage";
 import StudentHomeworkPage from "./routes/student/StudentHomeworkPage";
 import StudentHomeworkDetailPage from "./routes/student/StudentHomeworkDetailPage";
+import StudentLessonPage from "./routes/student/StudentLessonPage";
+import StudentLessonDetailPage from "./routes/student/StudentLessonDetailPage";
+import StudentScorePage from "./routes/student/StudentScorePage";
+import StudentOnlineTestPage from "./routes/student/StudentOnlineTestPage";
+import StudentOnlineTestTakePage from "./routes/student/StudentOnlineTestTakePage";
 import ParentLayout from "./routes/parent/ParentLayout";
+import ParentHomePage from "./routes/parent/ParentHomePage";
 import ParentMePage from "./routes/parent/ParentMePage";
+import ParentNoticePage from "./routes/parent/ParentNoticePage";
 import ParentSchedulePage from "./routes/parent/ParentSchedulePage";
 import ParentHomeworkPage from "./routes/parent/ParentHomeworkPage";
+import ParentScorePage from "./routes/parent/ParentScorePage";
 import TeacherLayout from "./routes/teacher/TeacherLayout";
+import DashboardPage from "./routes/teacher/DashboardPage";
+import MaterialPage from "./routes/teacher/materials/MaterialPage";
+import NoticePage from "./routes/teacher/notices/NoticePage";
 import AttendancePage from "./routes/teacher/attendance/AttendancePage";
 import ClinicPage from "./routes/teacher/clinics/ClinicPage";
 import StudentListPage from "./routes/teacher/students/StudentListPage";
@@ -27,11 +41,10 @@ import LessonListPage from "./routes/teacher/lessons/LessonListPage";
 import LessonDetailPage from "./routes/teacher/lessons/LessonDetailPage";
 import HomeworkListPage from "./routes/teacher/homeworks/HomeworkListPage";
 import HomeworkDetailPage from "./routes/teacher/homeworks/HomeworkDetailPage";
-
-/** 다음 Phase에서 실제 홈으로 교체한다. */
-function ComingSoon({ phase }: { phase: string }) {
-  return <p className="text-sm text-slate-500">{phase}에서 채웁니다.</p>;
-}
+import ScorePage from "./routes/teacher/scores/ScorePage";
+import ExamSchedulePage from "./routes/teacher/exams/ExamSchedulePage";
+import OnlineTestListPage from "./routes/teacher/onlinetests/OnlineTestListPage";
+import OnlineTestDetailPage from "./routes/teacher/onlinetests/OnlineTestDetailPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -55,12 +68,18 @@ export const router = createBrowserRouter([
       </RoleGuard>
     ),
     children: [
-      { index: true, element: <ComingSoon phase="Phase 7" /> },
+      { index: true, element: <StudentHomePage /> },
       { path: "homeworks", element: <StudentHomeworkPage /> },
       { path: "homeworks/:homeworkId", element: <StudentHomeworkDetailPage /> },
       { path: "attendances", element: <StudentAttendancePage /> },
       { path: "clinics", element: <StudentClinicPage /> },
-      /* Phase 6, 7에서 추가 */
+      { path: "lessons", element: <StudentLessonPage /> },
+      { path: "lessons/:lessonId", element: <StudentLessonDetailPage /> },
+      { path: "scores", element: <StudentScorePage /> },
+      { path: "online-tests", element: <StudentOnlineTestPage /> },
+      { path: "online-tests/:testId", element: <StudentOnlineTestTakePage /> },
+      { path: "materials", element: <StudentMaterialPage /> },
+      { path: "notices", element: <StudentNoticePage /> },
     ],
   },
   {
@@ -71,11 +90,12 @@ export const router = createBrowserRouter([
       </RoleGuard>
     ),
     children: [
-      { index: true, element: <Navigate to="/parent/schedule" replace /> },
+      { index: true, element: <ParentHomePage /> },
       { path: "schedule", element: <ParentSchedulePage /> },
       { path: "homeworks", element: <ParentHomeworkPage /> },
+      { path: "scores", element: <ParentScorePage /> },
+      { path: "notices", element: <ParentNoticePage /> },
       { path: "me", element: <ParentMePage /> },
-      /* Phase 6, 7에서 추가 */
     ],
   },
   {
@@ -86,7 +106,7 @@ export const router = createBrowserRouter([
       </RoleGuard>
     ),
     children: [
-      { index: true, element: <Navigate to="/teacher/students" replace /> },
+      { index: true, element: <DashboardPage /> },
       { path: "students", element: <StudentListPage /> },
       { path: "students/new", element: <StudentNewPage /> },
       { path: "students/:studentId", element: <StudentDetailPage /> },
@@ -98,7 +118,12 @@ export const router = createBrowserRouter([
       { path: "homeworks", element: <HomeworkListPage /> },
       { path: "homeworks/:homeworkId", element: <HomeworkDetailPage /> },
       { path: "clinics", element: <ClinicPage /> },
-      /* Phase 6~7에서 추가 */
+      { path: "scores", element: <ScorePage /> },
+      { path: "exam-schedules", element: <ExamSchedulePage /> },
+      { path: "online-tests", element: <OnlineTestListPage /> },
+      { path: "online-tests/:testId", element: <OnlineTestDetailPage /> },
+      { path: "materials", element: <MaterialPage /> },
+      { path: "notices", element: <NoticePage /> },
     ],
   },
   { path: "/", element: <RoleRedirect /> },

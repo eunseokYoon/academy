@@ -1,7 +1,9 @@
 import { get } from "../../shared/api/client";
 import type { PageResponse } from "../../shared/api/types";
-import type { AttendanceCalendar, AttendanceStatus } from "../../shared/attendance/types";
+import type { AttendanceCalendar, AttendanceStatus, AttendanceSummary } from "../../shared/attendance/types";
 import type { SubmissionStatus } from "../../shared/homework/types";
+import type { NoticeSummary } from "../../shared/notice/api";
+import type { ExamType, ScoreChart, ScoreType, StudentExamSchedule } from "../../shared/score/types";
 
 export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -42,3 +44,50 @@ export const getChildHomeworks = (
   studentId: number,
   params: { status?: SubmissionStatus; page?: number },
 ) => get<PageResponse<ParentHomework>>(`/parent/children/${studentId}/homeworks`, params);
+
+// ---------- 테스트 결과 (P-4) ----------
+
+/**
+ * 학부모 화면의 핵심이다. 표가 아니라 주차별 시계열이다.
+ * 등수·백분위·반 평균은 응답에 없다.
+ */
+export const getChildScores = (studentId: number, scoreType?: ScoreType) =>
+  get<ScoreChart>(`/parent/children/${studentId}/scores`, scoreType ? { scoreType } : undefined);
+
+export const getChildExamSchedules = (studentId: number) =>
+  get<StudentExamSchedule[]>(`/parent/children/${studentId}/exam-schedules`);
+
+// ---------- 포털 홈 (P-1) ----------
+
+/**
+ * 여섯 카드를 <b>한 번의 호출</b>로 받는다. 자녀를 바꾸면 이 호출만 다시 하면 된다.
+ *
+ * <p>수업 제목·내용·영상, 숙제 사진·피드백, 자료실 필드는 없다.
+ * 학부모는 "자녀가 했는지 여부"만 본다 — 응답에 추가하지 마라.
+ *
+ * <p>값이 없는 카드는 null이다. 0으로 오지 않는다.
+ */
+export interface ParentHome {
+  student: {
+    id: number;
+    name: string;
+    /** 서버가 마스킹한 값이다 (010-****-2222). 미가입 자녀는 null. */
+    phone: string | null;
+    classRooms: string[];
+  };
+  nextExam: {
+    examType: ExamType;
+    startDate: string;
+    scopeNote: string | null;
+    dDay: number;
+  } | null;
+  /** 날짜만 온다. 수업 내용은 학부모에게 노출하지 않는다. */
+  nextLessonDate: string | null;
+  notices: { totalCount: number; recent: NoticeSummary[] };
+  pendingHomeworkCount: number;
+  nextClinic: { clinicId: number; clinicDate: string; startTime: string; dDay: number } | null;
+  thisMonthAttendance: AttendanceSummary;
+}
+
+export const getChildHome = (studentId: number) =>
+  get<ParentHome>(`/parent/children/${studentId}/home`);
