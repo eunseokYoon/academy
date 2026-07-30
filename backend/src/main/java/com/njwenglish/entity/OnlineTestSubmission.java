@@ -64,4 +64,35 @@ public class OnlineTestSubmission extends BaseTimeEntity {
 
     @Column(name = "correct_count")
     private Short correctCount;
+
+    /** 학생이 응시 화면을 처음 열 때 만든다. 답은 전부 null(미체크)이다. */
+    public static OnlineTestSubmission start(OnlineTest onlineTest, Student student,
+                                             short questionCount) {
+        OnlineTestSubmission submission = new OnlineTestSubmission();
+        submission.onlineTest = onlineTest;
+        submission.student = student;
+        submission.chosenChoices = new Short[questionCount];
+        submission.status = OnlineTestStatus.IN_PROGRESS;
+        return submission;
+    }
+
+    /**
+     * 임시 저장. 출석과 반대로 서버에 남긴다 —
+     * 25문항에 20~30분이 걸려서 브라우저가 닫히면 처음부터 다시 해야 한다.
+     */
+    public void saveAnswers(Short[] chosenChoices) {
+        this.chosenChoices = chosenChoices;
+    }
+
+    /** 제출은 한 번뿐이다. 재응시가 없어서 이후 답을 바꿀 수 없다. */
+    public void submit(OffsetDateTime now, BigDecimal score, short correctCount) {
+        this.status = OnlineTestStatus.SUBMITTED;
+        this.submittedAt = now;
+        this.score = score;
+        this.correctCount = correctCount;
+    }
+
+    public boolean isSubmitted() {
+        return status == OnlineTestStatus.SUBMITTED;
+    }
 }

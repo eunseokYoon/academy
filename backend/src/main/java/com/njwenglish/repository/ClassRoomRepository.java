@@ -25,6 +25,18 @@ public interface ClassRoomRepository extends JpaRepository<ClassRoom, Long> {
 
     List<ClassRoom> findByIdIn(Collection<Long> ids);
 
+    /** T-1 통계: 운영 중인 반 수. */
+    long countByStatus(ClassRoomStatus status);
+
+    /**
+     * T-1 점검: 가입 코드가 열려 있는 반.
+     *
+     * <p>학기 중 내내 코드를 열어두는 것이 가장 흔한 사고 경로다. 등록 기간이 끝났는데
+     * 0이 아니면 T-3에서 닫아야 한다. <b>0이어도 화면에서 숨기지 마라</b> — 할 일이 아니라
+     * 매일 확인하는 점검 항목이다.
+     */
+    long countByStatusAndJoinCodeActiveTrue(ClassRoomStatus status);
+
     /**
      * 운영이 시작된 반은 지울 수 없다. 하나라도 있으면 409이고 close를 안내한다.
      * 억지로 지우면 학생의 과거 출석·숙제 기록이 함께 사라진다.

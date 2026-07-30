@@ -25,11 +25,14 @@ import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.AttendanceRepository.CalendarRow;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
+import com.njwenglish.repository.SubmissionRepository;
+import com.njwenglish.repository.SubmissionRepository.HomeworkRateRow;
 import com.njwenglish.repository.TeacherRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,6 +56,7 @@ public class AttendanceService {
     private final LessonRepository lessonRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final TeacherRepository teacherRepository;
+    private final SubmissionRepository submissionRepository;
     private final StudentAccessGuard studentAccessGuard;
 
     /**
@@ -181,22 +185,37 @@ public class AttendanceService {
                 (kept, candidate) -> kept.getAttendStatus() != null ? kept : candidate);
         }
 
+        Map<Long, HomeworkRateRow> homeworkRates = homeworkRatesOf(student.getId(), byDate.values());
+
         List<AttendanceDayResponse> days = new ArrayList<>(byDate.size());
         List<AttendanceStatus> confirmed = new ArrayList<>(byDate.size());
+        long doneTotal = 0;
+        long assignedTotal = 0;
         for (CalendarRow row : byDate.values()) {
             boolean isConfirmed = row.getLessonStatus() == LessonAttendanceStatus.CONFIRMED
                 && row.getAttendStatus() != null;
-            // homeworkRate는 Phase 5에서 채운다. 지금 0을 넣으면 빨간 띠가 뜬다
+            HomeworkRateRow rate = homeworkRates.get(row.getLessonId());
+
+            // rate가 null이면 그날 숙제가 없었다는 뜻이다. 0으로 바꾸지 마라 —
+            // 0은 "전부 미제출"이라 캘린더에 빨간 띠가 뜨고 학부모는 그걸 그렇게 읽는다
             days.add(new AttendanceDayResponse(row.getLessonDate(),
                 isConfirmed ? row.getAttendStatus().name() : AttendanceDayResponse.PENDING,
-                null));
+                rate == null ? null : percent(rate.getDoneCount(), rate.getTotalCount())));
+
             if (isConfirmed) {
                 confirmed.add(row.getAttendStatus());
             }
+            if (rate != null) {
+                doneTotal += rate.getDoneCount();
+                assignedTotal += rate.getTotalCount();
+            }
         }
 
+        // 그 달에 숙제가 하나도 없으면 월 전체도 null이다
+        Integer monthlyRate = assignedTotal == 0 ? null : percent(doneTotal, assignedTotal);
+
         return new AttendanceCalendarResponse(yearMonth.getYear(), yearMonth.getMonthValue(),
-            AttendanceSummaryResponse.of(confirmed), null, days);
+            AttendanceSummaryResponse.of(confirmed), monthlyRate, days);
     }
 
     // ---------- 내부 ----------
@@ -204,6 +223,28 @@ public class AttendanceService {
     private Lesson findLesson(Long lessonId) {
         return lessonRepository.findWithClassRoom(lessonId)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    /**
+     * 캘린더 색띠의 원본. lesson에 연결된 숙제만 대상이라, 행이 없는 수업일은
+     * "그날 숙제가 없었다"이지 0%가 아니다.
+     */
+    private Map<Long, HomeworkRateRow> homeworkRatesOf(Long studentId,
+                                                       Collection<CalendarRow> rows) {
+        List<Long> lessonIds = rows.stream().map(CalendarRow::getLessonId).toList();
+        if (lessonIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, HomeworkRateRow> rates = new HashMap<>();
+        for (HomeworkRateRow rate : submissionRepository.findHomeworkRates(studentId, lessonIds)) {
+            rates.put(rate.getLessonId(), rate);
+        }
+        return rates;
+    }
+
+    /** 반올림한다. 5문항 중 3개면 60이다. */
+    private int percent(long done, long total) {
+        return Math.toIntExact(Math.round(done * 100.0 / total));
     }
 
     private Map<Long, Attendance> indexByStudent(List<Attendance> attendances) {

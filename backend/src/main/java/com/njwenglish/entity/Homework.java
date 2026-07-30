@@ -49,4 +49,39 @@ public class Homework extends BaseTimeEntity {
 
     @Column(name = "due_at", nullable = false)
     private OffsetDateTime dueAt;
+
+    /** lesson은 선택이다. 연결해야 캘린더의 숙제 완료율 색띠가 계산된다. */
+    public static Homework create(ClassRoom classRoom, Lesson lesson, Teacher teacher,
+                                  String title, String description, OffsetDateTime dueAt) {
+        Homework homework = new Homework();
+        homework.classRoom = classRoom;
+        homework.lesson = lesson;
+        homework.teacher = teacher;
+        homework.title = title;
+        homework.description = description;
+        homework.dueAt = dueAt;
+        return homework;
+    }
+
+    public void edit(String title, String description, Lesson lesson) {
+        this.title = title;
+        this.description = description;
+        this.lesson = lesson;
+    }
+
+    /**
+     * 마감은 늦추는 방향만이다. 앞당기면 이미 제출한 학생의 is_late를 전부 재계산해야 하는데,
+     * 그 비용에 비해 쓸 일이 없다. 앞당기려면 삭제 후 재출제한다.
+     */
+    public boolean canExtendTo(OffsetDateTime newDueAt) {
+        return !newDueAt.isBefore(dueAt);
+    }
+
+    public void extendDueAt(OffsetDateTime newDueAt) {
+        this.dueAt = newDueAt;
+    }
+
+    public boolean isLateAt(OffsetDateTime at) {
+        return at.isAfter(dueAt);
+    }
 }

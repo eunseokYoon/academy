@@ -98,4 +98,87 @@ public class OnlineTest extends BaseTimeEntity {
 
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
+
+    public static OnlineTest create(ClassRoom classRoom, Teacher teacher, String title,
+                                    short questionCount, short choiceCount,
+                                    Short[] correctChoices, Short[] points, String answerS3Key,
+                                    ScoreType scoreType, String subject,
+                                    short year, short month, short week,
+                                    OffsetDateTime opensAt, OffsetDateTime closesAt) {
+        OnlineTest test = new OnlineTest();
+        test.classRoom = classRoom;
+        test.teacher = teacher;
+        test.title = title;
+        test.questionCount = questionCount;
+        test.choiceCount = choiceCount;
+        test.correctChoices = correctChoices;
+        test.points = points;
+        test.answerS3Key = answerS3Key;
+        test.scoreType = scoreType;
+        test.subject = subject;
+        test.year = year;
+        test.month = month;
+        test.week = week;
+        test.opensAt = opensAt;
+        test.closesAt = closesAt;
+        return test;
+    }
+
+    /**
+     * 공개 전에만 정답·문항 수를 바꿀 수 있다. 호출부에서 isPublished()를 먼저 검사해라.
+     * 공개 후 정답을 고치면 이미 응시한 학생의 점수가 소급 변경된다.
+     */
+    public void edit(String title, short questionCount, short choiceCount,
+                     Short[] correctChoices, Short[] points, String answerS3Key,
+                     ScoreType scoreType, String subject,
+                     short year, short month, short week,
+                     OffsetDateTime opensAt, OffsetDateTime closesAt) {
+        this.title = title;
+        this.questionCount = questionCount;
+        this.choiceCount = choiceCount;
+        this.correctChoices = correctChoices;
+        this.points = points;
+        this.answerS3Key = answerS3Key;
+        this.scoreType = scoreType;
+        this.subject = subject;
+        this.year = year;
+        this.month = month;
+        this.week = week;
+        this.opensAt = opensAt;
+        this.closesAt = closesAt;
+    }
+
+    /** 공개 후에도 바꿀 수 있는 값. 정답과 문항 수는 여기 넣지 마라. */
+    public void editSchedule(String title, String answerS3Key,
+                             OffsetDateTime opensAt, OffsetDateTime closesAt) {
+        this.title = title;
+        this.answerS3Key = answerS3Key;
+        this.opensAt = opensAt;
+        this.closesAt = closesAt;
+    }
+
+    public void publish(OffsetDateTime now) {
+        if (publishedAt == null) {
+            this.publishedAt = now;
+        }
+    }
+
+    public boolean isPublished() {
+        return publishedAt != null;
+    }
+
+    /** 응시 가능 시각인지. opensAt이 null이면 공개 즉시 열린다. */
+    public boolean isOpenAt(OffsetDateTime now) {
+        return opensAt == null || !now.isBefore(opensAt);
+    }
+
+    /** closesAt이 null이면 마감이 없다. */
+    public boolean isClosedAt(OffsetDateTime now) {
+        return closesAt != null && now.isAfter(closesAt);
+    }
+
+    /** 성적 반영 대상인지. null이면 연습용이라 scores에 남지 않는다. */
+    public boolean reflectsToScores() {
+        return scoreType != null;
+    }
 }

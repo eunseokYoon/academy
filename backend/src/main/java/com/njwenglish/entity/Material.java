@@ -71,4 +71,61 @@ public class Material extends BaseCreatedEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "uploaded_by", nullable = false)
     private Teacher uploadedBy;
+
+    /**
+     * 반 전용 자료. 같은 파일을 여러 반에 주려면 반마다 이 메서드를 호출해 행을 만든다
+     * (s3Key는 공유한다 — S3에 두 번 올릴 이유가 없다).
+     */
+    public static Material forClass(String title, MaterialCategory category, String s3Key,
+                                    String fileName, Long bytes, ClassRoom classRoom,
+                                    short year, short month, short week, Teacher uploadedBy) {
+        Material material = base(title, category, s3Key, fileName, bytes,
+            year, month, week, uploadedBy);
+        material.classRoom = classRoom;
+        material.visibility = MaterialVisibility.CLASS;
+        return material;
+    }
+
+    /**
+     * 반 제한 없는 자료. <b>"누구나"가 아니라 "로그인한 전체 재원생"이다.</b>
+     * classRoom은 null이어야 한다 (ck_materials_scope).
+     */
+    public static Material forEveryone(String title, MaterialCategory category, String s3Key,
+                                       String fileName, Long bytes,
+                                       short year, short month, short week, Teacher uploadedBy) {
+        Material material = base(title, category, s3Key, fileName, bytes,
+            year, month, week, uploadedBy);
+        material.visibility = MaterialVisibility.PUBLIC;
+        return material;
+    }
+
+    /**
+     * 공개 범위(visibility·classRoom)와 파일은 바꾸지 않는다. 대상이 바뀌는 것은
+     * 사실상 다른 자료이고, 파일을 바꾸면 이전 s3 객체가 고아로 남는다.
+     * 둘 다 삭제 후 새로 올리는 것이 맞다.
+     */
+    public void edit(String title, MaterialCategory category,
+                     short year, short month, short week) {
+        this.title = title;
+        this.category = category;
+        this.year = year;
+        this.month = month;
+        this.week = week;
+    }
+
+    private static Material base(String title, MaterialCategory category, String s3Key,
+                                 String fileName, Long bytes,
+                                 short year, short month, short week, Teacher uploadedBy) {
+        Material material = new Material();
+        material.title = title;
+        material.category = category;
+        material.s3Key = s3Key;
+        material.fileName = fileName;
+        material.bytes = bytes;
+        material.year = year;
+        material.month = month;
+        material.week = week;
+        material.uploadedBy = uploadedBy;
+        return material;
+    }
 }

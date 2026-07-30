@@ -56,4 +56,28 @@ public class ExamSchedule extends BaseTimeEntity {
 
     @Column(name = "scope_note", columnDefinition = "TEXT")
     private String scopeNote;
+
+    public static ExamSchedule create(ClassRoom classRoom, short year, short semester,
+                                      ExamType examType, LocalDate startDate, LocalDate endDate,
+                                      String scopeNote) {
+        ExamSchedule schedule = new ExamSchedule();
+        schedule.classRoom = classRoom;
+        schedule.year = year;
+        schedule.semester = semester;
+        schedule.examType = examType;
+        schedule.startDate = startDate;
+        schedule.endDate = endDate;
+        schedule.scopeNote = scopeNote;
+        return schedule;
+    }
+
+    /**
+     * 반·연도·학기·시험종류는 바꾸지 않는다. UNIQUE 키를 이루는 값이라
+     * 옮기려면 지우고 다시 만드는 편이 낫다. 여기서는 기간과 범위만 고친다.
+     */
+    public void reschedule(LocalDate startDate, LocalDate endDate, String scopeNote) {
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.scopeNote = scopeNote;
+    }
 }

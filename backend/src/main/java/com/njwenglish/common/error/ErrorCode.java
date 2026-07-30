@@ -20,7 +20,12 @@ public enum ErrorCode {
     PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 10장까지 첨부할 수 있습니다."),
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),
     SUBMISSION_EXISTS(HttpStatus.CONFLICT, "제출한 학생이 있어 삭제할 수 없습니다."),
+    SUBMISSION_ALREADY_CHECKED(HttpStatus.CONFLICT, "선생님이 확인을 마친 숙제는 수정할 수 없습니다."),
     STUDENT_HAS_RECORDS(HttpStatus.CONFLICT, "운영 기록이 있어 삭제할 수 없습니다. 퇴원 처리를 사용해 주세요."),
+    // 공개 후 정답을 고치면 이미 응시한 학생의 점수가 소급 변경된다. 삭제 후 재출제가 유일한 경로다
+    TEST_ALREADY_PUBLISHED(HttpStatus.CONFLICT,
+        "공개된 테스트의 정답과 문항 수는 수정할 수 없습니다. 삭제 후 다시 출제해 주세요."),
+    EXAM_SCHEDULE_HAS_SCORES(HttpStatus.CONFLICT, "연결된 성적이 있어 삭제할 수 없습니다."),
     CLASS_ROOM_HAS_RECORDS(HttpStatus.CONFLICT, "수업·배정 기록이 있어 삭제할 수 없습니다. 종료 처리를 사용해 주세요."),
     LESSON_HAS_RECORDS(HttpStatus.CONFLICT, "출석·숙제·시청 기록이 있어 삭제할 수 없습니다."),
     INVITE_CODE_INVALID(HttpStatus.BAD_REQUEST, "초대코드가 유효하지 않습니다."),

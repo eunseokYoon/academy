@@ -2,6 +2,7 @@ package com.njwenglish.repository;
 
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.enums.StudentStatus;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -63,6 +64,29 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
                          @Param("keyword") String keyword,
                          @Param("phoneKeyword") String phoneKeyword,
                          Pageable pageable);
+
+    /** T-1 통계: 재원생 수. */
+    long countByStatus(StudentStatus status);
+
+    /**
+     * T-1 할 일: 회원가입 안 한 학생. 가입하지 않으면 선생님이 입력한 출석·숙제·성적이
+     * 아무에게도 전달되지 않는다. 오픈 초기에 이 숫자를 0으로 만드는 게 실제 운영 업무다.
+     */
+    long countByStatusAndUserIsNull(StudentStatus status);
+
+    /** T-1 할 일: 학부모가 연결되지 않은 학생. */
+    long countByStatusAndParentIsNull(StudentStatus status);
+
+    /**
+     * T-1 점검: 최근 7일 신규 가입.
+     *
+     * <p>반 코드는 전화번호 대조가 없어 코드를 아는 사람 누구나 가입한다. 막을 수단이 없으니
+     * <b>가입 후 발견해서 지운다.</b> 이 숫자가 그 탐지 경로의 입구다.
+     *
+     * <p>status로 걸러내지 않는다. 퇴원 처리된 학생도 "그 기간에 들어온 사람"이라
+     * 선생님이 확인해야 하는 대상이다.
+     */
+    long countByCreatedAtGreaterThanEqual(OffsetDateTime from);
 
     /**
      * 물리 삭제 차단 조건. 하나라도 있으면 STUDENT_HAS_RECORDS다.

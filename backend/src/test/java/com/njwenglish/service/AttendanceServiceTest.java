@@ -28,6 +28,7 @@ import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.AttendanceRepository.CalendarRow;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
+import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
@@ -56,6 +57,8 @@ class AttendanceServiceTest {
     @Mock
     private TeacherRepository teacherRepository;
     @Mock
+    private SubmissionRepository submissionRepository;
+    @Mock
     private StudentAccessGuard studentAccessGuard;
 
     private AttendanceService attendanceService;
@@ -77,7 +80,7 @@ class AttendanceServiceTest {
         lesson = Fixtures.lesson(501L, classRoom, LESSON_DATE);
 
         attendanceService = new AttendanceService(attendanceRepository, lessonRepository,
-            enrollmentRepository, teacherRepository, studentAccessGuard);
+            enrollmentRepository, teacherRepository, submissionRepository, studentAccessGuard);
     }
 
     @AfterEach
@@ -212,9 +215,50 @@ class AttendanceServiceTest {
 
         assertThat(calendar.days()).hasSize(2);
         assertThat(calendar.days().get(1).status()).isEqualTo("PENDING");
-        // Phase 5 전까지 숙제 비율은 null이다. 0이면 학부모 캘린더에 빨간 띠가 뜬다
+        // 그날 숙제가 없으면 null이다. 0이면 학부모 캘린더에 빨간 띠가 뜬다
         assertThat(calendar.days()).allMatch(day -> day.homeworkRate() == null);
         assertThat(calendar.homeworkCompletionRate()).isNull();
+    }
+
+    @Test
+    @DisplayName("숙제가 있는 날만 완료율이 채워지고, 없는 날은 0이 아니라 null이다")
+    void 숙제가_없는_날의_완료율은_null이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(attendanceRepository.findCalendarRows(anyLong(), any(), any()))
+            .willReturn(List.of(
+                row(501L, LocalDate.of(2026, 5, 6),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT),
+                row(502L, LocalDate.of(2026, 5, 13),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
+        // 5/6에만 숙제가 있다. 5문항 중 3개 제출
+        given(submissionRepository.findHomeworkRates(88L, List.of(501L, 502L)))
+            .willReturn(List.of(rate(501L, 3, 5)));
+
+        AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
+
+        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(60);
+        // 숙제가 없던 날이다. 0으로 바꾸면 "하나도 안 냈다"로 읽힌다
+        assertThat(calendar.days().get(1).homeworkRate()).isNull();
+        assertThat(calendar.homeworkCompletionRate()).isEqualTo(60);
+    }
+
+    private SubmissionRepository.HomeworkRateRow rate(Long lessonId, long done, long total) {
+        return new SubmissionRepository.HomeworkRateRow() {
+            @Override
+            public Long getLessonId() {
+                return lessonId;
+            }
+
+            @Override
+            public long getDoneCount() {
+                return done;
+            }
+
+            @Override
+            public long getTotalCount() {
+                return total;
+            }
+        };
     }
 
     @Test

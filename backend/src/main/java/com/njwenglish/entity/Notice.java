@@ -58,4 +58,45 @@ public class Notice extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false)
     private Teacher createdBy;
+
+    /**
+     * 초안으로 만들어진다. publishedAt이 채워질 때까지 학생·학부모에게 보이지 않는다.
+     *
+     * <p>classRoom은 scope와 짝이다. CLASS면 not null, ALL이면 null이어야 한다
+     * (ck_notices_target). 호출부에서 검증한 뒤 넘긴다.
+     */
+    public static Notice draft(String title, String content, NoticeScope scope,
+                               ClassRoom classRoom, boolean pinned, Teacher createdBy) {
+        Notice notice = new Notice();
+        notice.title = title;
+        notice.content = content;
+        notice.scope = scope;
+        notice.classRoom = classRoom;
+        notice.pinned = pinned;
+        notice.createdBy = createdBy;
+        return notice;
+    }
+
+    public void edit(String title, String content, boolean pinned) {
+        this.title = title;
+        this.content = content;
+        this.pinned = pinned;
+    }
+
+    /** 대상 변경. scope와 classRoom은 항상 함께 바뀐다 — 따로 두면 CHECK 제약에 걸린다. */
+    public void retarget(NoticeScope scope, ClassRoom classRoom) {
+        this.scope = scope;
+        this.classRoom = classRoom;
+    }
+
+    /** 이미 발행된 공지를 다시 발행해도 최초 발행 시각을 유지한다. 목록 정렬 기준이라 흔들리면 안 된다. */
+    public void publish(OffsetDateTime now) {
+        if (publishedAt == null) {
+            this.publishedAt = now;
+        }
+    }
+
+    public boolean isPublished() {
+        return publishedAt != null;
+    }
 }

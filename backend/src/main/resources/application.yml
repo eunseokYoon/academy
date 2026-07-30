@@ -42,6 +42,7 @@ app:
   s3:
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
-    presign-expiry-seconds: 300                # 5분
+    presign-expiry-seconds: 300                # 5분 (업로드 PUT)
+    read-expiry-seconds: 600                   # 10분 (조회 GET)
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173}

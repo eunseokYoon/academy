@@ -60,6 +60,22 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
                                                          @Param("from") LocalDate from,
                                                          @Param("to") LocalDate to);
 
+    /**
+     * P-1 홈의 다음 클리닉 하나. 오늘 포함이다 — 오늘 17시 클리닉이 아침에 사라지면 안 된다.
+     * 없으면 Optional.empty()이고 프론트가 카드를 숨긴다.
+     */
+    @Query("""
+        SELECT r FROM ClinicReservation r
+        JOIN FETCH r.clinic c
+        WHERE r.student.id = :studentId
+          AND r.status = 'RESERVED'
+          AND c.clinicDate >= :from
+        ORDER BY c.clinicDate, c.startTime
+        LIMIT 1
+        """)
+    Optional<ClinicReservation> findNextReserved(@Param("studentId") Long studentId,
+                                                @Param("from") LocalDate from);
+
     interface ClinicCount {
         Long getClinicId();
 

@@ -7,7 +7,9 @@ import com.njwenglish.dto.lesson.LessonCreateRequest;
 import com.njwenglish.dto.lesson.LessonDetailResponse;
 import com.njwenglish.dto.lesson.LessonListItemResponse;
 import com.njwenglish.dto.lesson.LessonUpdateRequest;
+import com.njwenglish.dto.lesson.LessonViewsResponse;
 import com.njwenglish.service.LessonService;
+import com.njwenglish.service.LessonViewService;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -29,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TeacherLessonController {
 
     private final LessonService lessonService;
+    private final LessonViewService lessonViewService;
 
     @GetMapping
     public ApiResponse<List<LessonListItemResponse>> list(
@@ -63,6 +66,12 @@ public class TeacherLessonController {
     public ApiResponse<LessonDetailResponse> update(@PathVariable Long lessonId,
                                                     @RequestBody LessonUpdateRequest request) {
         return ApiResponse.ok(lessonService.update(lessonId, request));
+    }
+
+    /** 시청 현황. 미시청 학생도 포함된다 — 선생님이 보려는 건 안 본 학생이다. */
+    @GetMapping("/{lessonId}/views")
+    public ApiResponse<LessonViewsResponse> views(@PathVariable Long lessonId) {
+        return ApiResponse.ok(lessonViewService.views(lessonId));
     }
 
     @PostMapping("/{lessonId}/publish")

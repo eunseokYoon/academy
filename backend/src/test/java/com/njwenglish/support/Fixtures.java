@@ -4,15 +4,18 @@ import com.njwenglish.common.security.AuthUser;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicReservation;
+import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Parent;
 import com.njwenglish.entity.Student;
+import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.User;
 import com.njwenglish.entity.enums.ClassRoomStatus;
 import com.njwenglish.entity.enums.UserRole;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -85,6 +88,19 @@ public final class Fixtures {
         ClinicReservation reservation = ClinicReservation.reserve(clinic, student, assignedBy);
         ReflectionTestUtils.setField(reservation, "id", id);
         return reservation;
+    }
+
+    public static Homework homework(Long id, ClassRoom classRoom, OffsetDateTime dueAt) {
+        Homework homework = Homework.create(classRoom, null, teacherEntity(1L),
+            "주간지 전 범위 풀기", "워크북 27~35쪽", dueAt);
+        ReflectionTestUtils.setField(homework, "id", id);
+        return homework;
+    }
+
+    public static Submission submission(Long id, Homework homework, Student student) {
+        Submission submission = Submission.notSubmitted(homework, student);
+        ReflectionTestUtils.setField(submission, "id", id);
+        return submission;
     }
 
     public static Parent parent(Long id, User user) {

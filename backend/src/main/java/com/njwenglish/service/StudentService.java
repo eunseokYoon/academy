@@ -17,6 +17,7 @@ import com.njwenglish.dto.member.StudentCreateResponse;
 import com.njwenglish.dto.member.StudentDeleteResponse;
 import com.njwenglish.dto.member.StudentDetailResponse;
 import com.njwenglish.dto.member.StudentListItemResponse;
+import com.njwenglish.dto.member.StudentMeResponse;
 import com.njwenglish.dto.member.StudentRestoreResponse;
 import com.njwenglish.dto.member.StudentUpdateRequest;
 import com.njwenglish.dto.member.StudentWithdrawRequest;
@@ -70,6 +71,30 @@ public class StudentService {
     private final InviteCodeIssuer inviteCodeIssuer;
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
+
+    /**
+     * S-7 상단 카드. 이름은 students.name이고 전화번호는 마스킹해 내려간다.
+     *
+     * <p>학생 본인 호출이라 getUser()가 null일 수 없지만, 반 목록은 재원 중인 것만이다 —
+     * 퇴원한 반이 "내 반"으로 남으면 학생이 혼란스럽다.
+     */
+    @Transactional(readOnly = true)
+    public StudentMeResponse me() {
+        Student student = studentAccessGuard.requireSelf();
+        List<StudentMeResponse.ClassRoomRef> classRooms =
+            enrollmentRepository.findByStudentIdAndLeftAtIsNull(student.getId()).stream()
+                .map(Enrollment::getClassRoom)
+                .sorted(Comparator.comparing(ClassRoom::getName))
+                .map(room -> new StudentMeResponse.ClassRoomRef(room.getId(), room.getName()))
+                .toList();
+
+        return new StudentMeResponse(
+            student.getId(),
+            student.getName(),
+            classRooms,
+            student.getUser() == null ? null : PhoneNumbers.mask(student.getUser().getPhone()),
+            student.getParent() != null);
+    }
 
     /**
      * sort=recent가 반 코드 제3자 탐지 경로다. 등록 기간에는 매일 상단 20명만 훑는다.

@@ -74,6 +74,16 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     List<Enrollment> findByStudentIdAndLeftAtIsNull(Long studentId);
 
+    /**
+     * D-day·시험 일정의 대상 반. 퇴원한 반이 섞이면 지난 학기 시험이 D-day로 뜬다.
+     * 학생이 여러 반에 속할 수 있어 목록이다.
+     */
+    @Query("""
+        SELECT e.classRoom.id FROM Enrollment e
+        WHERE e.student.id = :studentId AND e.leftAt IS NULL
+        """)
+    List<Long> findActiveClassRoomIds(@Param("studentId") Long studentId);
+
     long countByStudentId(Long studentId);
 
     Optional<Enrollment> findByStudentIdAndClassRoomIdAndLeftAtIsNull(Long studentId,

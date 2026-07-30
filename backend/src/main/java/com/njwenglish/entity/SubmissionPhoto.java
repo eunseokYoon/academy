@@ -41,4 +41,14 @@ public class SubmissionPhoto extends BaseCreatedEntity {
     private Short sortOrder;
 
     private Integer bytes;
+
+    public static SubmissionPhoto of(Submission submission, String s3Key, short sortOrder,
+                                     Integer bytes) {
+        SubmissionPhoto photo = new SubmissionPhoto();
+        photo.submission = submission;
+        photo.s3Key = s3Key;
+        photo.sortOrder = sortOrder;
+        photo.bytes = bytes;
+        return photo;
+    }
 }

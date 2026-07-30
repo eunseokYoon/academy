@@ -36,4 +36,18 @@ public class HomeworkTemplate extends BaseTimeEntity {
 
     @Column(name = "use_count", nullable = false)
     private Integer useCount;
+
+    public static HomeworkTemplate create(Teacher teacher, String title, String description) {
+        HomeworkTemplate template = new HomeworkTemplate();
+        template.teacher = teacher;
+        template.title = title;
+        template.description = description;
+        template.useCount = 0;
+        return template;
+    }
+
+    /** 목록이 use_count DESC 정렬이라 자주 쓰는 숙제가 위로 올라온다. */
+    public void increaseUseCount() {
+        this.useCount = this.useCount + 1;
+    }
 }

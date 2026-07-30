@@ -39,4 +39,16 @@ public class Feedback extends BaseTimeEntity {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
+
+    public static Feedback create(Submission submission, Teacher teacher, String content) {
+        Feedback feedback = new Feedback();
+        feedback.submission = submission;
+        feedback.teacher = teacher;
+        feedback.content = content;
+        return feedback;
+    }
+
+    public void edit(String content) {
+        this.content = content;
+    }
 }

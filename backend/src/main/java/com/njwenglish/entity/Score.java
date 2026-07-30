@@ -76,4 +76,43 @@ public class Score extends BaseTimeEntity {
 
     @Column(columnDefinition = "TEXT")
     private String memo;
+
+    /**
+     * year·month·week는 선생님이 T-8 화면에서 고른 값이다.
+     * 서버가 examDate에서 계산해 덮어쓰지 마라 — 달 경계에 걸친 주에서 어긋난다.
+     */
+    public static Score create(Student student, ScoreType scoreType, ExamSchedule examSchedule,
+                               String examName, String subject, BigDecimal rawScore,
+                               Short gradeLevel, LocalDate examDate,
+                               short year, short month, short week, String memo) {
+        Score score = new Score();
+        score.student = student;
+        score.scoreType = scoreType;
+        score.examSchedule = examSchedule;
+        score.examName = examName;
+        score.subject = subject;
+        score.rawScore = rawScore;
+        score.gradeLevel = gradeLevel;
+        score.examDate = examDate;
+        score.year = year;
+        score.month = month;
+        score.week = week;
+        score.memo = memo;
+        return score;
+    }
+
+    /**
+     * uq_scores(student, score_type, subject, exam_name, exam_date)를 이루는 값은 안 바뀐다.
+     * 같은 시험을 다시 저장하는 건 오타 수정이라는 정상 흐름이라 409가 아니라 이 경로로 흡수된다.
+     */
+    public void rewrite(ExamSchedule examSchedule, BigDecimal rawScore, Short gradeLevel,
+                        short year, short month, short week, String memo) {
+        this.examSchedule = examSchedule;
+        this.rawScore = rawScore;
+        this.gradeLevel = gradeLevel;
+        this.year = year;
+        this.month = month;
+        this.week = week;
+        this.memo = memo;
+    }
 }

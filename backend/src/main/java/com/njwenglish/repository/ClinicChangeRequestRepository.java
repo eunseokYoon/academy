@@ -14,6 +14,9 @@ public interface ClinicChangeRequestRepository extends JpaRepository<ClinicChang
     /** 같은 예약에 PENDING 요청이 두 개면 둘 다 승인됐을 때 예약이 꼬인다. */
     boolean existsByReservationIdAndStatus(Long reservationId, ChangeRequestStatus status);
 
+    /** T-1 할 일: 클리닉 변경 요청 대기. 방치하면 학생이 어느 시간에 가야 할지 모른다. */
+    long countByStatus(ChangeRequestStatus status);
+
     @Query("""
         SELECT r FROM ClinicChangeRequest r
         JOIN FETCH r.student

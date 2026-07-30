@@ -96,4 +96,24 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
         WHERE a.id = :attendanceId
         """)
     Optional<Attendance> findWithStudent(@Param("attendanceId") Long attendanceId);
+
+    /** S-5 상세의 그날 출석. 확정 전이면 행이 없고, 그건 출석이 아니라 미확인이다. */
+    Optional<Attendance> findByLessonIdAndStudentId(Long lessonId, Long studentId);
+
+    /**
+     * P-1 홈의 이번 달 출석 집계.
+     *
+     * <p><b>수업이 CONFIRMED인 것만</b> 센다. PENDING인 날은 아직 확정되지 않은 날이고
+     * 출석이 아니다 — 기본값이 출석이라 이 조건이 빠지면 선생님이 깜빡한 날까지
+     * 학부모에게 "출석 11회"로 보인다.
+     */
+    @Query("""
+        SELECT a.status FROM Attendance a
+        WHERE a.student.id = :studentId
+          AND a.attendDate BETWEEN :from AND :to
+          AND a.lesson.attendanceStatus = 'CONFIRMED'
+        """)
+    List<AttendanceStatus> findConfirmedStatuses(@Param("studentId") Long studentId,
+                                                 @Param("from") LocalDate from,
+                                                 @Param("to") LocalDate to);
 }
