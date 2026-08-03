@@ -1,11 +1,17 @@
 package com.njwenglish.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
+import com.njwenglish.common.error.BusinessException;
+import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.dto.weeklytest.WeeklyTestGridResponse;
+import com.njwenglish.dto.weeklytest.WeeklyTestSaveRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.WeeklyTest;
@@ -20,6 +26,7 @@ import com.njwenglish.repository.WeeklyTestScoreRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -124,5 +131,97 @@ class WeeklyTestServiceTest {
         assertThat(word.cells()).hasSize(1);
         assertThat(word.cells().get(0).correctCount()).isEqualTo((short) 23);
         assertThat(word.cells().get(0).result()).isEqualTo(TestResult.PASS);
+    }
+
+    private WeeklyTestSaveRequest saveRequest(WeeklyTestSaveRequest.TestInput... tests) {
+        return new WeeklyTestSaveRequest(3L, (short) 2026, (short) 5, (short) 3,
+            List.of(tests));
+    }
+
+    @Test
+    @DisplayName("맞힌 개수가 전체 문항 수보다 크면 400이다")
+    void 맞힌_개수가_전체보다_크면_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, (short) 25, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, (short) 30, null, null,
+                TestResult.PASS, false))));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("리뷰 테스트에 맞힌 개수를 실어 보내면 400이다 — Pass/Fail만 받는다")
+    void 리뷰에_개수를_보내면_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.REVIEW, null, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, (short) 20, null, null,
+                TestResult.PASS, false))));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("재시험 통과 체크는 FAIL일 때만 붙는다 — PASS면 400")
+    void 재시험_통과는_FAIL일_때만이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, (short) 25, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, (short) 23, null, null,
+                TestResult.PASS, true))));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("WORD·PRACTICE는 전체 문항 수 없이 셀을 저장할 수 없다")
+    void 전체_문항_수가_없으면_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, null, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, (short) 23, null, null,
+                TestResult.PASS, false))));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("값이 전부 빈 셀은 행을 지운다 — 학부모 화면에서 사라져야 한다")
+    void 빈_셀은_행을_지운다() {
+        WeeklyTest test = wordTest(10L);
+        WeeklyTestScore existing = WeeklyTestScore.create(test, hanul, (short) 23, null, null,
+            TestResult.PASS, false);
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.WORD, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(test));
+        given(weeklyTestScoreRepository.findByWeeklyTestIdAndStudentId(10L, 88L))
+            .willReturn(Optional.of(existing));
+
+        weeklyTestService.save(saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, (short) 25, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, null, null, null, null, false)))));
+
+        verify(weeklyTestScoreRepository).delete(existing);
+    }
+
+    @Test
+    @DisplayName("헤더값을 비워 보내면 그 종류를 통째로 지운다")
+    void 헤더를_비우면_종류가_삭제된다() {
+        WeeklyTest test = wordTest(10L);
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.WORD, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(test));
+
+        weeklyTestService.save(saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, null, null, null, List.of())));
+
+        verify(weeklyTestRepository).delete(test);
     }
 }

@@ -2,9 +2,13 @@ package com.njwenglish.controller.teacher;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.dto.weeklytest.WeeklyTestGridResponse;
+import com.njwenglish.dto.weeklytest.WeeklyTestSaveRequest;
 import com.njwenglish.service.WeeklyTestService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,5 +29,12 @@ public class TeacherWeeklyTestController {
                                                     @RequestParam short month,
                                                     @RequestParam short week) {
         return ApiResponse.ok(weeklyTestService.grid(classRoomId, year, month, week));
+    }
+
+    /** 그리드 한 장 통째로 저장. 요청에 들어온 종류·학생만 처리한다. */
+    @PutMapping
+    public ApiResponse<Void> save(@Valid @RequestBody WeeklyTestSaveRequest request) {
+        weeklyTestService.save(request);
+        return ApiResponse.ok();
     }
 }
