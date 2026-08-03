@@ -27,3 +27,6 @@ frontend/dist/
 # 개발 명세·계약 문서 — 로컬에만 두고 원격에는 올리지 않는다
 docs/
 spec/
+
+# superpowers 작업 기록 (SDD 원장·리뷰 패키지). 커밋 대상 아님
+.superpowers/
