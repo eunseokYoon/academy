@@ -263,19 +263,26 @@ class WeeklyTestServiceTest {
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
-    // 회귀: 헤더값이 전부 null이면 종류 삭제
+    // Critical #2 추가 회귀: CLINIC 부분 채움 미검증
     @Test
-    @DisplayName("헤더값 전부 null이면 종류가 삭제된다 (기존 동작 회귀)")
-    void 헤더_전부_null이면_삭제된다() {
-        WeeklyTest test = wordTest(10L);
-        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
-        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
-            3L, WeeklyTestType.WORD, (short) 2026, (short) 5, (short) 3))
-            .willReturn(Optional.of(test));
+    @DisplayName("CLINIC에서 한쪽만 채우면 400이다 — internalTotal만 있으면 거부")
+    void CLINIC_internalTotal만_있으면_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.CLINIC, null, (short) 15, null, List.of()));
 
-        weeklyTestService.save(saveRequest(new WeeklyTestSaveRequest.TestInput(
-            WeeklyTestType.WORD, null, null, null, List.of())));
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
 
-        verify(weeklyTestRepository).delete(test);
+    @Test
+    @DisplayName("CLINIC에서 한쪽만 채우면 400이다 — externalTotal만 있으면 거부")
+    void CLINIC_externalTotal만_있으면_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.CLINIC, null, null, (short) 20, List.of()));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 }

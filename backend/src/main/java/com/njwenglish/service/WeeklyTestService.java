@@ -217,8 +217,14 @@ public class WeeklyTestService {
                 if (input.externalTotal() != null && input.externalTotal() <= 0) {
                     throw new BusinessException(ErrorCode.VALIDATION_FAILED);
                 }
-                // 셀이 있는데 헤더가 부족하면 거부
-                if (hasCells && (input.internalTotal() == null || input.externalTotal() == null)) {
+                // 둘 중 정확히 하나만 있으면 거부: 둘 다 있거나 둘 다 없어야 함
+                boolean hasInternal = input.internalTotal() != null;
+                boolean hasExternal = input.externalTotal() != null;
+                if (hasInternal != hasExternal) {
+                    throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+                }
+                // 셀이 있는데 헤더가 없으면 거부 (이제 hasInternal/hasExternal이 같음을 보증)
+                if (hasCells && !hasInternal) {
                     throw new BusinessException(ErrorCode.VALIDATION_FAILED);
                 }
             }
