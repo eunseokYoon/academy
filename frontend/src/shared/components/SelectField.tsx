@@ -11,9 +11,9 @@ export function SelectField({ label, hint, children, ...props }: Props) {
       <span className="block text-sm font-medium text-slate-700">{label}</span>
       <select
         {...props}
-        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base
-                   text-slate-900 outline-none focus:border-slate-900 focus:ring-1
-                   focus:ring-slate-900"
+        className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base
+                   text-slate-900 outline-none transition-colors focus:border-brand-600
+                   focus:ring-4 focus:ring-brand-600/15"
       >
         {children}
       </select>

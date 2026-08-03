@@ -10,7 +10,9 @@ import { Modal } from "../../../shared/components/Modal";
 import { SubmitButton } from "../../../shared/components/SubmitButton";
 import { TextField } from "../../../shared/components/TextField";
 import { createClassRoom, listClassRooms } from "../api";
-import { DAY_LABELS } from "../format";
+import type { ClassRoomSchedule } from "../api";
+import { formatSchedules } from "../format";
+import { ScheduleEditor, validateSchedules } from "./ScheduleEditor";
 
 /**
  * T-3 목록. 가입 코드와 열림 상태를 항상 보이게 둔다 —
@@ -60,8 +62,7 @@ export default function ClassRoomListPage() {
                     {room.name}
                   </Link>
                   <p className="mt-0.5 text-sm text-slate-500">
-                    {room.dayOfWeek ? `${DAY_LABELS[room.dayOfWeek]}요일` : "요일 미정"}
-                    {room.startTime && ` ${room.startTime.slice(0, 5)}`} · 재원 {room.studentCount}명
+                    {formatSchedules(room.schedules)} · 재원 {room.studentCount}명
                   </p>
                 </div>
                 {room.status === "CLOSED" && <Badge tone="neutral">종료</Badge>}
@@ -97,23 +98,12 @@ export default function ClassRoomListPage() {
 function CreateModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [termStart, setTermStart] = useState("");
-  const [termEnd, setTermEnd] = useState("");
+  const [schedules, setSchedules] = useState<ClassRoomSchedule[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ name: string; joinCode: string } | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      createClassRoom({
-        name: name.trim(),
-        dayOfWeek: dayOfWeek ? Number(dayOfWeek) : null,
-        startTime: startTime || null,
-        termStart: termStart || null,
-        termEnd: termEnd || null,
-        memo: null,
-      }),
+    mutationFn: () => createClassRoom({ name: name.trim(), schedules, memo: null }),
     onSuccess: async (result) => {
       setError(null);
       setCreated(result);
@@ -124,6 +114,12 @@ function CreateModal({ onClose }: { onClose: () => void }) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    // 서버도 400으로 막지만, 여기서 걸러야 어디가 틀렸는지 문구로 알려줄 수 있다
+    const scheduleError = validateSchedules(schedules);
+    if (scheduleError) {
+      setError(scheduleError);
+      return;
+    }
     mutation.mutate();
   }
 
@@ -165,47 +161,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           onChange={(e) => setName(e.target.value)}
           required
         />
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="block text-sm font-medium text-slate-700">요일</span>
-            <select
-              value={dayOfWeek}
-              onChange={(e) => setDayOfWeek(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
-                         text-base"
-            >
-              <option value="">미정</option>
-              {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                <option key={day} value={day}>
-                  {DAY_LABELS[day]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <TextField
-            label="시작 시각"
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <TextField
-            label="시작일"
-            type="date"
-            value={termStart}
-            onChange={(e) => setTermStart(e.target.value)}
-          />
-          <TextField
-            label="종료일"
-            type="date"
-            value={termEnd}
-            onChange={(e) => setTermEnd(e.target.value)}
-          />
-        </div>
-        <p className="text-xs text-slate-500">
-          요일을 비우면 수업일 일괄 생성을 쓸 수 없습니다.
-        </p>
+        <ScheduleEditor value={schedules} onChange={setSchedules} />
         <FormError message={error} />
         <SubmitButton pending={mutation.isPending}>만들기</SubmitButton>
       </form>

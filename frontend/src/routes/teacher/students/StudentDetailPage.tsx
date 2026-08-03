@@ -176,14 +176,14 @@ function ClassRoomSection({ student }: { student: StudentDetail }) {
 
 /** 미사용 코드가 있으면 그대로 보여주고, 잃어버렸으면 재발급한다(이전 코드는 즉시 무효). */
 function SignupCodeSection({ student, onDone }: SectionProps) {
-  const [target, setTarget] = useState<CodeTarget>("STUDENT");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: () =>
       issueSignupCode(student.studentId, {
-        target,
+        // 학생용만 발급한다. 학부모는 코드 없이 계정이 바로 생긴다
+        target: "STUDENT",
         phone: phone.trim() ? digitsOnly(phone) : undefined,
       }),
     onSuccess: async () => {
@@ -227,19 +227,11 @@ function SignupCodeSection({ student, onDone }: SectionProps) {
           <p className="text-xs text-slate-500">
             재발급하면 이전 코드는 즉시 무효입니다. 번호를 비우면 기존 번호를 유지합니다.
           </p>
+          {/*
+            학생용만 남았다. 학부모 계정은 등록 시점에 바로 만들어져서 전달할 코드가 없다 —
+            비밀번호를 잊었으면 코드가 아니라 아래 「비밀번호 초기화」다.
+          */}
           <div className="flex gap-2">
-            <select
-              value={target}
-              onChange={(e) => setTarget(e.target.value as CodeTarget)}
-              className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
-            >
-              <option value="STUDENT" disabled={student.studentSignedUp}>
-                학생용
-              </option>
-              <option value="PARENT" disabled={student.parentLinked}>
-                학부모용
-              </option>
-            </select>
             <input
               value={phone}
               onChange={(e) => setPhone(formatPhone(e.target.value))}

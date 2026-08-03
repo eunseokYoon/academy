@@ -21,7 +21,8 @@ import {
   updateClassRoom,
 } from "../api";
 import type { ClassRoom } from "../api";
-import { DAY_LABELS, today } from "../format";
+import { today } from "../format";
+import { ScheduleEditor, toFormSchedules, validateSchedules } from "./ScheduleEditor";
 
 export default function ClassRoomDetailPage() {
   const classRoomId = Number(useParams().classRoomId);
@@ -307,24 +308,16 @@ function AssignModal({ classRoomId, onClose }: { classRoomId: number; onClose: (
 
 function ProfileSection({ classRoom, onDone }: SectionProps) {
   const [name, setName] = useState(classRoom.name);
-  const [dayOfWeek, setDayOfWeek] = useState(classRoom.dayOfWeek?.toString() ?? "");
-  const [startTime, setStartTime] = useState(classRoom.startTime?.slice(0, 5) ?? "");
-  const [termStart, setTermStart] = useState(classRoom.termStart ?? "");
-  const [termEnd, setTermEnd] = useState(classRoom.termEnd ?? "");
+  const [schedules, setSchedules] = useState(toFormSchedules(classRoom.schedules));
   const [memo, setMemo] = useState(classRoom.memo ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () =>
-      updateClassRoom(classRoom.classRoomId, {
-        name: name.trim(),
-        dayOfWeek: dayOfWeek ? Number(dayOfWeek) : undefined,
-        startTime: startTime || undefined,
-        termStart: termStart || undefined,
-        termEnd: termEnd || undefined,
-        memo,
-      }),
+      // schedules를 항상 보낸다. 이 폼이 스케줄 전체를 보여주고 있어서
+      // 비운 채 저장하면 "요일 미정으로 바꿔라"가 맞는 뜻이다
+      updateClassRoom(classRoom.classRoomId, { name: name.trim(), schedules, memo }),
     onSuccess: async () => {
       setError(null);
       setSaved(true);
@@ -339,6 +332,11 @@ function ProfileSection({ classRoom, onDone }: SectionProps) {
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setSaved(false);
+    const scheduleError = validateSchedules(schedules);
+    if (scheduleError) {
+      setError(scheduleError);
+      return;
+    }
     mutation.mutate();
   }
 
@@ -346,44 +344,7 @@ function ProfileSection({ classRoom, onDone }: SectionProps) {
     <Section title="반 정보">
       <form onSubmit={handleSubmit} className="space-y-3">
         <TextField label="반 이름" value={name} onChange={(e) => setName(e.target.value)} required />
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="block text-sm font-medium text-slate-700">요일</span>
-            <select
-              value={dayOfWeek}
-              onChange={(e) => setDayOfWeek(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
-                         text-base"
-            >
-              <option value="">미정</option>
-              {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                <option key={day} value={day}>
-                  {DAY_LABELS[day]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <TextField
-            label="시작 시각"
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <TextField
-            label="시작일"
-            type="date"
-            value={termStart}
-            onChange={(e) => setTermStart(e.target.value)}
-          />
-          <TextField
-            label="종료일"
-            type="date"
-            value={termEnd}
-            onChange={(e) => setTermEnd(e.target.value)}
-          />
-        </div>
+        <ScheduleEditor value={schedules} onChange={setSchedules} />
         <TextField label="메모" value={memo} onChange={(e) => setMemo(e.target.value)} />
         <p className="text-xs text-slate-500">
           이름을 바꾸면 지난 수업의 반 이름 표기도 함께 바뀝니다.

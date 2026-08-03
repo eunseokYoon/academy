@@ -48,21 +48,32 @@ export interface StudentDetail {
   signupCodes: SignupCode[];
 }
 
+/**
+ * 코드는 학생 한 장뿐이다. 학부모 계정은 등록 시점에 보호자 번호로 바로 만들어지고
+ * 초기 비밀번호는 0000이다 — 전달할 코드가 없다.
+ */
 export interface StudentCreated {
   studentId: number;
-  signupCodes: {
-    student: { code: string; phone: string; expiresAt: string };
-    parent: { code: string; phone: string; expiresAt: string };
-  };
+  signupCode: { code: string; phone: string; expiresAt: string };
+}
+
+/**
+ * 반의 주간 수업 슬롯. 요일당 하나다.
+ *
+ * dayOfWeek: 1=월 ~ 7=일 (ISO-8601). 시각은 "19:00" 형식이다.
+ * endTime은 없을 수 있다 — 기존 반 이관분에는 종료시각이 없다.
+ */
+export interface ClassRoomSchedule {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string | null;
 }
 
 export interface ClassRoom {
   classRoomId: number;
   name: string;
-  dayOfWeek: number | null;
-  startTime: string | null;
-  termStart: string | null;
-  termEnd: string | null;
+  /** 빈 배열이면 요일 미정이다. 그 반에는 수업일 일괄 생성을 쓸 수 없다. */
+  schedules: ClassRoomSchedule[];
   status: ClassRoomStatus;
   joinCode: string;
   joinCodeActive: boolean;
@@ -164,10 +175,11 @@ export const getClassRoom = (classRoomId: number) =>
 
 export interface ClassRoomForm {
   name: string;
-  dayOfWeek: number | null;
-  startTime: string | null;
-  termStart: string | null;
-  termEnd: string | null;
+  /**
+   * 수정(PATCH)에서 이 필드를 <b>빼면</b> 스케줄을 건드리지 않고,
+   * 빈 배열을 보내면 전부 지운다(요일 미정). 서버가 통째로 교체한다.
+   */
+  schedules: ClassRoomSchedule[];
   memo: string | null;
 }
 

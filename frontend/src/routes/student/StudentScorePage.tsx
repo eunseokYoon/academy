@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../shared/auth/AuthContext";
 import { ExamDdayList } from "../../shared/components/ExamDdayList";
 import { ScoreSections } from "../../shared/components/ScoreSections";
 import { WordScoreChart } from "../../shared/components/WordScoreChart";
@@ -6,6 +8,7 @@ import { getMe, getMyScores, listMyExamSchedules } from "./api";
 
 /** S-7. 내 정보 카드 + 성적. 학부모 화면(P-4)과 같은 데이터 형식을 쓴다. */
 export default function StudentScorePage() {
+  const { signOut } = useAuth();
   const me = useQuery({ queryKey: ["student", "me"], queryFn: getMe });
   const scores = useQuery({ queryKey: ["student", "scores"], queryFn: () => getMyScores() });
   const exams = useQuery({
@@ -46,6 +49,19 @@ export default function StudentScorePage() {
           <ScoreSections internal={scores.data.internal} mock={scores.data.mock} />
         </>
       )}
+
+      {/*
+        학생의 유일한 로그아웃 경로다. 공용 PC나 형제 폰에서 쓰는 경우가 있어
+        이게 없으면 계정을 내려놓을 방법이 없다. 배치는 학부모 화면(P-4)과 맞췄다.
+      */}
+      <div className="flex items-center justify-between pt-2 text-sm">
+        <Link to="/privacy" className="text-slate-500 underline">
+          개인정보처리방침
+        </Link>
+        <button type="button" onClick={() => void signOut()} className="text-slate-500 underline">
+          로그아웃
+        </button>
+      </div>
     </div>
   );
 }

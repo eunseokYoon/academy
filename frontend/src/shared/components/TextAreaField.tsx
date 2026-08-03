@@ -12,9 +12,9 @@ export function TextAreaField({ label, hint, rows = 4, ...props }: Props) {
       <textarea
         {...props}
         rows={rows}
-        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base
-                   text-slate-900 outline-none placeholder:text-slate-400
-                   focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+        className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base
+                   text-slate-900 outline-none transition-colors placeholder:text-slate-400
+                   focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15"
       />
       {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
     </label>

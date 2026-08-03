@@ -19,13 +19,13 @@ export function Modal({ title, onClose, children, footer }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0
-                 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-brand-950/50 p-0
+                 backdrop-blur-[2px] sm:items-center sm:p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5
                    shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

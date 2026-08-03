@@ -33,14 +33,17 @@ export interface AttendanceCalendar {
 /**
  * 색상만으로 구분하지 않는다. 색약 사용자를 위해 칸 안에 짧은 기호를 함께 넣고
  * 하단에 범례를 둔다.
+ *
+ * <p>여기 색은 브랜드 남색으로 바꾸지 마라. 포인트 색이 빨강에서 파랑으로 옮겨간 덕분에
+ * 빨강이 이 표에서 "결석" 하나만 뜻하게 됐다 — 브랜드색과 겹치지 않는 게 이득이다.
  */
 export const DAY_STATUS_STYLE: Record<DayStatus, { label: string; mark: string; cell: string }> = {
-  PRESENT: { label: "출석", mark: "출", cell: "bg-emerald-100 text-emerald-800" },
-  LATE: { label: "지각", mark: "지", cell: "bg-amber-100 text-amber-800" },
-  ABSENT: { label: "결석", mark: "결", cell: "bg-red-100 text-red-800" },
-  SICK: { label: "병결", mark: "병", cell: "bg-sky-100 text-sky-800" },
-  EXCUSED: { label: "공결", mark: "공", cell: "bg-slate-200 text-slate-700" },
-  PENDING: { label: "미확인", mark: "—", cell: "bg-slate-100 text-slate-400" },
+  PRESENT: { label: "출석", mark: "출", cell: "bg-emerald-100 text-emerald-800 ring-emerald-200" },
+  LATE: { label: "지각", mark: "지", cell: "bg-amber-100 text-amber-800 ring-amber-200" },
+  ABSENT: { label: "결석", mark: "결", cell: "bg-red-100 text-red-800 ring-red-200" },
+  SICK: { label: "병결", mark: "병", cell: "bg-sky-100 text-sky-800 ring-sky-200" },
+  EXCUSED: { label: "공결", mark: "공", cell: "bg-slate-200 text-slate-700 ring-slate-300" },
+  PENDING: { label: "미확인", mark: "—", cell: "bg-slate-100 text-slate-400 ring-slate-200" },
 };
 
 /** T-5에서 선생님이 고를 수 있는 예외 상태. 기본값 PRESENT는 고를 필요가 없다. */

@@ -119,7 +119,7 @@ function ClassCodeForm({ onDone, onSwitch }: FormProps) {
           type="tel"
           inputMode="numeric"
           placeholder="010-9876-5432"
-          hint="보호자께 안내를 드릴 때 쓰는 번호입니다. 학생 본인 번호와 달라야 합니다."
+          hint="이 번호로 보호자 계정이 바로 만들어집니다. 정확히 입력하세요. 본인 번호와 달라야 합니다."
           value={parentPhone}
           onChange={(e) => setParentPhone(formatPhone(e.target.value))}
           required
@@ -138,11 +138,15 @@ function ClassCodeForm({ onDone, onSwitch }: FormProps) {
   );
 }
 
-/** 보조 경로. 학생·학부모 모두 쓰며 역할은 코드에 붙어 있다. */
+/**
+ * 보조 경로. <b>학생 전용</b>이다 — 폰이 없거나 반 코드를 못 쓴 학생을 선생님이 대신 등록한 경우다.
+ *
+ * <p>학부모용 개인 코드는 없다. 학부모 계정은 학생 가입·등록 시점에 보호자 번호로
+ * 바로 만들어지고, 초기 비밀번호 0000으로 로그인 화면에서 바로 들어간다.
+ */
 function PersonalCodeForm({ onDone, onSwitch }: FormProps) {
   const [code, setCode] = useState("");
   const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -155,7 +159,6 @@ function PersonalCodeForm({ onDone, onSwitch }: FormProps) {
         await post<SignupResult>("/auth/signup", {
           code: code.trim().toUpperCase(),
           phone: digitsOnly(phone),
-          name: name.trim() || null,
         }),
       );
     } catch (e) {
@@ -185,13 +188,6 @@ function PersonalCodeForm({ onDone, onSwitch }: FormProps) {
           value={phone}
           onChange={(e) => setPhone(formatPhone(e.target.value))}
           required
-        />
-        <TextField
-          label="이름"
-          placeholder="홍길동"
-          hint="학부모님만 입력하세요. 학생은 비워 두시면 됩니다."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
         />
         <FormError message={error} />
         <SubmitButton pending={pending}>가입하기</SubmitButton>

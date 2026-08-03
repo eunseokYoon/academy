@@ -57,26 +57,29 @@ export default function StudentNewPage() {
     mutation.mutate();
   }
 
-  // 등록 직후 코드 2장을 바로 보여준다. 별도 화면으로 미루면 실제로 안 쓴다
+  // 등록 직후 코드를 바로 보여준다. 별도 화면으로 미루면 실제로 안 쓴다
   if (created) {
     return (
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-slate-900">{name.trim()} 등록 완료</h2>
         <p className="text-sm text-slate-500">
-          아래 코드를 각각 학생과 보호자에게 전달하세요. 7일 안에 가입해야 합니다.
+          아래 코드를 학생에게 전달하세요. 7일 안에 가입해야 합니다.
         </p>
         <SignupCodeCard
           target="STUDENT"
-          code={created.signupCodes.student.code}
-          phone={created.signupCodes.student.phone}
-          expiresAt={created.signupCodes.student.expiresAt}
+          code={created.signupCode.code}
+          phone={created.signupCode.phone}
+          expiresAt={created.signupCode.expiresAt}
         />
-        <SignupCodeCard
-          target="PARENT"
-          code={created.signupCodes.parent.code}
-          phone={created.signupCodes.parent.phone}
-          expiresAt={created.signupCodes.parent.expiresAt}
-        />
+        {/* 학부모는 코드가 없다. 안내 문구가 없으면 선생님이 코드를 찾아 헤맨다 */}
+        <div className="rounded-xl bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-inset
+                        ring-brand-200">
+          <p className="font-semibold">보호자 계정은 이미 만들어졌습니다</p>
+          <p className="mt-1 leading-relaxed text-brand-800">
+            보호자 번호로 바로 로그인할 수 있습니다. 전달할 코드는 없고,
+            <b> 초기 비밀번호는 0000</b>입니다. 첫 로그인에서 비밀번호를 바꿔야 다른 화면이 열립니다.
+          </p>
+        </div>
         <div className="flex gap-2">
           <button
             type="button"

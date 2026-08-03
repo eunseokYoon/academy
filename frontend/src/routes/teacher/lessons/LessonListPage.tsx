@@ -9,7 +9,7 @@ import { Modal } from "../../../shared/components/Modal";
 import { SubmitButton } from "../../../shared/components/SubmitButton";
 import { TextField } from "../../../shared/components/TextField";
 import { bulkCreateLessons, createLesson, listClassRooms, listLessons } from "../api";
-import { DAY_LABELS, today } from "../format";
+import { DAY_LABELS, formatScheduleDays, today } from "../format";
 
 const NOW = new Date();
 
@@ -332,9 +332,9 @@ function BulkCreateModal({ onClose }: { onClose: () => void }) {
           </select>
           {selected && (
             <span className="mt-1 block text-xs text-slate-500">
-              {selected.dayOfWeek
-                ? `${DAY_LABELS[selected.dayOfWeek]}요일마다 만듭니다.`
-                : "이 반에는 요일이 없어 일괄 생성을 쓸 수 없습니다. 반 정보에서 요일을 지정하세요."}
+              {selected.schedules.length > 0
+                ? `${formatScheduleDays(selected.schedules)}요일마다 만듭니다.`
+                : "이 반에는 수업 시간이 없어 일괄 생성을 쓸 수 없습니다. 반 정보에서 지정하세요."}
             </span>
           )}
         </label>

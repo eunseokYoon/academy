@@ -42,38 +42,36 @@ export function AttendanceCalendar({ data, onPrev, onNext, dayBadge }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onPrev}
-          aria-label="이전 달"
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600"
-        >
-          ‹ 이전
-        </button>
-        <span className="text-sm font-semibold text-slate-900">
-          {data.year}년 {data.month}월
-        </span>
-        <button
-          type="button"
-          onClick={onNext}
-          aria-label="다음 달"
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600"
-        >
-          다음 ›
-        </button>
-      </div>
+      <SummaryGrid data={data} />
+      <HomeworkRate rate={data.homeworkCompletionRate} />
 
-      <SummaryBar data={data} />
+      <div className="card p-3">
+        <div className="flex items-center justify-between px-1 pb-2">
+          <MonthButton onClick={onPrev} label="이전 달">
+            ‹
+          </MonthButton>
+          <span className="tnum text-sm font-bold text-brand-900">
+            {data.year}년 {data.month}월
+          </span>
+          <MonthButton onClick={onNext} label="다음 달">
+            ›
+          </MonthButton>
+        </div>
 
-      <div className="rounded-xl bg-white p-2 shadow-sm">
-        <div className="grid grid-cols-7 text-center text-xs text-slate-400">
-          {WEEKDAYS.map((label) => (
-            <div key={label} className="py-1">
+        {/* 일요일 빨강 · 토요일 파랑. 한국 달력 관습이라 없으면 어색하다 */}
+        <div className="grid grid-cols-7 text-center text-xs font-medium">
+          {WEEKDAYS.map((label, index) => (
+            <div
+              key={label}
+              className={`py-1.5 ${
+                index === 0 ? "text-red-400" : index === 6 ? "text-brand-400" : "text-slate-400"
+              }`}
+            >
               {label}
             </div>
           ))}
         </div>
+
         <div className="grid grid-cols-7 gap-1">
           {cells.map((day, index) => {
             if (day === null) return <div key={`blank-${index}`} />;
@@ -97,28 +95,62 @@ export function AttendanceCalendar({ data, onPrev, onNext, dayBadge }: Props) {
   );
 }
 
-function SummaryBar({ data }: { data: CalendarData }) {
+function MonthButton({
+  onClick,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-brand-600
+                 transition-colors hover:bg-brand-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 참고 디자인의 4칸 통계 줄. 숫자를 크게, 라벨을 작게 둔다 —
+ * 학부모가 이 화면에서 제일 먼저 보는 건 "몇 번 빠졌나"다.
+ */
+function SummaryGrid({ data }: { data: CalendarData }) {
   const items = [
-    { label: "출석", value: data.summary.present },
-    { label: "지각", value: data.summary.late },
-    { label: "결석", value: data.summary.absent },
-    { label: "병·공결", value: data.summary.sick + data.summary.excused },
+    { label: "출석", value: data.summary.present, color: "text-emerald-600" },
+    { label: "지각", value: data.summary.late, color: "text-amber-600" },
+    { label: "결석", value: data.summary.absent, color: "text-red-600" },
+    { label: "병·공결", value: data.summary.sick + data.summary.excused, color: "text-sky-600" },
   ];
   return (
-    <div className="flex items-center justify-between rounded-xl bg-white p-3 text-sm shadow-sm">
-      <div className="flex gap-3">
-        {items.map((item) => (
-          <span key={item.label} className="text-slate-600">
-            {item.label} <b className="text-slate-900">{item.value}</b>
-          </span>
-        ))}
-      </div>
-      {/* Phase 5 전에는 null이라 아예 숨긴다. 0%로 보이면 오해를 부른다 */}
-      {data.homeworkCompletionRate !== null && (
-        <span className="text-slate-600">
-          숙제 <b className="text-slate-900">{data.homeworkCompletionRate}%</b>
-        </span>
-      )}
+    <div className="grid grid-cols-4 gap-2">
+      {items.map((item) => (
+        <div key={item.label} className="card px-2 py-3 text-center">
+          {/*
+            여기는 tnum을 쓰지 않는다. 고정폭 숫자는 "11"을 "1 1"처럼 벌려 놓는다.
+            자릿수를 세로로 맞출 표도 아니고 칸 너비도 고정이라 이득이 없다.
+          */}
+          <p className={`text-2xl font-extrabold leading-none ${item.color}`}>{item.value}</p>
+          <p className="mt-1.5 text-[11px] text-slate-500">{item.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Phase 5 전에는 null이라 아예 숨긴다. 0%로 보이면 오해를 부른다. */
+function HomeworkRate({ rate }: { rate: number | null }) {
+  if (rate === null) return null;
+  return (
+    <div className="card flex items-center justify-between px-4 py-3">
+      <span className="text-sm text-slate-600">이번 달 숙제 완료율</span>
+      <span className="tnum text-sm font-bold text-brand-700">{rate}%</span>
     </div>
   );
 }
@@ -138,7 +170,7 @@ function DayCell({
   if (!status) {
     return (
       <div className="flex aspect-square flex-col items-center justify-start rounded-lg p-1">
-        <span className="text-xs text-slate-300">{day}</span>
+        <span className="tnum text-xs text-slate-300">{day}</span>
         {badge}
       </div>
     );
@@ -148,10 +180,10 @@ function DayCell({
   return (
     <div
       className={`flex aspect-square flex-col items-center justify-start rounded-lg p-1
-                  ${style.cell}`}
+                  ring-1 ring-inset ${style.cell}`}
       title={`${day}일 ${style.label}`}
     >
-      <span className="text-xs font-medium">{day}</span>
+      <span className="tnum text-xs font-semibold">{day}</span>
       <span className="text-[10px] leading-tight">{style.mark}</span>
       {badge}
       {/* null이면 띠를 그리지 않는다. 0은 빨강이라 "숙제 없던 날"과 구분돼야 한다 */}
@@ -161,7 +193,7 @@ function DayCell({
           style={{
             background: `linear-gradient(90deg,
               ${homeworkRate >= 50 ? "#10b981" : "#ef4444"} ${homeworkRate}%,
-              #e2e8f0 ${homeworkRate}%)`,
+              rgba(255,255,255,0.55) ${homeworkRate}%)`,
           }}
           aria-label={`숙제 ${homeworkRate}%`}
         />
@@ -173,14 +205,14 @@ function DayCell({
 /** 색상만으로 구분하면 색약 사용자가 읽을 수 없다. 범례는 선택이 아니다. */
 function Legend() {
   return (
-    <ul className="flex flex-wrap gap-2 text-xs text-slate-600">
+    <ul className="flex flex-wrap gap-x-3 gap-y-1.5 px-1 text-xs text-slate-500">
       {(Object.keys(DAY_STATUS_STYLE) as DayStatus[]).map((status) => {
         const style = DAY_STATUS_STYLE[status];
         return (
           <li key={status} className="flex items-center gap-1">
             <span
-              className={`inline-flex h-4 w-4 items-center justify-center rounded
-                          text-[10px] ${style.cell}`}
+              className={`inline-flex h-4 w-4 items-center justify-center rounded text-[10px]
+                          ring-1 ring-inset ${style.cell}`}
             >
               {style.mark}
             </span>
