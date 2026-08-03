@@ -22,3 +22,8 @@ frontend/dist/
 
 # logs
 *.log
+.gstack/
+
+# 개발 명세·계약 문서 — 로컬에만 두고 원격에는 올리지 않는다
+docs/
+spec/
