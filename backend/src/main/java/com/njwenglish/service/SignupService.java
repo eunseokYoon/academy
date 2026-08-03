@@ -83,13 +83,31 @@ public class SignupService {
         student.linkUser(createAccount(UserRole.STUDENT, phone, name));
         enrollmentRepository.save(Enrollment.create(student, classRoom, LocalDate.now()));
 
-        // 학부모 연결의 시작점. 선생님이 T-2에서 이 코드를 확인해 학부모에게 전달한다
-        parentLinkService.issueParentCode(student, parentPhone);
+        /*
+         * 학부모 계정을 여기서 바로 만든다. 코드를 발급해 선생님이 전달하는 단계는 없앴다.
+         *
+         * 학생이 적은 번호를 그대로 믿는다는 뜻이다. 반 코드에는 전화번호 대조가 없어서
+         * 오타나 남의 번호가 그대로 계정이 된다. 비밀번호는 전원이 아는 0000이라
+         * 그 번호를 아는 사람이 먼저 로그인하면 이 학생의 성적을 본다.
+         * 막지 않기로 한 것이므로(반 코드 경로의 기존 방침과 같다) 선생님이
+         * T-1의 recentSignupCount와 T-3의 sort=recent로 발견해 지우는 것이 유일한 대응이다.
+         *
+         * 가입 폼에 학부모 이름 칸이 없어서 「김하늘 학부모」로 채운다. 선생님 화면에서
+         * 누구의 보호자인지 바로 읽히는 값이라야 잘못 만들어진 계정을 찾을 수 있다.
+         * 이미 그 번호가 PARENT면 새로 만들지 않고 자녀만 붙는다(형제·자매) — 이때 이름은 쓰이지 않는다.
+         * STUDENT·TEACHER 번호면 linkParent가 DUPLICATE_RESOURCE를 던진다.
+         */
+        parentLinkService.linkParent(student, parentPhone, student.getName() + " 학부모");
 
         return SignupResponse.of(UserRole.STUDENT, phone, student.getName(), classRoom.getName());
     }
 
-    /** 경로 2 — 개인 코드. 코드와 전화번호를 모두 확인해야 무작위 대입으로 계정을 만들 수 없다. */
+    /**
+     * 경로 2 — 개인 코드. 코드와 전화번호를 모두 확인해야 무작위 대입으로 계정을 만들 수 없다.
+     *
+     * <p><b>학생 전용이다.</b> 학부모 코드는 더 이상 발급하지 않는다 — 학부모 계정은
+     * 학생 가입·선생님 등록 시점에 보호자 번호로 바로 만들어진다.
+     */
     private SignupResponse byPersonalCode(SignupCode signupCode, SignupRequest request) {
         if (signupCode.isUsed()) {
             throw new BusinessException(ErrorCode.INVITE_CODE_USED);
@@ -101,16 +119,10 @@ public class SignupService {
         }
 
         Student student = signupCode.getStudent();
-        UserRole role = signupCode.getTargetRole();
-
-        if (role == UserRole.PARENT) {
-            parentLinkService.linkParent(student, phone, requireName(request.name()));
-        } else {
-            linkStudentAccount(student, phone);
-        }
+        linkStudentAccount(student, phone);
 
         signupCode.markUsed(OffsetDateTime.now());
-        return SignupResponse.of(role, phone, student.getName(), null);
+        return SignupResponse.of(UserRole.STUDENT, phone, student.getName(), null);
     }
 
     /** students 행과 이름은 선생님이 등록할 때 이미 있다. 여기서는 계정만 붙인다. */

@@ -7,6 +7,7 @@ import com.njwenglish.common.util.InviteCodeIssuer;
 import com.njwenglish.dto.classroom.ClassRoomCreateRequest;
 import com.njwenglish.dto.classroom.ClassRoomCreateResponse;
 import com.njwenglish.dto.classroom.ClassRoomResponse;
+import com.njwenglish.dto.classroom.ClassRoomScheduleDto;
 import com.njwenglish.dto.classroom.ClassRoomUpdateRequest;
 import com.njwenglish.dto.classroom.JoinCodeRequest;
 import com.njwenglish.dto.classroom.JoinCodeResponse;
@@ -16,7 +17,10 @@ import com.njwenglish.entity.enums.ClassRoomStatus;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.TeacherRepository;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,14 +58,14 @@ public class ClassRoomService {
     public ClassRoomCreateResponse create(ClassRoomCreateRequest request) {
         // 입력 검증을 먼저 끝낸다. 뒤에 두면 조회 실패가 먼저 터져 원인이 가려진다
         String name = requireName(request.name());
-        Short dayOfWeek = validDayOfWeek(request.dayOfWeek());
+        List<ClassRoom.Slot> slots = validSlots(request.schedules());
         requireUniqueActiveName(name);
 
-        ClassRoom classRoom = classRoomRepository.save(ClassRoom.create(
-            currentTeacher(), name, inviteCodeIssuer.issue(), dayOfWeek, request.startTime(),
-            request.termStart(), request.termEnd(), request.memo()));
+        ClassRoom classRoom = ClassRoom.create(
+            currentTeacher(), name, inviteCodeIssuer.issue(), request.memo());
+        classRoom.replaceSchedules(slots == null ? List.of() : slots);
 
-        return ClassRoomCreateResponse.from(classRoom);
+        return ClassRoomCreateResponse.from(classRoomRepository.save(classRoom));
     }
 
     @Transactional
@@ -75,16 +79,9 @@ public class ClassRoomService {
                 classRoom.rename(name);
             }
         }
-        if (request.dayOfWeek() != null || request.startTime() != null) {
-            classRoom.changeSchedule(
-                request.dayOfWeek() != null
-                    ? validDayOfWeek(request.dayOfWeek()) : classRoom.getDayOfWeek(),
-                request.startTime() != null ? request.startTime() : classRoom.getStartTime());
-        }
-        if (request.termStart() != null || request.termEnd() != null) {
-            classRoom.changeTerm(
-                request.termStart() != null ? request.termStart() : classRoom.getTermStart(),
-                request.termEnd() != null ? request.termEnd() : classRoom.getTermEnd());
+        // null은 "건드리지 마라", 빈 배열은 "전부 지워라". 둘을 구분해야 한다
+        if (request.schedules() != null) {
+            classRoom.replaceSchedules(validSlots(request.schedules()));
         }
         if (request.memo() != null) {
             classRoom.changeMemo(request.memo().isBlank() ? null : request.memo());
@@ -156,6 +153,36 @@ public class ClassRoomService {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         return dayOfWeek;
+    }
+
+    /**
+     * null이면 null을 돌려준다 — 호출부가 "안 건드림"과 "비움"을 구분해야 한다.
+     *
+     * <p>요일 중복을 DB uq_crs_day에 닿기 전에 잡는다. 제약 위반으로 터지면
+     * 500이나 모호한 409가 나간다.
+     */
+    private List<ClassRoom.Slot> validSlots(List<ClassRoomScheduleDto> schedules) {
+        if (schedules == null) {
+            return null;
+        }
+        Set<Short> seenDays = new HashSet<>();
+        List<ClassRoom.Slot> slots = new ArrayList<>();
+        for (ClassRoomScheduleDto dto : schedules) {
+            Short day = validDayOfWeek(dto.dayOfWeek());
+            if (day == null || dto.startTime() == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            if (dto.endTime() != null && !dto.endTime().isAfter(dto.startTime())) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            if (!seenDays.add(day)) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            slots.add(new ClassRoom.Slot(day, dto.startTime(), dto.endTime()));
+        }
+        // 정렬하지 않는다. 응답 순서는 ClassRoomResponse.of가 책임진다 — 두 곳에서
+        // 정렬하면 한쪽만 고쳤을 때 화면마다 순서가 갈린다
+        return slots;
     }
 
     private String requireName(String raw) {

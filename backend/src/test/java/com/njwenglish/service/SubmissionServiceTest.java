@@ -73,8 +73,7 @@ class SubmissionServiceTest {
 
     @BeforeEach
     void setUp() {
-        classRoom = ClassRoom.create(null, "고2 심화반", "HK7F2Q", (short) 4,
-            LocalTime.of(19, 0), null, null, null);
+        classRoom = ClassRoom.create(null, "고2 심화반", "HK7F2Q", null);
         ReflectionTestUtils.setField(classRoom, "id", 3L);
 
         submissionService = new SubmissionService(submissionRepository, photoRepository,

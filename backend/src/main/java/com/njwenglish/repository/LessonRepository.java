@@ -49,12 +49,16 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     List<Lesson> findPendingUntil(@Param("today") LocalDate today);
 
     /**
-     * T-1 대시보드의 오늘 수업. 시작 시각은 lessons에 없고 반에 있다(class_rooms.start_time).
+     * T-1 대시보드의 오늘 수업. 시작 시각은 lessons에 없고 반의 요일 슬롯에 있다.
+     *
+     * <p>시각으로 정렬하지 않는다. 반이 주 2회면 요일마다 시각이 달라서 반 하나로 값을
+     * 고를 수 없다. 그 수업 날짜에 맞는 슬롯을 골라 <b>DashboardService가 자바에서 정렬</b>한다.
+     * 여기서 이름순은 그 정렬의 동점 처리다.
      */
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c
         WHERE l.lessonDate = :date
-        ORDER BY c.startTime NULLS LAST, c.name
+        ORDER BY c.name
         """)
     List<Lesson> findByDateWithClassRoom(@Param("date") LocalDate date);
 
@@ -65,6 +69,9 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
      * 여러 반에 속한 학생이 같은 수업을 두 번 만나지 않도록 JOIN이 아니라 EXISTS다.
      *
      * <p>P-1은 여기서 날짜만 꺼내 쓴다. 학부모에게는 수업 제목·내용·영상을 노출하지 않는다.
+     *
+     * <p>같은 날짜가 겹치면 이름순이다. 학생은 보통 반 하나에 속해서 동점이 거의 없고,
+     * 시각으로 정렬하려면 반의 요일 슬롯 중 그 날짜에 맞는 것을 골라야 해서 값이 비싸다.
      */
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c
@@ -73,7 +80,7 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
                       WHERE e.classRoom.id = l.classRoom.id
                         AND e.student.id = :studentId
                         AND e.leftAt IS NULL)
-        ORDER BY l.lessonDate, c.startTime NULLS LAST, c.name
+        ORDER BY l.lessonDate, c.name
         LIMIT 1
         """)
     Optional<Lesson> findNextForStudent(@Param("studentId") Long studentId,

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -64,9 +66,7 @@ class SignupServiceTest {
     @BeforeEach
     void setUp() {
         ParentLinkService parentLinkService = new ParentLinkService(
-            userRepository, parentRepository, signupCodeRepository,
-            new InviteCodeIssuer(signupCodeRepository, classRoomRepository),
-            passwordEncoder);
+            userRepository, parentRepository, passwordEncoder);
         signupService = new SignupService(signupCodeRepository, classRoomRepository,
             userRepository, studentRepository, enrollmentRepository, parentLinkService,
             passwordEncoder);
@@ -75,18 +75,21 @@ class SignupServiceTest {
     private void echoSaves() {
         given(studentRepository.save(any())).willAnswer(i -> i.getArgument(0));
         given(userRepository.save(any())).willAnswer(i -> i.getArgument(0));
+        // 반 코드 가입은 학생·학부모 두 계정을 만든다. 실패 케이스에서는 안 불려서 lenient다
+        lenient().when(parentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     }
 
-    private User savedUser() {
+    /**
+     * 반 코드 가입은 users를 두 번 저장한다(학생·학부모). 역할로 골라야
+     * "학생 계정" 검증에 학부모 계정이 섞이지 않는다.
+     */
+    private User savedUserOf(UserRole role) {
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(captor.capture());
-        return captor.getValue();
-    }
-
-    private SignupCode savedCode() {
-        ArgumentCaptor<SignupCode> captor = ArgumentCaptor.forClass(SignupCode.class);
-        verify(signupCodeRepository).save(captor.capture());
-        return captor.getValue();
+        verify(userRepository, atLeastOnce()).save(captor.capture());
+        return captor.getAllValues().stream()
+            .filter(user -> user.getRole() == role)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError(role + " 계정이 저장되지 않았다"));
     }
 
     @Nested
@@ -137,26 +140,32 @@ class SignupServiceTest {
 
             signupService.signup(request());
 
-            User created = savedUser();
-            assertThat(created.getRole()).isEqualTo(UserRole.STUDENT);
+            User created = savedUserOf(UserRole.STUDENT);
             assertThat(created.getLoginId()).isEqualTo("01011112222");
             assertThat(created.isMustChangePassword()).isTrue();
             assertThat(passwordEncoder.matches("0000", created.getPasswordHash())).isTrue();
         }
 
         @Test
-        @DisplayName("학부모용 개인 코드 1장이 보호자 번호로 자동 발급된다")
-        void 학부모_코드가_발급된다() {
+        @DisplayName("학부모 계정이 보호자 번호로 바로 만들어진다 — 코드는 발급하지 않는다")
+        void 학부모_계정이_바로_생긴다() {
             codeFound();
             echoSaves();
 
             signupService.signup(request());
 
-            SignupCode issued = savedCode();
-            assertThat(issued.getTargetRole()).isEqualTo(UserRole.PARENT);
-            assertThat(issued.getPhone()).isEqualTo("01098765432");
-            assertThat(issued.getCode()).isNotBlank();
-            assertThat(issued.getExpiresAt()).isAfter(OffsetDateTime.now().plusDays(6));
+            User parent = savedUserOf(UserRole.PARENT);
+            assertThat(parent.getLoginId()).isEqualTo("01098765432");
+            assertThat(parent.getName()).isEqualTo("서동환 학부모");
+            assertThat(parent.isMustChangePassword()).isTrue();
+            assertThat(passwordEncoder.matches("0000", parent.getPasswordHash())).isTrue();
+
+            ArgumentCaptor<Student> student = ArgumentCaptor.forClass(Student.class);
+            verify(studentRepository).save(student.capture());
+            assertThat(student.getValue().getParent()).isNotNull();
+
+            // 학부모 가입 코드는 더 이상 없다
+            verify(signupCodeRepository, never()).save(any());
         }
 
         @Test
@@ -169,7 +178,43 @@ class SignupServiceTest {
                 new SignupRequest("HK7F2Q", "서동환", "010-1111-2222", "010-9876-5432"));
 
             assertThat(response.loginId()).isEqualTo("01011112222");
-            assertThat(savedCode().getPhone()).isEqualTo("01098765432");
+            assertThat(savedUserOf(UserRole.PARENT).getLoginId()).isEqualTo("01098765432");
+        }
+
+        @Test
+        @DisplayName("보호자 번호가 이미 학부모 계정이면 새로 만들지 않고 자녀만 붙인다 (형제·자매)")
+        void 다자녀는_기존_학부모에_연결한다() {
+            codeFound();
+            echoSaves();
+            User existing = Fixtures.user(30L, UserRole.PARENT, "01098765432", "x");
+            existing.changePassword(passwordEncoder.encode("myOwnPassword"));
+            Parent existingParent = Fixtures.parent(5L, existing);
+            given(userRepository.findByLoginId("01098765432")).willReturn(Optional.of(existing));
+            given(parentRepository.findByUserId(30L)).willReturn(Optional.of(existingParent));
+
+            signupService.signup(request());
+
+            ArgumentCaptor<Student> student = ArgumentCaptor.forClass(Student.class);
+            verify(studentRepository).save(student.capture());
+            assertThat(student.getValue().getParent()).isSameAs(existingParent);
+            // 기존 계정의 비밀번호를 0000으로 되돌리면 이미 쓰던 학부모가 잠긴다
+            assertThat(passwordEncoder.matches("myOwnPassword", existing.getPasswordHash()))
+                .isTrue();
+            assertThat(existing.isMustChangePassword()).isFalse();
+            verify(parentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("보호자 번호가 이미 학생 계정이면 409다")
+        void 보호자_번호가_학생계정이면_거부한다() {
+            codeFound();
+            echoSaves();
+            given(userRepository.findByLoginId("01098765432"))
+                .willReturn(Optional.of(Fixtures.user(10L, UserRole.STUDENT, "01098765432")));
+
+            assertThatThrownBy(() -> signupService.signup(request()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.DUPLICATE_RESOURCE);
         }
 
         @Test
@@ -341,111 +386,4 @@ class SignupServiceTest {
         }
     }
 
-    @Nested
-    @DisplayName("개인 코드 — 학부모")
-    class 학부모_개인코드 {
-
-        private final Student student = Fixtures.student(88L, "서동환");
-        private final SignupCode code = SignupCode.issue(student, UserRole.PARENT,
-            "P7F2QX", "01098765432", OffsetDateTime.now());
-
-        private SignupRequest request() {
-            return new SignupRequest("P7F2QX", "홍길동", "01098765432", null);
-        }
-
-        @Test
-        @DisplayName("계정과 parents가 생기고 자녀가 연결된다")
-        void 학부모_계정을_만든다() {
-            given(signupCodeRepository.findByCode("P7F2QX")).willReturn(Optional.of(code));
-            given(userRepository.findByLoginId("01098765432")).willReturn(Optional.empty());
-            given(userRepository.save(any())).willAnswer(i -> i.getArgument(0));
-            given(parentRepository.save(any())).willAnswer(i -> i.getArgument(0));
-
-            SignupResponse response = signupService.signup(request());
-
-            User created = savedUser();
-            assertThat(created.getRole()).isEqualTo(UserRole.PARENT);
-            assertThat(created.getName()).isEqualTo("홍길동");
-            assertThat(created.isMustChangePassword()).isTrue();
-            assertThat(student.getParent()).isNotNull();
-            assertThat(code.isUsed()).isTrue();
-            assertThat(response.role()).isEqualTo(UserRole.PARENT);
-            assertThat(response.studentName()).isEqualTo("서동환");
-        }
-
-        @Test
-        @DisplayName("이미 가입한 학부모가 둘째 아이 코드를 쓰면 기존 계정에 자녀만 추가된다")
-        void 다자녀는_기존_계정에_연결한다() {
-            User existing = Fixtures.user(30L, UserRole.PARENT, "01098765432",
-                passwordEncoder.encode("myOwnPassword"));
-            existing.changePassword(passwordEncoder.encode("myOwnPassword"));
-            Parent existingParent = Fixtures.parent(5L, existing);
-            given(signupCodeRepository.findByCode("P7F2QX")).willReturn(Optional.of(code));
-            given(userRepository.findByLoginId("01098765432")).willReturn(Optional.of(existing));
-            given(parentRepository.findByUserId(30L)).willReturn(Optional.of(existingParent));
-
-            signupService.signup(request());
-
-            assertThat(student.getParent()).isSameAs(existingParent);
-            verify(userRepository, never()).save(any());
-            verify(parentRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("다자녀 연결 시 기존 비밀번호를 0000으로 되돌리지 않는다")
-        void 기존_비밀번호를_유지한다() {
-            User existing = Fixtures.user(30L, UserRole.PARENT, "01098765432", "x");
-            existing.changePassword(passwordEncoder.encode("myOwnPassword"));
-            given(signupCodeRepository.findByCode("P7F2QX")).willReturn(Optional.of(code));
-            given(userRepository.findByLoginId("01098765432")).willReturn(Optional.of(existing));
-            given(parentRepository.findByUserId(30L))
-                .willReturn(Optional.of(Fixtures.parent(5L, existing)));
-
-            signupService.signup(request());
-
-            assertThat(passwordEncoder.matches("myOwnPassword", existing.getPasswordHash())).isTrue();
-            assertThat(existing.isMustChangePassword()).isFalse();
-        }
-
-        @Test
-        @DisplayName("같은 번호가 학생 계정으로 존재하면 409다")
-        void 학생_번호와_충돌하면_거부한다() {
-            User studentAccount = Fixtures.user(10L, UserRole.STUDENT, "01098765432");
-            given(signupCodeRepository.findByCode("P7F2QX")).willReturn(Optional.of(code));
-            given(userRepository.findByLoginId("01098765432"))
-                .willReturn(Optional.of(studentAccount));
-
-            assertThatThrownBy(() -> signupService.signup(request()))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.DUPLICATE_RESOURCE);
-        }
-
-        @Test
-        @DisplayName("이름이 없으면 VALIDATION_FAILED다")
-        void 이름이_없으면_거부한다() {
-            given(signupCodeRepository.findByCode("P7F2QX")).willReturn(Optional.of(code));
-
-            assertThatThrownBy(() -> signupService.signup(
-                new SignupRequest("P7F2QX", null, "01098765432", null)))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
-        }
-    }
-
-    @Test
-    @DisplayName("발급하는 코드는 반 코드·기존 개인 코드와 겹치지 않는다")
-    void 코드는_겹치지_않게_발급된다() {
-        ClassRoom classRoom = Fixtures.openClassRoom(3L, "고2 심화반", "HK7F2Q");
-        given(signupCodeRepository.findByCode("HK7F2Q")).willReturn(Optional.empty());
-        given(classRoomRepository.findByJoinCode("HK7F2Q")).willReturn(Optional.of(classRoom));
-        echoSaves();
-        // 처음 뽑은 값이 이미 쓰이고 있으면 다시 뽑는다
-        given(signupCodeRepository.existsByCode(any())).willReturn(true, false);
-        given(classRoomRepository.existsByJoinCode(any())).willReturn(false);
-
-        signupService.signup(new SignupRequest("HK7F2Q", "서동환", "01011112222", "01098765432"));
-
-        assertThat(savedCode().getCode()).isNotBlank();
-        verify(signupCodeRepository, org.mockito.Mockito.times(2)).existsByCode(any());
-    }
 }

@@ -31,6 +31,7 @@ import com.njwenglish.entity.enums.StudentStatus;
 import com.njwenglish.entity.enums.UserRole;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
+import com.njwenglish.repository.ParentRepository;
 import com.njwenglish.repository.SignupCodeRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.UserRepository;
@@ -71,6 +72,8 @@ public class StudentService {
     private final InviteCodeIssuer inviteCodeIssuer;
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
+    private final ParentLinkService parentLinkService;
+    private final ParentRepository parentRepository;
 
     /**
      * S-7 상단 카드. 이름은 students.name이고 전화번호는 마스킹해 내려간다.
@@ -153,10 +156,11 @@ public class StudentService {
         enrollAll(student, request.classRoomIds());
 
         SignupCode studentCode = issueCode(student, UserRole.STUDENT, studentPhone);
-        SignupCode parentCode = issueCode(student, UserRole.PARENT, parentPhone);
+        // 학부모는 코드 없이 계정이 바로 생긴다. 반 코드 가입 경로와 같은 방식이다.
+        // 선생님이 넣은 번호라 학생이 적는 경우보다 신뢰도가 높다.
+        parentLinkService.linkParent(student, parentPhone, student.getName() + " 학부모");
 
-        return new StudentCreateResponse(student.getId(), new StudentCreateResponse.SignupCodes(
-            SignupCodeResponse.from(studentCode), SignupCodeResponse.from(parentCode)));
+        return new StudentCreateResponse(student.getId(), SignupCodeResponse.from(studentCode));
     }
 
     @Transactional
@@ -232,17 +236,21 @@ public class StudentService {
      *
      * <p>submissions는 출제 시 대상 전원의 행이 NOT_SUBMITTED로 미리 깔린다. "행이 있으면 409"로
      * 짜면 아무도 못 지운다. 판정은 hasOperationalRecords가 status로 걸러서 한다.
+     *
+     * <p><b>학부모가 붙어 있는지는 판정에 쓰지 않는다.</b> 예전에는 학부모가 코드로 직접
+     * 가입해야 연결돼서 "진짜 학생"의 신호였지만, 지금은 가입·등록 시점에 전원 자동으로 붙는다.
+     * 이걸 조건에 넣으면 모든 학생이 409가 되어 제3자를 아무도 못 지운다.
      */
     @Transactional
     public StudentDeleteResponse delete(Long studentId) {
         Student student = studentAccessGuard.requireAccessible(studentId);
 
-        // 학부모가 붙어 있으면 이미 실제 학생이다
-        if (student.getParent() != null || studentRepository.hasOperationalRecords(studentId)) {
+        if (studentRepository.hasOperationalRecords(studentId)) {
             throw new BusinessException(ErrorCode.STUDENT_HAS_RECORDS);
         }
 
         User user = student.getUser();
+        Parent parent = student.getParent();
         long enrollments = enrollmentRepository.countByStudentId(studentId);
 
         // FK 순서: 자식 → students → users
@@ -254,10 +262,31 @@ public class StudentService {
         studentRepository.flush();
 
         if (user != null) {
-            tokenService.revokeAllOf(user.getId());
+            // revoke가 아니라 delete다. 행이 남으면 FK 때문에 users를 못 지운다
+            tokenService.deleteAllOf(user.getId());
             userRepository.delete(user);
         }
+        deleteParentIfChildless(parent);
+
         return new StudentDeleteResponse(studentId, user != null, enrollments);
+    }
+
+    /**
+     * 이 학생이 유일한 자녀였으면 학부모 계정도 함께 지운다.
+     *
+     * <p>학부모 계정이 학생 가입에 딸려 자동으로 생기므로, 잘못 들어온 학생을 지울 때
+     * 계정을 남기면 아무 자녀도 없는 유령 계정이 쌓인다. 형제·자매가 남아 있으면 지우지 않는다.
+     */
+    private void deleteParentIfChildless(Parent parent) {
+        if (parent == null || studentRepository.countByParentId(parent.getId()) > 0) {
+            return;
+        }
+        User parentUser = parent.getUser();
+        parentRepository.delete(parent);
+        if (parentUser != null) {
+            tokenService.deleteAllOf(parentUser.getId());
+            userRepository.delete(parentUser);
+        }
     }
 
     /**
@@ -268,7 +297,7 @@ public class StudentService {
     public SignupCodeIssueResponse issueSignupCode(Long studentId,
                                                    SignupCodeIssueRequest request) {
         Student student = studentAccessGuard.requireAccessible(studentId);
-        UserRole target = requireTarget(request.target());
+        UserRole target = requireCodeTarget(request.target());
 
         // 이미 가입했다면 필요한 것은 코드가 아니라 reset-password다
         if (alreadySignedUp(student, target)) {
@@ -483,8 +512,26 @@ public class StudentService {
         return digits.isBlank() ? null : "%" + digits + "%";
     }
 
+    /**
+     * 비밀번호 초기화 대상. 학생·학부모 둘 다 계정이 있으므로 둘 다 받는다.
+     *
+     * <p><b>코드 발급과 공유하지 마라.</b> 코드는 학생만 나가지만 초기화는 학부모도 필요하다.
+     * 하나로 합쳐서 STUDENT만 허용하면 학부모가 비밀번호를 잊었을 때 손쓸 방법이 없어진다 —
+     * 이 서비스에는 비밀번호 찾기가 없고 선생님 초기화가 유일한 경로다.
+     */
     private UserRole requireTarget(UserRole target) {
         if (target != UserRole.STUDENT && target != UserRole.PARENT) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return target;
+    }
+
+    /**
+     * 코드는 학생용만 발급한다. 학부모 계정은 등록 시점에 바로 만들어져서 전달할 코드가 없다.
+     * PARENT를 보내면 400이다 — V7의 ck_signup_codes_role도 같은 것을 DB에서 막는다.
+     */
+    private UserRole requireCodeTarget(UserRole target) {
+        if (target != UserRole.STUDENT) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         return target;

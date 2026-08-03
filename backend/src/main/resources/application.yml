@@ -30,6 +30,20 @@ spring:
 server:
   port: 8080
   forward-headers-strategy: native
+  error:
+    # 에러 응답은 항상 ApiResponse.fail이다. /error로 새는 경로에서도 내부 정보를 내보내지 않는다.
+    include-stacktrace: never
+    include-message: never
+
+# 파일이 아니라 표준출력으로 남긴다. 컨테이너 안 파일은 재시작하면 사라지고,
+# Docker의 json-file 드라이버(compose의 logging 옵션)가 회전을 맡는다.
+# logging.file.name을 넣지 마라.
+logging:
+  level:
+    root: INFO
+    com.njwenglish: INFO
+    # DEBUG로 두면 t3.small 디스크가 빠르게 찬다.
+    org.hibernate.SQL: WARN
 
 app:
   jwt:

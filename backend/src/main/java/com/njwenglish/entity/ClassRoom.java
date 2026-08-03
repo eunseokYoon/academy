@@ -2,6 +2,7 @@ package com.njwenglish.entity;
 
 import com.njwenglish.common.entity.BaseTimeEntity;
 import com.njwenglish.entity.enums.ClassRoomStatus;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,9 +13,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
-import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -48,18 +52,13 @@ public class ClassRoom extends BaseTimeEntity {
     @Column(name = "join_code_active", nullable = false)
     private boolean joinCodeActive;
 
-    /** 1=월요일 ~ 7=일요일 (ISO-8601, java.time.DayOfWeek.getValue()와 동일) */
-    @Column(name = "day_of_week")
-    private Short dayOfWeek;
-
-    @Column(name = "start_time")
-    private LocalTime startTime;
-
-    @Column(name = "term_start")
-    private LocalDate termStart;
-
-    @Column(name = "term_end")
-    private LocalDate termEnd;
+    /**
+     * 요일당 하나. 수정은 replaceSchedules로 통째 교체한다.
+     * OrderBy를 두는 이유는 목록·상세·대시보드에서 순서가 갈리지 않게 하려는 것이다.
+     */
+    @OneToMany(mappedBy = "classRoom", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("dayOfWeek asc, startTime asc")
+    private List<ClassRoomSchedule> schedules = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -72,18 +71,12 @@ public class ClassRoom extends BaseTimeEntity {
      * joinCode는 서버가 만든 값만 받는다. 선생님이 직접 정하면 「고2반」처럼
      * 추측 가능한 값이 들어가고, 반 코드는 전화번호 대조가 없어 그대로 뚫린다.
      */
-    public static ClassRoom create(Teacher teacher, String name, String joinCode,
-                                   Short dayOfWeek, LocalTime startTime,
-                                   LocalDate termStart, LocalDate termEnd, String memo) {
+    public static ClassRoom create(Teacher teacher, String name, String joinCode, String memo) {
         ClassRoom classRoom = new ClassRoom();
         classRoom.teacher = teacher;
         classRoom.name = name;
         classRoom.joinCode = joinCode;
         classRoom.joinCodeActive = true;
-        classRoom.dayOfWeek = dayOfWeek;
-        classRoom.startTime = startTime;
-        classRoom.termStart = termStart;
-        classRoom.termEnd = termEnd;
         classRoom.memo = memo;
         classRoom.status = ClassRoomStatus.ACTIVE;
         return classRoom;
@@ -94,14 +87,31 @@ public class ClassRoom extends BaseTimeEntity {
         this.name = name;
     }
 
-    public void changeSchedule(Short dayOfWeek, LocalTime startTime) {
-        this.dayOfWeek = dayOfWeek;
-        this.startTime = startTime;
+    /**
+     * 스케줄을 slots와 같은 상태로 만든다. 개별 슬롯 id를 밖에서 다루지 않는다 —
+     * 슬롯이 1~3개고 화면은 폼 하나라 id를 주고받으면 프론트 상태만 늘고 얻는 것이 없다.
+     *
+     * <p><b>전량 삭제 후 재삽입이 아니라 요일 기준 차집합이다.</b> Hibernate는 flush에서
+     * INSERT를 DELETE보다 먼저 실행해서, 지우고 다시 넣으면 같은 요일이 잠깐 두 줄이 되어
+     * uq_crs_day에 걸린다. 남길 요일은 시각만 고치고, 빠진 요일만 지운다.
+     */
+    public void replaceSchedules(List<Slot> slots) {
+        this.schedules.removeIf(existing -> slots.stream()
+            .noneMatch(slot -> slot.dayOfWeek().equals(existing.getDayOfWeek())));
+
+        for (Slot slot : slots) {
+            this.schedules.stream()
+                .filter(existing -> existing.getDayOfWeek().equals(slot.dayOfWeek()))
+                .findFirst()
+                .ifPresentOrElse(
+                    existing -> existing.changeTime(slot.startTime(), slot.endTime()),
+                    () -> this.schedules.add(ClassRoomSchedule.create(
+                        this, slot.dayOfWeek(), slot.startTime(), slot.endTime())));
+        }
     }
 
-    public void changeTerm(LocalDate termStart, LocalDate termEnd) {
-        this.termStart = termStart;
-        this.termEnd = termEnd;
+    /** 서비스 계층이 슬롯을 넘길 때 쓰는 값 객체. DTO를 엔티티로 들이지 않기 위한 것이다. */
+    public record Slot(Short dayOfWeek, LocalTime startTime, LocalTime endTime) {
     }
 
     public void changeMemo(String memo) {

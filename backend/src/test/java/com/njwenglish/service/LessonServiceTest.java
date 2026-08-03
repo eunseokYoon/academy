@@ -45,9 +45,20 @@ class LessonServiceTest {
 
     /** 목요일(4) 반. bulk 생성 기준이 된다. */
     private ClassRoom thursdayClass() {
-        ClassRoom classRoom = ClassRoom.create(null, "고2 심화반", "HK7F2Q", (short) 4,
-            LocalTime.of(19, 0), null, null, null);
+        ClassRoom classRoom = ClassRoom.create(null, "고2 심화반", "HK7F2Q", null);
+        classRoom.replaceSchedules(List.of(
+            new ClassRoom.Slot((short) 4, LocalTime.of(19, 0), null)));
         ReflectionTestUtils.setField(classRoom, "id", 3L);
+        return classRoom;
+    }
+
+    /** 화(2)·목(4) 주 2회 반. */
+    private ClassRoom tuesdayThursdayClass() {
+        ClassRoom classRoom = ClassRoom.create(null, "화목반", "KD4REX", null);
+        classRoom.replaceSchedules(List.of(
+            new ClassRoom.Slot((short) 2, LocalTime.of(19, 0), LocalTime.of(21, 0)),
+            new ClassRoom.Slot((short) 4, LocalTime.of(19, 0), LocalTime.of(21, 0))));
+        ReflectionTestUtils.setField(classRoom, "id", 4L);
         return classRoom;
     }
 
@@ -236,5 +247,35 @@ class LessonServiceTest {
             .extracting("errorCode").isEqualTo(ErrorCode.LESSON_HAS_RECORDS);
 
         verify(lessonRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("슬롯이 여러 개면 모든 요일에 수업을 만든다")
+    void 여러_요일에_일괄_생성한다() {
+        given(classRoomRepository.findById(4L)).willReturn(Optional.of(tuesdayThursdayClass()));
+        given(lessonRepository.findLessonDates(4L, LocalDate.of(2026, 8, 3),
+            LocalDate.of(2026, 8, 16))).willReturn(List.of());
+        given(lessonRepository.save(any())).willAnswer(i -> i.getArgument(0));
+
+        LessonBulkCreateResponse response = lessonService.bulkCreate(new LessonBulkCreateRequest(
+            4L, LocalDate.of(2026, 8, 3), LocalDate.of(2026, 8, 16), null));
+
+        // 화 8/4 8/11, 목 8/6 8/13 → 4일
+        assertThat(response.created()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("슬롯이 없는 반은 일괄 생성을 거부한다")
+    void 슬롯_없으면_거부한다() {
+        ClassRoom noSchedule = ClassRoom.create(null, "미정반", "AAAAAA", null);
+        ReflectionTestUtils.setField(noSchedule, "id", 5L);
+        given(classRoomRepository.findById(5L)).willReturn(Optional.of(noSchedule));
+
+        assertThatThrownBy(() -> lessonService.bulkCreate(new LessonBulkCreateRequest(
+            5L, LocalDate.of(2026, 8, 3), LocalDate.of(2026, 8, 16), null)))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        verify(lessonRepository, never()).save(any());
     }
 }

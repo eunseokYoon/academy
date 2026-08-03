@@ -31,6 +31,7 @@ import com.njwenglish.entity.enums.UserRole;
 import com.njwenglish.entity.enums.UserStatus;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
+import com.njwenglish.repository.ParentRepository;
 import com.njwenglish.repository.SignupCodeRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.UserRepository;
@@ -66,6 +67,8 @@ class StudentServiceTest {
     private ClassRoomRepository classRoomRepository;
     @Mock
     private TokenService tokenService;
+    @Mock
+    private ParentRepository parentRepository;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private StudentService studentService;
@@ -75,7 +78,9 @@ class StudentServiceTest {
         studentService = new StudentService(studentAccessGuard, studentRepository, userRepository,
             signupCodeRepository, enrollmentRepository, classRoomRepository,
             new InviteCodeIssuer(signupCodeRepository, classRoomRepository),
-            tokenService, passwordEncoder);
+            tokenService, passwordEncoder,
+            new ParentLinkService(userRepository, parentRepository, passwordEncoder),
+            parentRepository);
     }
 
     private List<SignupCode> savedCodes() {
@@ -94,32 +99,41 @@ class StudentServiceTest {
         }
 
         @Test
-        @DisplayName("students 1행과 signup_codes 2행이 생기고 users는 만들지 않는다")
-        void 계정없이_학생과_코드만_만든다() {
+        @DisplayName("학생 코드는 1장만 만들고, 학부모는 코드 없이 계정이 바로 생긴다")
+        void 학생코드와_학부모계정을_만든다() {
             given(studentRepository.save(any())).willAnswer(i -> i.getArgument(0));
             given(signupCodeRepository.save(any())).willAnswer(i -> i.getArgument(0));
+            given(userRepository.save(any())).willAnswer(i -> i.getArgument(0));
+            given(parentRepository.save(any())).willAnswer(i -> i.getArgument(0));
 
             StudentCreateResponse response = studentService.create(request(null));
 
             ArgumentCaptor<Student> student = ArgumentCaptor.forClass(Student.class);
             verify(studentRepository).save(student.capture());
             assertThat(student.getValue().getName()).isEqualTo("서동환");
+            // 학생 계정은 여전히 없다. 학생은 코드로 직접 가입한다
             assertThat(student.getValue().getUser()).isNull();
-            assertThat(student.getValue().getParent()).isNull();
+            // 학부모는 이 시점에 이미 붙어 있다
+            assertThat(student.getValue().getParent()).isNotNull();
             assertThat(student.getValue().getMemo()).isEqualTo("독해 보강");
 
-            verify(userRepository, never()).save(any());
-
+            // 코드는 학생용 한 장뿐이다
             List<SignupCode> codes = savedCodes();
-            assertThat(codes).hasSize(2);
+            assertThat(codes).hasSize(1);
             assertThat(codes.get(0).getTargetRole()).isEqualTo(UserRole.STUDENT);
             assertThat(codes.get(0).getPhone()).isEqualTo("01011112222");
-            assertThat(codes.get(1).getTargetRole()).isEqualTo(UserRole.PARENT);
-            assertThat(codes.get(1).getPhone()).isEqualTo("01098765432");
 
-            assertThat(response.signupCodes().student().code()).matches("[A-Z2-9]{6}");
-            assertThat(response.signupCodes().parent().code()).matches("[A-Z2-9]{6}");
-            assertThat(response.signupCodes().student().expiresAt())
+            // 학부모 계정은 보호자 번호가 아이디이고 초기 비밀번호 상태다
+            ArgumentCaptor<User> parentUser = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(parentUser.capture());
+            assertThat(parentUser.getValue().getRole()).isEqualTo(UserRole.PARENT);
+            assertThat(parentUser.getValue().getLoginId()).isEqualTo("01098765432");
+            assertThat(parentUser.getValue().isMustChangePassword()).isTrue();
+            assertThat(passwordEncoder.matches("0000", parentUser.getValue().getPasswordHash()))
+                .isTrue();
+
+            assertThat(response.signupCode().code()).matches("[A-Z2-9]{6}");
+            assertThat(response.signupCode().expiresAt())
                 .isAfter(OffsetDateTime.now().plusDays(6));
         }
 
@@ -298,15 +312,57 @@ class StudentServiceTest {
         }
 
         @Test
-        @DisplayName("학부모가 연결돼 있으면 409다")
-        void 학부모가_있으면_거부한다() {
+        @DisplayName("유일한 자녀였으면 학부모 계정도 함께 지운다 — 자녀 없는 유령 계정을 남기지 않는다")
+        void 단독_자녀면_학부모도_지운다() {
             Student student = Fixtures.student(91L, "제3자");
-            student.linkParent(Fixtures.parent(5L, Fixtures.user(30L, UserRole.PARENT, "01098765432")));
+            User parentUser = Fixtures.user(30L, UserRole.PARENT, "01098765432");
+            Parent parent = Fixtures.parent(5L, parentUser);
+            student.linkParent(parent);
             given(studentAccessGuard.requireAccessible(91L)).willReturn(student);
+            given(studentRepository.hasOperationalRecords(91L)).willReturn(false);
+            given(studentRepository.countByParentId(5L)).willReturn(0L);
 
-            assertThatThrownBy(() -> studentService.delete(91L))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.STUDENT_HAS_RECORDS);
+            studentService.delete(91L);
+
+            verify(studentRepository).delete(student);
+            verify(parentRepository).delete(parent);
+            verify(userRepository).delete(parentUser);
+            // revoke가 아니라 delete다. 행이 남으면 FK 때문에 users 삭제가 실패한다
+            verify(tokenService).deleteAllOf(30L);
+        }
+
+        @Test
+        @DisplayName("형제·자매가 남아 있으면 학부모 계정은 지우지 않는다")
+        void 다른_자녀가_있으면_학부모를_남긴다() {
+            Student student = Fixtures.student(91L, "제3자");
+            User parentUser = Fixtures.user(30L, UserRole.PARENT, "01098765432");
+            Parent parent = Fixtures.parent(5L, parentUser);
+            student.linkParent(parent);
+            given(studentAccessGuard.requireAccessible(91L)).willReturn(student);
+            given(studentRepository.hasOperationalRecords(91L)).willReturn(false);
+            given(studentRepository.countByParentId(5L)).willReturn(1L);
+
+            studentService.delete(91L);
+
+            verify(studentRepository).delete(student);
+            verify(parentRepository, never()).delete(any());
+            verify(userRepository, never()).delete(parentUser);
+        }
+
+        @Test
+        @DisplayName("학부모가 붙어 있다는 것만으로는 막지 않는다 — 이제 전원 자동으로 붙는다")
+        void 학부모_연결은_삭제를_막지_않는다() {
+            Student student = Fixtures.student(91L, "제3자");
+            student.linkParent(
+                Fixtures.parent(5L, Fixtures.user(30L, UserRole.PARENT, "01098765432")));
+            given(studentAccessGuard.requireAccessible(91L)).willReturn(student);
+            given(studentRepository.hasOperationalRecords(91L)).willReturn(false);
+            given(studentRepository.countByParentId(5L)).willReturn(0L);
+
+            // 예전에는 여기서 409였다. 그때는 학부모가 코드로 직접 가입해야 붙었기 때문이다.
+            studentService.delete(91L);
+
+            verify(studentRepository).delete(student);
         }
 
         @Test
@@ -392,15 +448,29 @@ class StudentServiceTest {
             Student student = Fixtures.student(88L, "서동환");
             given(studentAccessGuard.requireAccessible(88L)).willReturn(student);
             given(signupCodeRepository
-                .findByStudentIdAndTargetRoleAndUsedAtIsNull(88L, UserRole.PARENT))
+                .findByStudentIdAndTargetRoleAndUsedAtIsNull(88L, UserRole.STUDENT))
                 .willReturn(List.of());
             given(signupCodeRepository.save(any())).willAnswer(i -> i.getArgument(0));
 
             SignupCodeIssueResponse response = studentService.issueSignupCode(
-                88L, new SignupCodeIssueRequest(UserRole.PARENT, "010-3333-4444"));
+                88L, new SignupCodeIssueRequest(UserRole.STUDENT, "010-3333-4444"));
 
             assertThat(response.phone()).isEqualTo("01033334444");
-            assertThat(response.target()).isEqualTo(UserRole.PARENT);
+            assertThat(response.target()).isEqualTo(UserRole.STUDENT);
+        }
+
+        @Test
+        @DisplayName("target=PARENT는 400이다 — 학부모 코드는 발급하지 않는다")
+        void 학부모_코드는_발급하지_않는다() {
+            given(studentAccessGuard.requireAccessible(88L))
+                .willReturn(Fixtures.student(88L, "서동환"));
+
+            assertThatThrownBy(() -> studentService.issueSignupCode(
+                88L, new SignupCodeIssueRequest(UserRole.PARENT, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+            verify(signupCodeRepository, never()).save(any());
         }
     }
 

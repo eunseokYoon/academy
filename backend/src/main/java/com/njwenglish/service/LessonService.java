@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,14 +71,17 @@ public class LessonService {
     @Transactional
     public LessonBulkCreateResponse bulkCreate(LessonBulkCreateRequest request) {
         ClassRoom classRoom = findClassRoom(request.classRoomId());
-        if (classRoom.getDayOfWeek() == null) {
+        // 슬롯의 요일 집합. 요일당 슬롯이 하나라 중복은 없지만 contains로 쓰려고 Set으로 모은다
+        Set<DayOfWeek> days = classRoom.getSchedules().stream()
+            .map(schedule -> DayOfWeek.of(schedule.getDayOfWeek()))
+            .collect(Collectors.toSet());
+        if (days.isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         if (request.to().isBefore(request.from())) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
 
-        DayOfWeek dayOfWeek = DayOfWeek.of(classRoom.getDayOfWeek());
         Set<LocalDate> skip = new HashSet<>(
             request.skipDates() == null ? List.of() : request.skipDates());
         skip.addAll(lessonRepository.findLessonDates(
@@ -88,7 +92,7 @@ public class LessonService {
         for (LocalDate date = request.from();
              !date.isAfter(request.to());
              date = date.plusDays(1)) {
-            if (date.getDayOfWeek() != dayOfWeek) {
+            if (!days.contains(date.getDayOfWeek())) {
                 continue;
             }
             if (skip.contains(date)) {
