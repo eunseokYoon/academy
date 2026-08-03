@@ -81,6 +81,16 @@ public class OnlineTest extends BaseTimeEntity {
     @Column(length = 50)
     private String subject;
 
+    /**
+     * <b>앞 N문항이 내부지문</b>, 나머지가 외부지문이다. null이면 집계하지 않는다.
+     *
+     * <p>클리닉 성적이 내부·외부로 나뉘어 있는데 온라인 테스트 결과는 문항 하나로
+     * 이어진 배열이다. 이 값이 있으면 결과 화면이 내부·외부 맞힌 개수를 따로 집계해
+     * 보여주고, 선생님은 그 숫자를 성적 기입 탭에 옮겨 적기만 하면 된다.
+     */
+    @Column(name = "internal_question_count")
+    private Short internalQuestionCount;
+
     @Column(name = "year", nullable = false)
     private Short year;
 
@@ -103,6 +113,7 @@ public class OnlineTest extends BaseTimeEntity {
                                     short questionCount, short choiceCount,
                                     Short[] correctChoices, Short[] points, String answerS3Key,
                                     ScoreType scoreType, String subject,
+                                    Short internalQuestionCount,
                                     short year, short month, short week,
                                     OffsetDateTime opensAt, OffsetDateTime closesAt) {
         OnlineTest test = new OnlineTest();
@@ -116,6 +127,7 @@ public class OnlineTest extends BaseTimeEntity {
         test.answerS3Key = answerS3Key;
         test.scoreType = scoreType;
         test.subject = subject;
+        test.internalQuestionCount = internalQuestionCount;
         test.year = year;
         test.month = month;
         test.week = week;
@@ -130,7 +142,7 @@ public class OnlineTest extends BaseTimeEntity {
      */
     public void edit(String title, short questionCount, short choiceCount,
                      Short[] correctChoices, Short[] points, String answerS3Key,
-                     ScoreType scoreType, String subject,
+                     ScoreType scoreType, String subject, Short internalQuestionCount,
                      short year, short month, short week,
                      OffsetDateTime opensAt, OffsetDateTime closesAt) {
         this.title = title;
@@ -141,6 +153,7 @@ public class OnlineTest extends BaseTimeEntity {
         this.answerS3Key = answerS3Key;
         this.scoreType = scoreType;
         this.subject = subject;
+        this.internalQuestionCount = internalQuestionCount;
         this.year = year;
         this.month = month;
         this.week = week;

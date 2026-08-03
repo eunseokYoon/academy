@@ -5,6 +5,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.OnlineTestAnswerKeys;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.security.CurrentUser;
+import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.onlinetest.AnswerUploadUrlRequest;
 import com.njwenglish.dto.onlinetest.AnswerUploadUrlResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestCreateRequest;
@@ -12,6 +13,7 @@ import com.njwenglish.dto.onlinetest.OnlineTestCreateResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestDetailResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestListItemResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestResultsResponse;
+import com.njwenglish.dto.onlinetest.OnlineTestStudentDetailResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestTakeStatus;
 import com.njwenglish.dto.onlinetest.OnlineTestUpdateRequest;
 import com.njwenglish.entity.ClassRoom;
@@ -30,6 +32,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -57,6 +60,7 @@ public class OnlineTestService {
     private final ClassRoomRepository classRoomRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final TeacherRepository teacherRepository;
+    private final StudentAccessGuard studentAccessGuard;
     private final OnlineTestAnswerKeys answerKeys;
     private final PresignedUrlProvider presignedUrlProvider;
 
@@ -88,11 +92,12 @@ public class OnlineTestService {
         String subject = validSubject(request.scoreType(), request.subject());
         String answerS3Key = validAnswerKey(request.answerS3Key(), teacher.getId());
         validatePeriod(request.opensAt(), request.closesAt());
+        validateInternalCount(request.internalQuestionCount(), questionCount);
 
         OnlineTest test = onlineTestRepository.save(OnlineTest.create(
             classRoom, teacher, request.title().trim(), questionCount, choiceCount,
             request.correctChoices(), request.points(), answerS3Key,
-            request.scoreType(), subject,
+            request.scoreType(), subject, request.internalQuestionCount(),
             request.year(), request.month(), request.week(),
             request.opensAt(), request.closesAt()));
 
@@ -137,13 +142,16 @@ public class OnlineTestService {
             ? test.getScoreType() : request.scoreType();
         String subject = validSubject(scoreType,
             request.subject() == null ? test.getSubject() : request.subject());
+        Short internalQuestionCount = request.internalQuestionCount() == null
+            ? test.getInternalQuestionCount() : request.internalQuestionCount();
 
         validateChoices(correctChoices, questionCount, choiceCount);
         validatePoints(points, questionCount);
         validateWeek(year, month, week);
+        validateInternalCount(internalQuestionCount, questionCount);
 
         test.edit(title, questionCount, choiceCount, correctChoices, points, answerS3Key,
-            scoreType, subject, year, month, week, opensAt, closesAt);
+            scoreType, subject, internalQuestionCount, year, month, week, opensAt, closesAt);
         return OnlineTestDetailResponse.from(test, answerFileUrl(test));
     }
 
@@ -189,16 +197,32 @@ public class OnlineTestService {
             onlineTestSubmissionRepository.findByOnlineTestId(testId).stream()
                 .collect(Collectors.toMap(s -> s.getStudent().getId(), Function.identity()));
 
+        Short internalCount = test.getInternalQuestionCount();
+        Short[] correct = test.getCorrectChoices();
+
         List<OnlineTestResultsResponse.Item> items = students.stream()
             .map(student -> {
                 OnlineTestSubmission submission = submissions.get(student.getId());
                 boolean submitted = submission != null && submission.isSubmitted();
+                if (!submitted) {
+                    return new OnlineTestResultsResponse.Item(
+                        student.getId(), student.getName(),
+                        OnlineTestTakeStatus.of(submission),
+                        null, null, null, null, List.of(), null);
+                }
+                Short[] chosen = submission.getChosenChoices();
+                // 내부지문 문항 수가 없으면 집계하지 않는다. 0으로 채우면 "0개 맞음"으로 읽힌다
+                Short internalCorrect = internalCount == null
+                    ? null : countCorrect(correct, chosen, 0, internalCount);
+                Short externalCorrect = internalCount == null
+                    ? null : countCorrect(correct, chosen, internalCount, correct.length);
                 return new OnlineTestResultsResponse.Item(
                     student.getId(), student.getName(),
                     OnlineTestTakeStatus.of(submission),
-                    submitted ? submission.getScore() : null,
-                    submitted ? submission.getCorrectCount() : null,
-                    submitted ? submission.getSubmittedAt() : null);
+                    submission.getScore(), submission.getCorrectCount(),
+                    internalCorrect, externalCorrect,
+                    wrongQuestionNos(correct, chosen),
+                    submission.getSubmittedAt());
             })
             .toList();
 
@@ -209,7 +233,7 @@ public class OnlineTestService {
 
         return new OnlineTestResultsResponse(
             new OnlineTestResultsResponse.Test(test.getId(), test.getTitle(),
-                test.getQuestionCount(), test.getClassRoom().getName()),
+                test.getQuestionCount(), internalCount, test.getClassRoom().getName()),
             new OnlineTestResultsResponse.Counts(items.size(),
                 items.size() - submitted - inProgress, inProgress, submitted),
             average(items),
@@ -232,6 +256,76 @@ public class OnlineTestService {
     }
 
     // ---------- 내부 ----------
+
+    /**
+     * 선생님 전용. 학생 한 명의 문항별 정오.
+     *
+     * <p>온라인 테스트는 클리닉 테스트의 온라인 대체본이다. 선생님이 이 화면을 보고
+     * 성적 기입 탭의 클리닉 칸에 직접 적는다. 성적 자동 반영은 없다.
+     */
+    @Transactional(readOnly = true)
+    public OnlineTestStudentDetailResponse studentDetail(Long testId, Long studentId) {
+        studentAccessGuard.requireAccessible(studentId);
+
+        OnlineTest test = findTest(testId);
+        OnlineTestSubmission submission = onlineTestSubmissionRepository
+            .findByOnlineTestIdAndStudentId(testId, studentId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        Short[] correct = test.getCorrectChoices();
+        Short[] chosen = submission.getChosenChoices();
+        Short internalCount = test.getInternalQuestionCount();
+
+        List<OnlineTestStudentDetailResponse.QuestionResult> results = new ArrayList<>();
+        for (int i = 0; i < correct.length; i++) {
+            Short picked = i < chosen.length ? chosen[i] : null;
+            String section = internalCount == null
+                ? null : (i < internalCount ? "INTERNAL" : "EXTERNAL");
+            results.add(new OnlineTestStudentDetailResponse.QuestionResult(
+                i + 1, picked, correct[i],
+                picked != null && picked.equals(correct[i]), section));
+        }
+
+        return new OnlineTestStudentDetailResponse(studentId,
+            submission.getStudent().getName(), submission.getCorrectCount(),
+            test.getQuestionCount(), internalCount, List.copyOf(results));
+    }
+
+    /**
+     * [fromIndex, toIndex) 구간의 정답 개수. chosen이 null이면 미체크라 오답이다.
+     * 내부지문(0 ~ internalQuestionCount)과 외부지문(그 뒤)을 나눠 세는 데 쓴다.
+     */
+    static short countCorrect(Short[] correctChoices, Short[] chosenChoices,
+                              int fromIndex, int toIndex) {
+        short count = 0;
+        for (int i = fromIndex; i < toIndex && i < correctChoices.length; i++) {
+            Short chosen = i < chosenChoices.length ? chosenChoices[i] : null;
+            if (chosen != null && chosen.equals(correctChoices[i])) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** 틀린 문항 번호. <b>1부터 센다</b> — 선생님이 시험지에서 찾는 번호와 같아야 한다. */
+    static List<Integer> wrongQuestionNos(Short[] correctChoices, Short[] chosenChoices) {
+        List<Integer> wrong = new ArrayList<>();
+        for (int i = 0; i < correctChoices.length; i++) {
+            Short chosen = i < chosenChoices.length ? chosenChoices[i] : null;
+            if (chosen == null || !chosen.equals(correctChoices[i])) {
+                wrong.add(i + 1);
+            }
+        }
+        return List.copyOf(wrong);
+    }
+
+    /** 내부지문은 앞에서부터 세므로 전체 문항 수를 넘을 수 없다. */
+    private void validateInternalCount(Short internalQuestionCount, short questionCount) {
+        if (internalQuestionCount != null
+            && (internalQuestionCount < 0 || internalQuestionCount > questionCount)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
 
     private OnlineTest findTest(Long testId) {
         return onlineTestRepository.findWithClassRoom(testId)

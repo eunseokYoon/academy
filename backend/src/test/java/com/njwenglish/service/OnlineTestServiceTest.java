@@ -13,6 +13,7 @@ import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.OnlineTestAnswerKeys;
 import com.njwenglish.common.s3.PresignedUrlProvider;
+import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.onlinetest.OnlineTestCreateRequest;
 import com.njwenglish.dto.onlinetest.OnlineTestResultsResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestTakeStatus;
@@ -63,6 +64,8 @@ class OnlineTestServiceTest {
     @Mock
     private TeacherRepository teacherRepository;
     @Mock
+    private StudentAccessGuard studentAccessGuard;
+    @Mock
     private OnlineTestAnswerKeys answerKeys;
     @Mock
     private PresignedUrlProvider presignedUrlProvider;
@@ -76,7 +79,7 @@ class OnlineTestServiceTest {
     void setUp() {
         onlineTestService = new OnlineTestService(onlineTestRepository,
             onlineTestSubmissionRepository, classRoomRepository, enrollmentRepository,
-            teacherRepository, answerKeys, presignedUrlProvider);
+            teacherRepository, studentAccessGuard, answerKeys, presignedUrlProvider);
 
         Fixtures.login(Fixtures.teacher(1L));
         given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
@@ -98,14 +101,14 @@ class OnlineTestServiceTest {
     private OnlineTestCreateRequest request(short questionCount, Short[] correctChoices,
                                             Short[] points, ScoreType scoreType, String subject) {
         return new OnlineTestCreateRequest(3L, "6월 2주차 단어시험", questionCount, (short) 5,
-            correctChoices, points, null, scoreType, subject,
+            correctChoices, points, null, scoreType, subject, null,
             (short) 2026, (short) 6, (short) 2, null, null);
     }
 
     private OnlineTest publishedTest() {
         OnlineTest test = OnlineTest.create(classRoom, teacher, "6월 2주차 단어시험",
             (short) 25, (short) 5, answers(25, 3), null, null,
-            ScoreType.WORD, "영어", (short) 2026, (short) 6, (short) 2, null, null);
+            ScoreType.WORD, "영어", null, (short) 2026, (short) 6, (short) 2, null, null);
         ReflectionTestUtils.setField(test, "id", 55L);
         test.publish(OffsetDateTime.now().minusDays(1));
         return test;
@@ -168,7 +171,7 @@ class OnlineTestServiceTest {
 
         assertThatThrownBy(() -> onlineTestService.update(55L, new OnlineTestUpdateRequest(
             null, null, null, answers(25, 1), null, null, null, null, null, null, null,
-            null, null)))
+            null, null, null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TEST_ALREADY_PUBLISHED);
     }
@@ -181,7 +184,7 @@ class OnlineTestServiceTest {
 
         onlineTestService.update(55L, new OnlineTestUpdateRequest(
             "6월 2주차 단어시험(재공지)", null, null, null, null, null, null, null,
-            null, null, null, null, null));
+            null, null, null, null, null, null));
 
         assertThat(test.getTitle()).isEqualTo("6월 2주차 단어시험(재공지)");
     }
@@ -247,7 +250,7 @@ class OnlineTestServiceTest {
 
         assertThatThrownBy(() -> onlineTestService.create(new OnlineTestCreateRequest(
             3L, "6월 2주차 단어시험", (short) 25, (short) 5, answers(25, 3), null,
-            "online-tests/2026/06/남의파일.pdf", null, null,
+            "online-tests/2026/06/남의파일.pdf", null, null, null,
             (short) 2026, (short) 6, (short) 2, null, null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);

@@ -8,6 +8,7 @@ import com.njwenglish.dto.onlinetest.OnlineTestCreateResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestDetailResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestListItemResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestResultsResponse;
+import com.njwenglish.dto.onlinetest.OnlineTestStudentDetailResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestUpdateRequest;
 import com.njwenglish.service.OnlineTestService;
 import jakarta.validation.Valid;
@@ -80,9 +81,21 @@ public class TeacherOnlineTestController {
         return ApiResponse.ok();
     }
 
-    /** 미응시 학생도 포함된다. */
+    /** 미응시 학생도 포함된다. 학생별 틀린 문항 번호와 내부·외부 집계가 함께 내려간다. */
     @GetMapping("/{testId}/results")
     public ApiResponse<OnlineTestResultsResponse> results(@PathVariable Long testId) {
         return ApiResponse.ok(onlineTestService.results(testId));
+    }
+
+    /**
+     * 학생 한 명의 문항별 정오. 선생님이 이걸 보고 성적 기입 탭에 직접 적는다.
+     *
+     * <p>정답이 들어가는 응답이라 TEACHER 전용 경로에만 둔다.
+     * 학생 응시 화면에서 이 엔드포인트를 호출하게 만들지 마라.
+     */
+    @GetMapping("/{testId}/results/{studentId}")
+    public ApiResponse<OnlineTestStudentDetailResponse> studentDetail(
+        @PathVariable Long testId, @PathVariable Long studentId) {
+        return ApiResponse.ok(onlineTestService.studentDetail(testId, studentId));
     }
 }

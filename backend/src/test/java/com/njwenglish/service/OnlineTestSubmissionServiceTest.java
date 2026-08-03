@@ -80,7 +80,7 @@ class OnlineTestSubmissionServiceTest {
     private OnlineTest test(ScoreType scoreType, String subject, OffsetDateTime closesAt) {
         OnlineTest test = OnlineTest.create(classRoom, teacher, "6월 2주차 단어시험",
             (short) 25, (short) 5, answers(25, 3), null, "online-tests/2026/06/key.pdf",
-            scoreType, subject, (short) 2026, (short) 6, (short) 2, null, closesAt);
+            scoreType, subject, null, (short) 2026, (short) 6, (short) 2, null, closesAt);
         ReflectionTestUtils.setField(test, "id", 55L);
         test.publish(OffsetDateTime.now().minusDays(1));
         return test;

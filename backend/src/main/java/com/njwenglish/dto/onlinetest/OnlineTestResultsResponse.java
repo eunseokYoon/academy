@@ -16,19 +16,30 @@ public record OnlineTestResultsResponse(
     BigDecimal average,
     List<Item> items
 ) {
-    public record Test(Long testId, String title, Short questionCount, String classRoomName) {
+    /** internalQuestionCount가 null이면 내부·외부 집계를 하지 않는다. */
+    public record Test(Long testId, String title, Short questionCount,
+                       Short internalQuestionCount, String classRoomName) {
     }
 
     public record Counts(int total, int notStarted, int inProgress, int submitted) {
     }
 
-    /** NOT_STARTED는 아직 응시 화면을 열지도 않은 학생이다. */
+    /**
+     * NOT_STARTED는 아직 응시 화면을 열지도 않은 학생이다.
+     *
+     * <p>internalCorrect·externalCorrect는 test.internalQuestionCount가 null이거나
+     * 미제출이면 둘 다 null이다. wrongQuestionNos는 1부터 센 문항 번호이고
+     * 미제출이면 빈 배열이다 — null을 내려주면 프론트가 매번 null 검사를 해야 한다.
+     */
     public record Item(
         Long studentId,
         String name,
         OnlineTestTakeStatus status,
         BigDecimal score,
         Short correctCount,
+        Short internalCorrect,
+        Short externalCorrect,
+        List<Integer> wrongQuestionNos,
         OffsetDateTime submittedAt
     ) {
     }
