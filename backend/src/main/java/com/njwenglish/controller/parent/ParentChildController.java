@@ -7,15 +7,14 @@ import com.njwenglish.dto.clinic.ParentClinicResponse;
 import com.njwenglish.dto.home.ParentHomeResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
 import com.njwenglish.dto.member.ChildResponse;
-import com.njwenglish.dto.score.ScoreChartResponse;
 import com.njwenglish.dto.score.StudentExamScheduleResponse;
-import com.njwenglish.entity.enums.ScoreType;
+import com.njwenglish.dto.studentscore.StudentScoreResponse;
 import com.njwenglish.service.AttendanceService;
 import com.njwenglish.service.ClinicService;
 import com.njwenglish.service.ExamScheduleService;
 import com.njwenglish.service.HomeService;
 import com.njwenglish.service.ParentService;
-import com.njwenglish.service.ScoreService;
+import com.njwenglish.service.StudentScoreQueryService;
 import com.njwenglish.service.SubmissionService;
 import java.time.LocalDate;
 import java.util.List;
@@ -45,7 +44,7 @@ public class ParentChildController {
     private final AttendanceService attendanceService;
     private final ClinicService clinicService;
     private final SubmissionService submissionService;
-    private final ScoreService scoreService;
+    private final StudentScoreQueryService studentScoreQueryService;
     private final ExamScheduleService examScheduleService;
 
     @GetMapping
@@ -96,15 +95,14 @@ public class ParentChildController {
     }
 
     /**
-     * P-4. 주차별 시계열이다. 표가 아니라 그래프가 학부모 화면의 핵심이다.
+     * P-4. 종류별 섹션이다. 학생 화면(S-7)과 <b>완전히 같은 응답</b>을 쓴다.
      *
      * <p>등수·백분위·반 평균은 어디에도 넣지 않는다.
+     * 정기고사도 여기 없다 — 선생님만 보기로 확정된 데이터다.
      */
     @GetMapping("/{studentId}/scores")
-    public ApiResponse<ScoreChartResponse> scores(@PathVariable Long studentId,
-                                                  @RequestParam(required = false)
-                                                  ScoreType scoreType) {
-        return ApiResponse.ok(scoreService.childScores(studentId, scoreType));
+    public ApiResponse<StudentScoreResponse> scores(@PathVariable Long studentId) {
+        return ApiResponse.ok(studentScoreQueryService.forStudent(studentId));
     }
 
     /** 자녀가 바뀌면 반이 바뀌므로 일정도 함께 바뀐다. */
