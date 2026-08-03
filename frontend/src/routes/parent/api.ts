@@ -3,7 +3,7 @@ import type { PageResponse } from "../../shared/api/types";
 import type { AttendanceCalendar, AttendanceStatus, AttendanceSummary } from "../../shared/attendance/types";
 import type { SubmissionStatus } from "../../shared/homework/types";
 import type { NoticeSummary } from "../../shared/notice/api";
-import type { ExamType, ScoreChart, ScoreType, StudentExamSchedule } from "../../shared/score/types";
+import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 
 export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -51,8 +51,9 @@ export const getChildHomeworks = (
  * 학부모 화면의 핵심이다. 표가 아니라 주차별 시계열이다.
  * 등수·백분위·반 평균은 응답에 없다.
  */
-export const getChildScores = (studentId: number, scoreType?: ScoreType) =>
-  get<ScoreChart>(`/parent/children/${studentId}/scores`, scoreType ? { scoreType } : undefined);
+/** 학생 화면(S-7)과 같은 응답이다. 정기고사는 여기 내려오지 않는다. */
+export const getChildScores = (studentId: number) =>
+  get<StudentScoreData>(`/parent/children/${studentId}/scores`);
 
 export const getChildExamSchedules = (studentId: number) =>
   get<StudentExamSchedule[]>(`/parent/children/${studentId}/exam-schedules`);

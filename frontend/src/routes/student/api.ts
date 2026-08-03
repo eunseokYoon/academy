@@ -4,7 +4,7 @@ import type { AttendanceCalendar, AttendanceStatus } from "../../shared/attendan
 import type { SubmissionStatus } from "../../shared/homework/types";
 import type { MaterialCategory } from "../../shared/material/types";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
-import type { ExamType, ScoreChart, ScoreType, StudentExamSchedule } from "../../shared/score/types";
+import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 
 export type ReservationStatus = "RESERVED" | "CANCELED" | "MOVED";
 export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -209,8 +209,8 @@ export const recordLessonView = (lessonId: number, watchSeconds: number) =>
 
 // ---------- 성적 · 시험 일정 (S-7) ----------
 
-export const getMyScores = (scoreType?: ScoreType) =>
-  get<ScoreChart>("/student/scores", scoreType ? { scoreType } : undefined);
+/** 학부모 화면(P-4)과 같은 응답이다. 정기고사는 여기 내려오지 않는다. */
+export const getMyScores = () => get<StudentScoreData>("/student/scores");
 
 export const listMyExamSchedules = () =>
   get<StudentExamSchedule[]>("/student/exam-schedules");

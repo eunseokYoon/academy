@@ -1,11 +1,17 @@
-import { del, get, patch, post } from "../../shared/api/client";
+import { del, get, patch, post, put } from "../../shared/api/client";
 import type { PageResponse } from "../../shared/api/types";
 import type { AttendanceStatus, AttendanceSummary } from "../../shared/attendance/types";
 import type { HomeworkCounts, SubmissionStatus } from "../../shared/homework/types";
 import type { MaterialCategory, MaterialVisibility } from "../../shared/material/types";
 import type { NoticeScope } from "../../shared/notice/api";
 import type { OnlineTestTakeStatus } from "../../shared/onlinetest/types";
-import type { ExamType, ScoreType } from "../../shared/score/types";
+import type {
+  ExamType,
+  RegularExamGrid,
+  RegularExamSaveBody,
+  WeeklyTestGrid,
+  WeeklyTestSaveBody,
+} from "../../shared/score/types";
 
 export type StudentStatus = "ENROLLED" | "WITHDRAWN";
 export type ClassRoomStatus = "ACTIVE" | "CLOSED";
@@ -631,62 +637,31 @@ export const updateExamSchedule = (
 export const deleteExamSchedule = (examScheduleId: number) =>
   del<void>(`/teacher/exam-schedules/${examScheduleId}`);
 
-// ---------- 성적 (T-8) ----------
+// ---------- 성적 기입 · 정기고사 (T-8) ----------
 
-export interface Score {
-  scoreId: number;
-  scoreType: ScoreType;
-  examScheduleId: number | null;
-  examName: string;
-  subject: string;
-  rawScore: number | null;
-  gradeLevel: number | null;
-  examDate: string;
+/** 그리드 한 장. tests는 항상 4종이 순서대로 들어 있다. */
+export const getWeeklyTestGrid = (params: {
+  classRoomId: number;
   year: number;
   month: number;
   week: number;
-  memo: string | null;
-}
-
-export const listStudentScores = (studentId: number) =>
-  get<Score[]>(`/teacher/students/${studentId}/scores`);
+}) => get<WeeklyTestGrid>("/teacher/weekly-tests", params);
 
 /**
- * 한 시험의 여러 학생을 한 번에. <b>WORD는 100점 만점 환산값만 보낸다.</b>
- * 원점수를 그대로 보내면 P-4 그래프 세로축이 무너진다.
+ * 그리드 한 장 통째로 저장. 요청에 들어온 종류·학생만 반영된다.
  *
- * <p>같은 요청을 두 번 보내도 uq_scores 키로 갱신되므로 행이 중복되지 않는다.
+ * <p>셀 값이 전부 null이면 그 행이 삭제되고, 헤더값을 비우면 그 종류가 통째로 사라진다.
+ * 같은 칸을 다시 저장하는 건 오타 수정이라는 정상 흐름이라 409가 아니라 덮어쓰기다.
  */
-export const bulkCreateScores = (body: {
-  scoreType: ScoreType;
-  examScheduleId: number | null;
-  examName: string;
-  subject: string;
-  examDate: string;
-  year: number;
-  month: number;
-  week: number;
-  scores: {
-    studentId: number;
-    rawScore: number | null;
-    gradeLevel: number | null;
-    memo: string | null;
-  }[];
-}) => post<{ created: number; updated: number }>("/teacher/scores/bulk", body);
+export const saveWeeklyTests = (body: WeeklyTestSaveBody) =>
+  put<void>("/teacher/weekly-tests", body);
 
-export const updateScore = (
-  scoreId: number,
-  body: {
-    rawScore?: number | null;
-    gradeLevel?: number | null;
-    year?: number;
-    month?: number;
-    week?: number;
-    memo?: string | null;
-  },
-) => patch<Score>(`/teacher/scores/${scoreId}`, body);
+/** 정기고사. <b>선생님 전용</b>이라 학생·학부모 화면에서 호출하지 마라. */
+export const getRegularExamGrid = (params: { classRoomId: number; year: number }) =>
+  get<RegularExamGrid>("/teacher/regular-exams", params);
 
-export const deleteScore = (scoreId: number) => del<void>(`/teacher/scores/${scoreId}`);
+export const saveRegularExams = (body: RegularExamSaveBody) =>
+  put<void>("/teacher/regular-exams", body);
 
 // ---------- 온라인 테스트 (T-14) ----------
 
@@ -699,8 +674,8 @@ export interface OnlineTestListItem {
   year: number;
   month: number;
   week: number;
-  scoreType: ScoreType | null;
-  subject: string | null;
+  /** 앞 N문항이 내부지문. null이면 내부·외부 집계를 하지 않는다. */
+  internalQuestionCount: number | null;
   published: boolean;
   opensAt: string | null;
   closesAt: string | null;
@@ -717,7 +692,13 @@ export interface OnlineTestDetail extends Omit<OnlineTestListItem, "published"> 
 }
 
 export interface OnlineTestResults {
-  test: { testId: number; title: string; questionCount: number; classRoomName: string };
+  test: {
+    testId: number;
+    title: string;
+    questionCount: number;
+    internalQuestionCount: number | null;
+    classRoomName: string;
+  };
   counts: { total: number; notStarted: number; inProgress: number; submitted: number };
   /** 제출자만으로 계산한다. 제출이 없으면 null. 선생님 화면에만 있는 값이다. */
   average: number | null;
@@ -727,7 +708,29 @@ export interface OnlineTestResults {
     status: OnlineTestTakeStatus;
     score: number | null;
     correctCount: number | null;
+    /** test.internalQuestionCount가 null이거나 미제출이면 둘 다 null이다. */
+    internalCorrect: number | null;
+    externalCorrect: number | null;
+    /** 1부터 센 문항 번호. 미제출이면 빈 배열이다. */
+    wrongQuestionNos: number[];
     submittedAt: string | null;
+  }[];
+}
+
+/** 학생 한 명의 문항별 정오. 선생님이 이걸 보고 성적 기입 탭에 직접 적는다. */
+export interface OnlineTestStudentDetail {
+  studentId: number;
+  name: string;
+  correctCount: number | null;
+  questionCount: number;
+  internalQuestionCount: number | null;
+  results: {
+    questionNo: number;
+    /** null이면 미체크다. 오답 처리하고 감점은 없다. */
+    chosen: number | null;
+    correct: number;
+    isCorrect: boolean;
+    section: "INTERNAL" | "EXTERNAL" | null;
   }[];
 }
 
@@ -749,8 +752,8 @@ export const createOnlineTest = (body: {
   correctChoices: number[];
   points: number[] | null;
   answerS3Key: string | null;
-  scoreType: ScoreType | null;
-  subject: string | null;
+  /** 앞 N문항이 내부지문. null이면 내부·외부 집계를 하지 않는다. */
+  internalQuestionCount: number | null;
   year: number;
   month: number;
   week: number;
@@ -771,8 +774,7 @@ export const updateOnlineTest = (
     correctChoices: number[];
     points: number[] | null;
     answerS3Key: string | null;
-    scoreType: ScoreType | null;
-    subject: string | null;
+    internalQuestionCount: number | null;
     year: number;
     month: number;
     week: number;
@@ -792,6 +794,9 @@ export const deleteOnlineTest = (testId: number) =>
 
 export const getOnlineTestResults = (testId: number) =>
   get<OnlineTestResults>(`/teacher/online-tests/${testId}/results`);
+
+export const getOnlineTestStudentDetail = (testId: number, studentId: number) =>
+  get<OnlineTestStudentDetail>(`/teacher/online-tests/${testId}/results/${studentId}`);
 
 // ---------- 대시보드 (T-1) ----------
 
