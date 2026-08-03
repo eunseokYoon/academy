@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.weeklytest.WeeklyTestGridResponse;
 import com.njwenglish.dto.weeklytest.WeeklyTestSaveRequest;
 import com.njwenglish.entity.ClassRoom;
@@ -20,7 +21,6 @@ import com.njwenglish.entity.enums.TestResult;
 import com.njwenglish.entity.enums.WeeklyTestType;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
-import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.WeeklyTestRepository;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
 import com.njwenglish.support.Fixtures;
@@ -47,7 +47,7 @@ class WeeklyTestServiceTest {
     @Mock
     private ClassRoomRepository classRoomRepository;
     @Mock
-    private StudentRepository studentRepository;
+    private StudentAccessGuard studentAccessGuard;
 
     private WeeklyTestService weeklyTestService;
 
@@ -58,7 +58,7 @@ class WeeklyTestServiceTest {
     @BeforeEach
     void setUp() {
         weeklyTestService = new WeeklyTestService(weeklyTestRepository, weeklyTestScoreRepository,
-            enrollmentRepository, classRoomRepository, studentRepository);
+            enrollmentRepository, classRoomRepository, studentAccessGuard);
     }
 
     private WeeklyTest wordTest(Long id) {
@@ -213,6 +213,60 @@ class WeeklyTestServiceTest {
     @Test
     @DisplayName("헤더값을 비워 보내면 그 종류를 통째로 지운다")
     void 헤더를_비우면_종류가_삭제된다() {
+        WeeklyTest test = wordTest(10L);
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.WORD, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(test));
+
+        weeklyTestService.save(saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, null, null, null, List.of())));
+
+        verify(weeklyTestRepository).delete(test);
+    }
+
+    // Critical #1 회귀: 셀 값 하한 검증
+    @Test
+    @DisplayName("셀의 correctCount가 음수면 400이다")
+    void 음수_correctCount는_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, (short) 25, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, (short) -1, null, null,
+                TestResult.PASS, false))));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    // Critical #2 회귀: 헤더 하한 검증 (셀 없음)
+    @Test
+    @DisplayName("WORD에 totalCount=0이고 셀이 없어도 400이다")
+    void WORD_totalCount_0은_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, (short) 0, null, null, List.of()));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    // Critical #2 회귀: CLINIC 헤더 하한 검증
+    @Test
+    @DisplayName("CLINIC에 internalTotal=0이면 400이다")
+    void CLINIC_internalTotal_0은_400이다() {
+        WeeklyTestSaveRequest request = saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.CLINIC, null, (short) 0, (short) 20, List.of()));
+
+        assertThatThrownBy(() -> weeklyTestService.save(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    // 회귀: 헤더값이 전부 null이면 종류 삭제
+    @Test
+    @DisplayName("헤더값 전부 null이면 종류가 삭제된다 (기존 동작 회귀)")
+    void 헤더_전부_null이면_삭제된다() {
         WeeklyTest test = wordTest(10L);
         given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
         given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(

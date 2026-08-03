@@ -2,6 +2,7 @@ package com.njwenglish.service;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.weeklytest.WeeklyTestGridResponse;
 import com.njwenglish.dto.weeklytest.WeeklyTestSaveRequest;
 import com.njwenglish.entity.ClassRoom;
@@ -12,7 +13,6 @@ import com.njwenglish.entity.enums.TestResult;
 import com.njwenglish.entity.enums.WeeklyTestType;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
-import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.WeeklyTestRepository;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
 import java.time.LocalDate;
@@ -41,7 +41,7 @@ public class WeeklyTestService {
     private final WeeklyTestScoreRepository weeklyTestScoreRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final ClassRoomRepository classRoomRepository;
-    private final StudentRepository studentRepository;
+    private final StudentAccessGuard studentAccessGuard;
 
     /**
      * 그리드 한 장. 명단은 <b>재원생 ∪ 그 주차에 성적이 있는 학생</b>이다.
@@ -161,6 +161,9 @@ public class WeeklyTestService {
     }
 
     private void saveCell(WeeklyTest test, WeeklyTestSaveRequest.CellInput cell) {
+        // studentId를 받는 모든 서비스 메서드의 첫 줄은 requireAccessible이다
+        Student student = studentAccessGuard.requireAccessible(cell.studentId());
+
         Optional<WeeklyTestScore> found = weeklyTestScoreRepository
             .findByWeeklyTestIdAndStudentId(test.getId(), cell.studentId());
 
@@ -176,8 +179,6 @@ public class WeeklyTestService {
             return;
         }
 
-        Student student = studentRepository.findById(cell.studentId())
-            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         weeklyTestScoreRepository.save(WeeklyTestScore.create(test, student,
             cell.correctCount(), cell.internalCorrect(), cell.externalCorrect(),
             cell.result(), cell.retestPassed()));
@@ -191,7 +192,12 @@ public class WeeklyTestService {
                 if (input.internalTotal() != null || input.externalTotal() != null) {
                     throw new BusinessException(ErrorCode.VALIDATION_FAILED);
                 }
-                if (hasCells && (input.totalCount() == null || input.totalCount() <= 0)) {
+                // totalCount가 존재하는데 0 이하면 거부 (셀 유무와 무관)
+                if (input.totalCount() != null && input.totalCount() <= 0) {
+                    throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+                }
+                // totalCount가 없는데 셀이 있으면 거부
+                if (input.totalCount() == null && hasCells) {
                     throw new BusinessException(ErrorCode.VALIDATION_FAILED);
                 }
             }
@@ -204,8 +210,15 @@ public class WeeklyTestService {
                 if (input.totalCount() != null) {
                     throw new BusinessException(ErrorCode.VALIDATION_FAILED);
                 }
-                if (hasCells && (input.internalTotal() == null || input.internalTotal() <= 0
-                    || input.externalTotal() == null || input.externalTotal() <= 0)) {
+                // internalTotal/externalTotal이 존재하는데 0 이하면 거부
+                if (input.internalTotal() != null && input.internalTotal() <= 0) {
+                    throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+                }
+                if (input.externalTotal() != null && input.externalTotal() <= 0) {
+                    throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+                }
+                // 셀이 있는데 헤더가 부족하면 거부
+                if (hasCells && (input.internalTotal() == null || input.externalTotal() == null)) {
                     throw new BusinessException(ErrorCode.VALIDATION_FAILED);
                 }
             }
@@ -229,6 +242,16 @@ public class WeeklyTestService {
         }
         // 재시험 통과는 Fail을 받은 학생에게만 붙는다. ck_wts_retest와 같은 규칙이다
         if (cell.retestPassed() && cell.result() != TestResult.FAIL) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        // 셀 값 하한 검증: ck_wts_counts는 >= 0을 요구한다
+        if (cell.correctCount() != null && cell.correctCount() < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (cell.internalCorrect() != null && cell.internalCorrect() < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (cell.externalCorrect() != null && cell.externalCorrect() < 0) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         if (cell.correctCount() != null && input.totalCount() != null
