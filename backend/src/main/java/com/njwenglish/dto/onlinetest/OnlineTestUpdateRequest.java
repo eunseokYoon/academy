@@ -1,6 +1,5 @@
 package com.njwenglish.dto.onlinetest;
 
-import com.njwenglish.entity.enums.ScoreType;
 import java.time.OffsetDateTime;
 
 /**
@@ -16,8 +15,6 @@ public record OnlineTestUpdateRequest(
     Short[] correctChoices,
     Short[] points,
     String answerS3Key,
-    ScoreType scoreType,
-    String subject,
     /** 앞 N문항이 내부지문. null이면 기존 값을 유지한다. */
     Short internalQuestionCount,
     Short year,

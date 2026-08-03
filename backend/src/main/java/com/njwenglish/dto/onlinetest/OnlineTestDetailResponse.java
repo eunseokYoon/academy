@@ -1,7 +1,6 @@
 package com.njwenglish.dto.onlinetest;
 
 import com.njwenglish.entity.OnlineTest;
-import com.njwenglish.entity.enums.ScoreType;
 import java.time.OffsetDateTime;
 
 /**
@@ -19,8 +18,6 @@ public record OnlineTestDetailResponse(
     Short[] points,
     String answerS3Key,
     String answerFileUrl,
-    ScoreType scoreType,
-    String subject,
     Short year,
     Short month,
     Short week,
@@ -34,7 +31,6 @@ public record OnlineTestDetailResponse(
             test.getTitle(), test.getQuestionCount(), test.getChoiceCount(),
             test.getCorrectChoices(), test.getPoints(),
             test.getAnswerS3Key(), answerFileUrl,
-            test.getScoreType(), test.getSubject(),
             test.getYear(), test.getMonth(), test.getWeek(),
             test.getOpensAt(), test.getClosesAt(), test.getPublishedAt());
     }

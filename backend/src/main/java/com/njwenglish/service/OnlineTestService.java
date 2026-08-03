@@ -22,7 +22,6 @@ import com.njwenglish.entity.OnlineTestSubmission;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.OnlineTestStatus;
-import com.njwenglish.entity.enums.ScoreType;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.OnlineTestRepository;
@@ -89,7 +88,6 @@ public class OnlineTestService {
         validateChoices(request.correctChoices(), questionCount, choiceCount);
         validatePoints(request.points(), questionCount);
         validateWeek(request.year(), request.month(), request.week());
-        String subject = validSubject(request.scoreType(), request.subject());
         String answerS3Key = validAnswerKey(request.answerS3Key(), teacher.getId());
         validatePeriod(request.opensAt(), request.closesAt());
         validateInternalCount(request.internalQuestionCount(), questionCount);
@@ -97,7 +95,7 @@ public class OnlineTestService {
         OnlineTest test = onlineTestRepository.save(OnlineTest.create(
             classRoom, teacher, request.title().trim(), questionCount, choiceCount,
             request.correctChoices(), request.points(), answerS3Key,
-            request.scoreType(), subject, request.internalQuestionCount(),
+            request.internalQuestionCount(),
             request.year(), request.month(), request.week(),
             request.opensAt(), request.closesAt()));
 
@@ -138,10 +136,6 @@ public class OnlineTestService {
         short year = request.year() == null ? test.getYear() : request.year();
         short month = request.month() == null ? test.getMonth() : request.month();
         short week = request.week() == null ? test.getWeek() : request.week();
-        ScoreType scoreType = request.scoreType() == null
-            ? test.getScoreType() : request.scoreType();
-        String subject = validSubject(scoreType,
-            request.subject() == null ? test.getSubject() : request.subject());
         Short internalQuestionCount = request.internalQuestionCount() == null
             ? test.getInternalQuestionCount() : request.internalQuestionCount();
 
@@ -151,7 +145,7 @@ public class OnlineTestService {
         validateInternalCount(internalQuestionCount, questionCount);
 
         test.edit(title, questionCount, choiceCount, correctChoices, points, answerS3Key,
-            scoreType, subject, internalQuestionCount, year, month, week, opensAt, closesAt);
+            internalQuestionCount, year, month, week, opensAt, closesAt);
         return OnlineTestDetailResponse.from(test, answerFileUrl(test));
     }
 
@@ -367,8 +361,7 @@ public class OnlineTestService {
             || (request.correctChoices() != null
                 && !java.util.Arrays.equals(request.correctChoices(), test.getCorrectChoices()))
             || (request.points() != null
-                && !java.util.Arrays.equals(request.points(), test.getPoints()))
-            || (request.scoreType() != null && request.scoreType() != test.getScoreType());
+                && !java.util.Arrays.equals(request.points(), test.getPoints()));
 
         if (changed) {
             throw new BusinessException(ErrorCode.TEST_ALREADY_PUBLISHED);
@@ -414,14 +407,6 @@ public class OnlineTestService {
      *
      * <p><b>여기서 "영어"를 기본값으로 채우지 마라.</b> 성적 관리 범위가 미확정이다.
      */
-    private String validSubject(ScoreType scoreType, String subject) {
-        String trimmed = subject == null || subject.isBlank() ? null : subject.trim();
-        if (scoreType != null && trimmed == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
-        }
-        return trimmed;
-    }
-
     private String validAnswerKey(String answerS3Key, Long teacherId) {
         if (answerS3Key == null || answerS3Key.isBlank()) {
             return null;

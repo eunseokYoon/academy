@@ -1,11 +1,8 @@
 package com.njwenglish.entity;
 
 import com.njwenglish.common.entity.BaseTimeEntity;
-import com.njwenglish.entity.enums.ScoreType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -28,8 +25,8 @@ import org.hibernate.type.SqlTypes;
  * null로 비우지도 마라. 응시용 DTO에서 필드 자체를 빼라.
  * 응답에 들어가는 순간 개발자 도구에서 정답이 그대로 보인다.
  *
- * <p>scoreType이 채워져 있으면 채점 결과가 scores로 자동 반영된다.
- * 그래서 subject가 필수다 (scores.subject가 NOT NULL).
+ * <p><b>성적 자동 반영은 없다.</b> 이 테스트는 클리닉 테스트를 오프라인으로 못 보는
+ * 학생을 위한 대체본이고, 선생님이 결과를 보고 성적 기입 탭에 직접 적는다.
  */
 @Entity
 @Table(name = "online_tests")
@@ -72,15 +69,6 @@ public class OnlineTest extends BaseTimeEntity {
     @Column(name = "answer_s3_key", length = 500)
     private String answerS3Key;
 
-    /** null이면 연습용이라 성적에 남지 않는다. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "score_type", length = 20)
-    private ScoreType scoreType;
-
-    /** scoreType이 있으면 필수. 코드에서 지어내지 말고 T-14 입력값을 그대로 복사한다. */
-    @Column(length = 50)
-    private String subject;
-
     /**
      * <b>앞 N문항이 내부지문</b>, 나머지가 외부지문이다. null이면 집계하지 않는다.
      *
@@ -112,7 +100,6 @@ public class OnlineTest extends BaseTimeEntity {
     public static OnlineTest create(ClassRoom classRoom, Teacher teacher, String title,
                                     short questionCount, short choiceCount,
                                     Short[] correctChoices, Short[] points, String answerS3Key,
-                                    ScoreType scoreType, String subject,
                                     Short internalQuestionCount,
                                     short year, short month, short week,
                                     OffsetDateTime opensAt, OffsetDateTime closesAt) {
@@ -125,8 +112,6 @@ public class OnlineTest extends BaseTimeEntity {
         test.correctChoices = correctChoices;
         test.points = points;
         test.answerS3Key = answerS3Key;
-        test.scoreType = scoreType;
-        test.subject = subject;
         test.internalQuestionCount = internalQuestionCount;
         test.year = year;
         test.month = month;
@@ -142,7 +127,7 @@ public class OnlineTest extends BaseTimeEntity {
      */
     public void edit(String title, short questionCount, short choiceCount,
                      Short[] correctChoices, Short[] points, String answerS3Key,
-                     ScoreType scoreType, String subject, Short internalQuestionCount,
+                     Short internalQuestionCount,
                      short year, short month, short week,
                      OffsetDateTime opensAt, OffsetDateTime closesAt) {
         this.title = title;
@@ -151,8 +136,6 @@ public class OnlineTest extends BaseTimeEntity {
         this.correctChoices = correctChoices;
         this.points = points;
         this.answerS3Key = answerS3Key;
-        this.scoreType = scoreType;
-        this.subject = subject;
         this.internalQuestionCount = internalQuestionCount;
         this.year = year;
         this.month = month;
@@ -188,10 +171,5 @@ public class OnlineTest extends BaseTimeEntity {
     /** closesAt이 null이면 마감이 없다. */
     public boolean isClosedAt(OffsetDateTime now) {
         return closesAt != null && now.isAfter(closesAt);
-    }
-
-    /** 성적 반영 대상인지. null이면 연습용이라 scores에 남지 않는다. */
-    public boolean reflectsToScores() {
-        return scoreType != null;
     }
 }

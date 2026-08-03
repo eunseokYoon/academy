@@ -44,7 +44,6 @@ public class OnlineTestSubmissionService {
     private final OnlineTestRepository onlineTestRepository;
     private final OnlineTestSubmissionRepository onlineTestSubmissionRepository;
     private final PresignedUrlProvider presignedUrlProvider;
-    private final ScoreService scoreService;
     private final StudentAccessGuard studentAccessGuard;
 
     @Transactional(readOnly = true)
@@ -114,7 +113,6 @@ public class OnlineTestSubmissionService {
      * <ol>
      *   <li>마감 경과면 400, 이미 제출했으면 409
      *   <li>채점해서 score·correctCount·submittedAt 기록
-     *   <li>scoreType이 있으면 scores에 행 생성 → P-4 그래프에 얹힌다
      * </ol>
      *
      * <p>요청 본문이 없다. 마지막으로 임시 저장한 답안으로 채점한다.
@@ -135,13 +133,8 @@ public class OnlineTestSubmissionService {
             test.getCorrectChoices(), submission.getChosenChoices(), test.getPoints());
         submission.submit(now, result.score(), result.correctCount());
 
-        // subject·examDate는 online_tests에 자동으로 존재하지 않는다. 여기서 채우지 않으면
-        // scores의 NOT NULL 제약에 걸린다. subject를 코드에서 지어내지 마라
-        if (test.reflectsToScores()) {
-            scoreService.recordFromOnlineTest(me, test.getScoreType(), test.getSubject(),
-                test.getTitle(), result.score(), now.atZoneSameInstant(KST).toLocalDate(),
-                test.getYear(), test.getMonth(), test.getWeek());
-        }
+        // 성적 자동 반영은 없다. 선생님이 결과 화면(문항별 오답·내부/외부 집계)을 보고
+        // 성적 기입 탭의 클리닉 칸에 직접 적는다
 
         return toResult(test, submission);
     }

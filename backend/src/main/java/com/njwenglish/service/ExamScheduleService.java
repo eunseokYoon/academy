@@ -14,7 +14,6 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.ExamScheduleRepository;
-import com.njwenglish.repository.ScoreRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -39,7 +38,6 @@ public class ExamScheduleService {
     private final ExamScheduleRepository examScheduleRepository;
     private final ClassRoomRepository classRoomRepository;
     private final EnrollmentRepository enrollmentRepository;
-    private final ScoreRepository scoreRepository;
     private final StudentAccessGuard studentAccessGuard;
 
     @Transactional(readOnly = true)
@@ -85,10 +83,9 @@ public class ExamScheduleService {
      */
     @Transactional
     public void delete(Long examScheduleId) {
+        // 성적이 시험 일정에 붙던 구조(scores.exam_schedule_id)가 사라져서 막을 것이 없다.
+        // 시험 일정은 D-day 표시 전용이다
         ExamSchedule schedule = findSchedule(examScheduleId);
-        if (scoreRepository.existsByExamScheduleId(examScheduleId)) {
-            throw new BusinessException(ErrorCode.EXAM_SCHEDULE_HAS_SCORES);
-        }
         examScheduleRepository.delete(schedule);
     }
 

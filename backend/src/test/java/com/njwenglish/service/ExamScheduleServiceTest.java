@@ -18,7 +18,6 @@ import com.njwenglish.entity.enums.ExamType;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.ExamScheduleRepository;
-import com.njwenglish.repository.ScoreRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -44,8 +43,6 @@ class ExamScheduleServiceTest {
     @Mock
     private EnrollmentRepository enrollmentRepository;
     @Mock
-    private ScoreRepository scoreRepository;
-    @Mock
     private StudentAccessGuard studentAccessGuard;
 
     private ExamScheduleService examScheduleService;
@@ -55,7 +52,7 @@ class ExamScheduleServiceTest {
     @BeforeEach
     void setUp() {
         examScheduleService = new ExamScheduleService(examScheduleRepository, classRoomRepository,
-            enrollmentRepository, scoreRepository, studentAccessGuard);
+            enrollmentRepository, studentAccessGuard);
     }
 
     private ExamSchedule schedule(Long id, LocalDate startDate) {
@@ -128,17 +125,4 @@ class ExamScheduleServiceTest {
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
-    @Test
-    @DisplayName("연결된 내신 성적이 있으면 삭제가 409다 — FK로 막히기 전에 돌려준다")
-    void 성적이_연결된_일정은_삭제할_수_없다() {
-        given(examScheduleRepository.findWithClassRoom(12L))
-            .willReturn(Optional.of(schedule(12L, LocalDate.of(2026, 6, 25))));
-        given(scoreRepository.existsByExamScheduleId(12L)).willReturn(true);
-
-        assertThatThrownBy(() -> examScheduleService.delete(12L))
-            .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.EXAM_SCHEDULE_HAS_SCORES);
-
-        verify(examScheduleRepository, never()).delete(any());
-    }
 }

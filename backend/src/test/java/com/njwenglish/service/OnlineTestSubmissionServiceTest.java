@@ -21,7 +21,6 @@ import com.njwenglish.entity.OnlineTest;
 import com.njwenglish.entity.OnlineTestSubmission;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
-import com.njwenglish.entity.enums.ScoreType;
 import com.njwenglish.repository.OnlineTestRepository;
 import com.njwenglish.repository.OnlineTestSubmissionRepository;
 import com.njwenglish.support.Fixtures;
@@ -53,8 +52,6 @@ class OnlineTestSubmissionServiceTest {
     @Mock
     private PresignedUrlProvider presignedUrlProvider;
     @Mock
-    private ScoreService scoreService;
-    @Mock
     private StudentAccessGuard studentAccessGuard;
 
     private OnlineTestSubmissionService onlineTestSubmissionService;
@@ -66,7 +63,7 @@ class OnlineTestSubmissionServiceTest {
     @BeforeEach
     void setUp() {
         onlineTestSubmissionService = new OnlineTestSubmissionService(onlineTestRepository,
-            onlineTestSubmissionRepository, presignedUrlProvider, scoreService,
+            onlineTestSubmissionRepository, presignedUrlProvider,
             studentAccessGuard);
         given(studentAccessGuard.requireSelf()).willReturn(me);
     }
@@ -77,10 +74,10 @@ class OnlineTestSubmissionServiceTest {
         return array;
     }
 
-    private OnlineTest test(ScoreType scoreType, String subject, OffsetDateTime closesAt) {
+    private OnlineTest test(OffsetDateTime closesAt) {
         OnlineTest test = OnlineTest.create(classRoom, teacher, "6월 2주차 단어시험",
             (short) 25, (short) 5, answers(25, 3), null, "online-tests/2026/06/key.pdf",
-            scoreType, subject, null, (short) 2026, (short) 6, (short) 2, null, closesAt);
+            null, (short) 2026, (short) 6, (short) 2, null, closesAt);
         ReflectionTestUtils.setField(test, "id", 55L);
         test.publish(OffsetDateTime.now().minusDays(1));
         return test;
@@ -110,7 +107,7 @@ class OnlineTestSubmissionServiceTest {
     @Test
     @DisplayName("응시 화면을 처음 열면 임시 저장용 행이 만들어진다")
     void 처음_열면_임시_저장_행이_생긴다() {
-        OnlineTest test = test(ScoreType.WORD, "영어", null);
+        OnlineTest test = test(null);
         openTest(test);
         given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
             .willReturn(Optional.empty());
@@ -125,7 +122,7 @@ class OnlineTestSubmissionServiceTest {
     @Test
     @DisplayName("마감 후 제출은 400이다 — 숙제의 지각 제출 허용과 다르다")
     void 마감_후_제출은_400이다() {
-        OnlineTest test = test(ScoreType.WORD, "영어", OffsetDateTime.now().minusMinutes(1));
+        OnlineTest test = test(OffsetDateTime.now().minusMinutes(1));
         openTest(test);
 
         assertThatThrownBy(() -> onlineTestSubmissionService.submit(55L))
@@ -136,7 +133,7 @@ class OnlineTestSubmissionServiceTest {
     @Test
     @DisplayName("이미 제출한 테스트를 다시 제출하면 409다")
     void 재제출은_409다() {
-        OnlineTest test = test(ScoreType.WORD, "영어", null);
+        OnlineTest test = test(null);
         OnlineTestSubmission submission = OnlineTestSubmission.start(test, me, (short) 25);
         submission.submit(OffsetDateTime.now(), new BigDecimal("92.00"), (short) 23);
         openTest(test);
@@ -148,46 +145,12 @@ class OnlineTestSubmissionServiceTest {
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SUBMISSION_EXISTS);
     }
 
-    @Test
-    @DisplayName("scoreType이 있으면 제출 시 scores에 반영되고 과목은 online_tests 값을 쓴다")
-    void 성적_반영은_출제_시_받은_과목을_쓴다() {
-        OnlineTest test = test(ScoreType.WORD, "영어", null);
-        OnlineTestSubmission submission = OnlineTestSubmission.start(test, me, (short) 25);
-        submission.saveAnswers(answers(25, 3));
-        openTest(test);
-        given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
-            .willReturn(Optional.of(submission));
 
-        OnlineTestResultResponse response = onlineTestSubmissionService.submit(55L);
-
-        assertThat(response.score()).isEqualByComparingTo(new BigDecimal("100.00"));
-        assertThat(response.correctCount()).isEqualTo((short) 25);
-        // 과목을 코드에서 지어내지 않는다. exam_date는 제출일이다
-        verify(scoreService).recordFromOnlineTest(me, ScoreType.WORD, "영어",
-            "6월 2주차 단어시험", new BigDecimal("100.00"), LocalDate.now(),
-            (short) 2026, (short) 6, (short) 2);
-    }
-
-    @Test
-    @DisplayName("scoreType이 null이면 scores에 행이 생기지 않는다 — 연습용이다")
-    void 연습용은_성적에_남지_않는다() {
-        OnlineTest test = test(null, null, null);
-        OnlineTestSubmission submission = OnlineTestSubmission.start(test, me, (short) 25);
-        submission.saveAnswers(answers(25, 3));
-        openTest(test);
-        given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
-            .willReturn(Optional.of(submission));
-
-        onlineTestSubmissionService.submit(55L);
-
-        verify(scoreService, never()).recordFromOnlineTest(any(), any(), any(), any(), any(),
-            any(), anyShort(), anyShort(), anyShort());
-    }
 
     @Test
     @DisplayName("제출 후에만 해설지 URL이 내려간다")
     void 해설지는_제출_후에만_내려간다() {
-        OnlineTest test = test(null, null, null);
+        OnlineTest test = test(null);
         OnlineTestSubmission submission = OnlineTestSubmission.start(test, me, (short) 25);
         submission.saveAnswers(answers(25, 3));
         openTest(test);
@@ -203,7 +166,7 @@ class OnlineTestSubmissionServiceTest {
     @Test
     @DisplayName("제출 전에 결과를 조회하면 404다")
     void 제출_전_결과_조회는_404다() {
-        OnlineTest test = test(null, null, null);
+        OnlineTest test = test(null);
         openTest(test);
         given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
             .willReturn(Optional.of(OnlineTestSubmission.start(test, me, (short) 25)));
@@ -216,7 +179,7 @@ class OnlineTestSubmissionServiceTest {
     @Test
     @DisplayName("임시 저장 배열 길이가 questionCount와 다르면 400이다")
     void 임시_저장_길이가_다르면_400이다() {
-        OnlineTest test = test(null, null, null);
+        OnlineTest test = test(null);
         openTest(test);
         given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
             .willReturn(Optional.of(OnlineTestSubmission.start(test, me, (short) 25)));
@@ -230,7 +193,7 @@ class OnlineTestSubmissionServiceTest {
     @Test
     @DisplayName("목록의 remainingMinutes는 서버가 계산한다 — 클라이언트 시계는 틀릴 수 있다")
     void 남은_시간은_서버가_계산한다() {
-        OnlineTest test = test(null, null, OffsetDateTime.now().plusMinutes(120));
+        OnlineTest test = test(OffsetDateTime.now().plusMinutes(120));
         given(onlineTestRepository.findOpenForStudent(any(), any())).willReturn(List.of(test));
         given(onlineTestSubmissionRepository.findByStudentAndTests(any(), any()))
             .willReturn(List.of());
