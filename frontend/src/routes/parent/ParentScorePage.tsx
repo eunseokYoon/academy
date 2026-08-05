@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
 import { ExamDdayList } from "../../shared/components/ExamDdayList";
-import { ScoreSections } from "../../shared/components/ScoreSections";
-import { WordScoreChart } from "../../shared/components/WordScoreChart";
+import { ScoreSectionList } from "../../shared/components/ScoreSectionList";
 import { getChildExamSchedules, getChildScores } from "./api";
 
 /**
@@ -48,9 +47,8 @@ export default function ParentScorePage() {
         <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : (
         <>
-          <WordScoreChart points={scores.data.word.points} />
+          <ScoreSectionList data={scores.data} />
           {exams.data && <ExamDdayList schedules={exams.data} />}
-          <ScoreSections internal={scores.data.internal} mock={scores.data.mock} />
         </>
       )}
     </div>

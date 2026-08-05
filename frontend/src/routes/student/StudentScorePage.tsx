@@ -2,11 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { ExamDdayList } from "../../shared/components/ExamDdayList";
-import { ScoreSections } from "../../shared/components/ScoreSections";
-import { WordScoreChart } from "../../shared/components/WordScoreChart";
+import { ScoreSectionList } from "../../shared/components/ScoreSectionList";
 import { getMe, getMyScores, listMyExamSchedules } from "./api";
 
-/** S-7. 내 정보 카드 + 성적. 학부모 화면(P-4)과 같은 데이터 형식을 쓴다. */
+/**
+ * S-7. 내 정보 카드 + 성적.
+ *
+ * <p>학부모 화면(P-4)과 <b>같은 응답·같은 컴포넌트</b>를 쓴다. 두 화면이
+ * ScoreSectionList를 공유하는 것이 "학생도 똑같이 본다"의 보장이다.
+ */
 export default function StudentScorePage() {
   const { signOut } = useAuth();
   const me = useQuery({ queryKey: ["student", "me"], queryFn: getMe });
@@ -44,10 +48,7 @@ export default function StudentScorePage() {
       {scores.isPending || !scores.data ? (
         <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : (
-        <>
-          <WordScoreChart points={scores.data.word.points} />
-          <ScoreSections internal={scores.data.internal} mock={scores.data.mock} />
-        </>
+        <ScoreSectionList data={scores.data} />
       )}
 
       {/*
