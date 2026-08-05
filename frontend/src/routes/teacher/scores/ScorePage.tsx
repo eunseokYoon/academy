@@ -2,33 +2,59 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "../../../shared/api/errors";
 import { FormError } from "../../../shared/components/FormError";
-import { SCORE_TYPE_LABELS } from "../../../shared/score/types";
-import type { ScoreType } from "../../../shared/score/types";
-import {
-  bulkCreateScores,
-  listClassRoomStudents,
-  listClassRooms,
-  listExamSchedules,
-} from "../api";
-import { today } from "../format";
+import { WEEKLY_TEST_LABELS } from "../../../shared/score/types";
+import type {
+  TestResult,
+  WeeklyTestCell,
+  WeeklyTestType,
+} from "../../../shared/score/types";
+import { getWeeklyTestGrid, listClassRooms, saveWeeklyTests } from "../api";
 
 const NOW = new Date();
 
-interface Row {
-  studentId: number;
-  name: string;
-  /** 화면 입력값. WORD는 맞힌 개수, 그 외는 원점수다. */
-  raw: string;
-  grade: string;
+/** 셀 하나의 화면 상태. 빈 문자열이 "미입력"이다 — 0과 구분해야 한다. */
+interface CellDraft {
+  correctCount: string;
+  internalCorrect: string;
+  externalCorrect: string;
+  result: TestResult | "";
+  retestPassed: boolean;
 }
 
+interface HeaderDraft {
+  totalCount: string;
+  internalTotal: string;
+  externalTotal: string;
+}
+
+const EMPTY_CELL: CellDraft = {
+  correctCount: "",
+  internalCorrect: "",
+  externalCorrect: "",
+  result: "",
+  retestPassed: false,
+};
+
+const EMPTY_HEADER: HeaderDraft = { totalCount: "", internalTotal: "", externalTotal: "" };
+
+/** 열 하나가 차지하는 하위 칸. 헤더 colSpan과 tbody 셀 개수가 이 배열로 함께 결정된다. */
+const COLUMN_FIELDS: Record<WeeklyTestType, string[]> = {
+  WORD: ["맞힌수", "결과", "재시험"],
+  REVIEW: ["결과", "재시험"],
+  PRACTICE: ["맞힌수"],
+  CLINIC: ["내부", "외부"],
+};
+
 /**
- * T-8. 주차를 먼저 고르고 반 명단 표에 점수만 순서대로 입력한다.
+ * T-8. 반 × 주차 한 화면에서 4종을 전부 입력한다.
  *
- * <p><b>단어 시험은 화면에서 100점 만점으로 환산한다.</b> 문항 수를 먼저 받고
- * 맞힌 개수를 입력받아 환산값을 보낸다 — 원점수를 그대로 보내면 P-4 그래프 세로축이 무너진다.
+ * <p><b>환산 점수를 화면에서 계산하지 마라.</b> 맞힌 개수와 전체 문항 수를 그대로 보내고
+ * 정답률은 서버가 조회 시점에 계산한다 — 나중에 문항 수를 고쳐도 따라온다.
  *
- * <p>한 명씩 저장 버튼을 누르는 방식으로 만들지 마라. 200명이면 실사용이 불가능하다.
+ * <p>저장 후 입력칸을 비우지 마라. 수정하려고 다시 열었을 때 값이 있어야 한다.
+ *
+ * <p>종류를 하나 골라 한 종류씩 입력하는 방식으로 되돌리지 마라. 실제 운영은
+ * 엑셀처럼 한 화면에서 다 채우는 것이다.
  */
 export default function ScorePage() {
   const queryClient = useQueryClient();
@@ -37,110 +63,132 @@ export default function ScorePage() {
   const [month, setMonth] = useState(NOW.getMonth() + 1);
   const [week, setWeek] = useState(1);
   const [classRoomId, setClassRoomId] = useState<number | "">("");
-  const [scoreType, setScoreType] = useState<ScoreType>("WORD");
-  const [examName, setExamName] = useState("");
-  const [subject, setSubject] = useState("영어");
-  const [examDate, setExamDate] = useState(today());
-  const [examScheduleId, setExamScheduleId] = useState<number | "">("");
-  const [questionCount, setQuestionCount] = useState("25");
-  const [rows, setRows] = useState<Row[]>([]);
+
+  /** testType → studentId → 셀 초안 */
+  const [drafts, setDrafts] = useState<Record<string, Record<number, CellDraft>>>({});
+  /** testType → 헤더 문항 수 초안 */
+  const [headers, setHeaders] = useState<Record<string, HeaderDraft>>({});
 
   const classRooms = useQuery({
     queryKey: ["teacher", "class-rooms"],
     queryFn: () => listClassRooms(),
   });
 
-  const schedules = useQuery({
-    queryKey: ["teacher", "exam-schedules", classRoomId, year],
-    queryFn: () => listExamSchedules({ classRoomId: Number(classRoomId), year }),
-    enabled: scoreType === "INTERNAL" && classRoomId !== "",
-  });
-
-  const roster = useQuery({
-    queryKey: ["teacher", "class-room-students", classRoomId],
-    queryFn: () => listClassRoomStudents(Number(classRoomId)),
+  const grid = useQuery({
+    queryKey: ["teacher", "weekly-tests", classRoomId, year, month, week],
+    queryFn: () =>
+      getWeeklyTestGrid({ classRoomId: Number(classRoomId), year, month, week }),
     enabled: classRoomId !== "",
   });
 
-  // 명단이 바뀌면 입력 행을 다시 만든다. 반을 바꿨는데 앞 반의 점수가 남아 있으면 사고다
-  const rosterKey = roster.data?.students.map((s) => s.studentId).join(",") ?? "";
+  // 서버 값을 초안으로 옮긴다. 반·주차가 바뀌면 앞 화면의 입력이 남으면 안 된다
   useEffect(() => {
-    setRows(
-      (roster.data?.students ?? []).map((student) => ({
-        studentId: student.studentId,
-        name: student.name,
-        raw: "",
-        grade: "",
-      })),
-    );
-    // roster.data를 의존성에 넣으면 refetch마다 입력이 날아간다. 명단 구성이 바뀔 때만 초기화한다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rosterKey]);
-
-  const questions = Number(questionCount);
-  const wordScale = scoreType === "WORD" && Number.isFinite(questions) && questions > 0;
-
-  /** 25문항 중 20개 → 80.00. 환산은 여기서 하고 DB에는 환산값만 들어간다. */
-  function toRawScore(row: Row): number | null {
-    if (row.raw.trim() === "") return null;
-    const value = Number(row.raw);
-    if (!Number.isFinite(value)) return null;
-    if (scoreType === "WORD") {
-      return wordScale ? Math.round((value / questions) * 10000) / 100 : null;
+    if (!grid.data) return;
+    const nextDrafts: Record<string, Record<number, CellDraft>> = {};
+    const nextHeaders: Record<string, HeaderDraft> = {};
+    for (const column of grid.data.tests) {
+      nextHeaders[column.testType] = {
+        totalCount: column.totalCount?.toString() ?? "",
+        internalTotal: column.internalTotal?.toString() ?? "",
+        externalTotal: column.externalTotal?.toString() ?? "",
+      };
+      const cells: Record<number, CellDraft> = {};
+      for (const cell of column.cells) {
+        cells[cell.studentId] = {
+          correctCount: cell.correctCount?.toString() ?? "",
+          internalCorrect: cell.internalCorrect?.toString() ?? "",
+          externalCorrect: cell.externalCorrect?.toString() ?? "",
+          result: cell.result ?? "",
+          retestPassed: cell.retestPassed,
+        };
+      }
+      nextDrafts[column.testType] = cells;
     }
-    return value;
+    setDrafts(nextDrafts);
+    setHeaders(nextHeaders);
+  }, [grid.data]);
+
+  function cellOf(testType: WeeklyTestType, studentId: number): CellDraft {
+    return drafts[testType]?.[studentId] ?? EMPTY_CELL;
   }
 
-  const filled = rows.filter((row) => row.raw.trim() !== "" || row.grade.trim() !== "");
+  function updateCell(testType: WeeklyTestType, studentId: number, patch: Partial<CellDraft>) {
+    setDrafts((prev) => {
+      const current = prev[testType]?.[studentId] ?? EMPTY_CELL;
+      const next = { ...current, ...patch };
+      // PASS로 바꾸면 재시험 체크를 되돌린다. 서버도 400으로 막지만 화면에서 먼저 막는다
+      if (next.result !== "FAIL") next.retestPassed = false;
+      return { ...prev, [testType]: { ...(prev[testType] ?? {}), [studentId]: next } };
+    });
+  }
+
+  function updateHeader(testType: WeeklyTestType, patch: Partial<HeaderDraft>) {
+    setHeaders((prev) => ({
+      ...prev,
+      [testType]: { ...(prev[testType] ?? EMPTY_HEADER), ...patch },
+    }));
+  }
+
+  const toShort = (value: string) => (value.trim() === "" ? null : Number(value));
 
   const save = useMutation({
     mutationFn: () =>
-      bulkCreateScores({
-        scoreType,
-        examScheduleId: scoreType === "INTERNAL" && examScheduleId !== ""
-          ? Number(examScheduleId)
-          : null,
-        examName: examName.trim(),
-        subject: subject.trim(),
-        examDate,
+      saveWeeklyTests({
+        classRoomId: Number(classRoomId),
         year,
         month,
         week,
-        scores: filled.map((row) => ({
-          studentId: row.studentId,
-          rawScore: toRawScore(row),
-          gradeLevel: row.grade.trim() === "" ? null : Number(row.grade),
-          memo: null,
+        tests: (grid.data?.tests ?? []).map((column) => ({
+          testType: column.testType,
+          totalCount: toShort(headers[column.testType]?.totalCount ?? ""),
+          internalTotal: toShort(headers[column.testType]?.internalTotal ?? ""),
+          externalTotal: toShort(headers[column.testType]?.externalTotal ?? ""),
+          cells: (grid.data?.students ?? []).map((student): WeeklyTestCell => {
+            const draft = cellOf(column.testType, student.studentId);
+            return {
+              studentId: student.studentId,
+              correctCount: toShort(draft.correctCount),
+              internalCorrect: toShort(draft.internalCorrect),
+              externalCorrect: toShort(draft.externalCorrect),
+              result: draft.result === "" ? null : draft.result,
+              retestPassed: draft.retestPassed,
+            };
+          }),
         })),
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "students"] });
-      setRows((prev) => prev.map((row) => ({ ...row, raw: "", grade: "" })));
+      // 입력칸을 비우지 않는다. 다시 불러와 채워진 상태를 유지한다
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "weekly-tests", classRoomId, year, month, week],
+      });
     },
   });
 
-  function updateRow(index: number, patch: Partial<Row>) {
-    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  }
-
-  /** Enter로 다음 학생 칸으로 내려간다. 마우스로 칸을 옮기면 20명 입력이 느려진다. */
-  function focusNext(index: number, field: "raw" | "grade") {
-    const next = document.querySelector<HTMLInputElement>(
-      `[data-cell="${field}-${index + 1}"]`,
-    );
+  /** Enter로 같은 열의 다음 학생 칸으로 내려간다. 마우스로 옮기면 20명 입력이 느려진다. */
+  function focusNext(key: string, index: number) {
+    const next = document.querySelector<HTMLInputElement>(`[data-cell="${key}-${index + 1}"]`);
     next?.focus();
     next?.select();
   }
 
-  const canSave =
-    classRoomId !== "" && examName.trim() !== "" && subject.trim() !== "" && filled.length > 0
-    && (scoreType !== "WORD" || wordScale);
-
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">주차별 성적 입력</h2>
+      <h2 className="text-lg font-semibold text-slate-900">성적 기입</h2>
 
-      <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm">
+      <section className="space-y-2 rounded-xl bg-white p-4 shadow-sm">
+        <select
+          value={classRoomId}
+          onChange={(e) => setClassRoomId(e.target.value === "" ? "" : Number(e.target.value))}
+          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+        >
+          <option value="">반 선택</option>
+          {(classRooms.data ?? []).map((room) => (
+            <option key={room.classRoomId} value={room.classRoomId}>
+              {room.name}
+            </option>
+          ))}
+        </select>
+
         <div className="grid grid-cols-3 gap-2 text-sm">
           <select
             value={year}
@@ -148,9 +196,7 @@ export default function ScorePage() {
             className="rounded-lg border border-slate-300 bg-white px-2 py-2"
           >
             {[NOW.getFullYear() - 1, NOW.getFullYear(), NOW.getFullYear() + 1].map((y) => (
-              <option key={y} value={y}>
-                {y}년
-              </option>
+              <option key={y} value={y}>{y}년</option>
             ))}
           </select>
           <select
@@ -159,9 +205,7 @@ export default function ScorePage() {
             className="rounded-lg border border-slate-300 bg-white px-2 py-2"
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>
-                {m}월
-              </option>
+              <option key={m} value={m}>{m}월</option>
             ))}
           </select>
           <select
@@ -170,177 +214,122 @@ export default function ScorePage() {
             className="rounded-lg border border-slate-300 bg-white px-2 py-2"
           >
             {[1, 2, 3, 4, 5].map((w) => (
-              <option key={w} value={w}>
-                {w}주차
-              </option>
+              <option key={w} value={w}>{w}주차</option>
             ))}
           </select>
         </div>
-
-        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-          <select
-            value={classRoomId}
-            onChange={(e) =>
-              setClassRoomId(e.target.value === "" ? "" : Number(e.target.value))
-            }
-            className="rounded-lg border border-slate-300 bg-white px-2 py-2"
-          >
-            <option value="">반 선택</option>
-            {(classRooms.data ?? []).map((room) => (
-              <option key={room.classRoomId} value={room.classRoomId}>
-                {room.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={scoreType}
-            onChange={(e) => setScoreType(e.target.value as ScoreType)}
-            className="rounded-lg border border-slate-300 bg-white px-2 py-2"
-          >
-            {(Object.keys(SCORE_TYPE_LABELS) as ScoreType[]).map((type) => (
-              <option key={type} value={type}>
-                {SCORE_TYPE_LABELS[type]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-          <input
-            value={examName}
-            onChange={(e) => setExamName(e.target.value)}
-            placeholder="시험명 (예: 5월 3주차 단어시험)"
-            className="rounded-lg border border-slate-300 px-3 py-2 sm:col-span-2"
-          />
-          <input
-            type="date"
-            value={examDate}
-            onChange={(e) => setExamDate(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-          {/* 성적 범위가 미확정이라 드롭다운 + 직접 입력이다. 영어로 고정하지 않는다 */}
-          <input
-            list="score-subjects"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="과목"
-            className="rounded-lg border border-slate-300 px-3 py-2"
-          />
-          <datalist id="score-subjects">
-            <option value="영어" />
-            <option value="국어" />
-            <option value="수학" />
-          </datalist>
-
-          {scoreType === "WORD" && (
-            <label className="flex items-center gap-2">
-              <span className="shrink-0 text-slate-600">문항 수</span>
-              <input
-                type="number"
-                min={1}
-                value={questionCount}
-                onChange={(e) => setQuestionCount(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              />
-            </label>
-          )}
-
-          {scoreType === "INTERNAL" && (
-            <select
-              value={examScheduleId}
-              onChange={(e) =>
-                setExamScheduleId(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="rounded-lg border border-slate-300 bg-white px-2 py-2"
-            >
-              <option value="">시험 일정 연결 없음</option>
-              {(schedules.data ?? []).map((schedule) => (
-                <option key={schedule.examScheduleId} value={schedule.examScheduleId}>
-                  {schedule.year}년 {schedule.semester}학기{" "}
-                  {schedule.examType === "MIDTERM" ? "중간" : "기말"}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {scoreType === "WORD" && (
-          <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
-            맞힌 개수를 입력하면 100점 만점으로 환산해 저장합니다. 저장되는 값은 환산 점수입니다.
-          </p>
-        )}
       </section>
 
       {classRoomId === "" ? (
         <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
           반을 선택하세요.
         </p>
-      ) : roster.isPending ? (
-        <p className="text-sm text-slate-400">명단 불러오는 중…</p>
+      ) : grid.isPending ? (
+        <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : (
-        <section className="overflow-hidden rounded-xl bg-white shadow-sm">
-          <table className="w-full text-sm">
+        <section className="overflow-x-auto rounded-xl bg-white shadow-sm">
+          <table className="min-w-max text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="px-3 py-2 text-left font-medium">학생</th>
-                <th className="px-3 py-2 text-left font-medium">
-                  {scoreType === "WORD" ? `맞힌 개수 (/${questionCount})` : "원점수"}
+                {/* 학생 이름 열만 가로 스크롤에 고정된다. 없으면 360px에서 누구 점수인지 알 수 없다 */}
+                <th
+                  rowSpan={2}
+                  className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-left font-medium"
+                >
+                  학생
                 </th>
-                {scoreType !== "WORD" && (
-                  <th className="px-3 py-2 text-left font-medium">등급</th>
-                )}
-                {scoreType === "WORD" && (
-                  <th className="px-3 py-2 text-left font-medium">환산</th>
+                {(grid.data?.tests ?? []).map((column) => (
+                  <th
+                    key={column.testType}
+                    colSpan={COLUMN_FIELDS[column.testType].length}
+                    className="border-l border-slate-200 px-3 py-2 text-left font-medium"
+                  >
+                    <div className="whitespace-nowrap text-slate-700">
+                      {WEEKLY_TEST_LABELS[column.testType]}
+                    </div>
+
+                    {/* 전체 문항 수는 반 공통이라 열 헤더에서 한 번만 받는다 */}
+                    {(column.testType === "WORD" || column.testType === "PRACTICE") && (
+                      <label className="mt-1 flex items-center gap-1 font-normal">
+                        전체
+                        <input
+                          type="number"
+                          min={1}
+                          value={headers[column.testType]?.totalCount ?? ""}
+                          onChange={(e) =>
+                            updateHeader(column.testType, { totalCount: e.target.value })
+                          }
+                          className="w-14 rounded border border-slate-300 px-1 py-0.5"
+                        />
+                      </label>
+                    )}
+                    {column.testType === "CLINIC" && (
+                      <div className="mt-1 flex gap-1 font-normal">
+                        <label className="flex items-center gap-1">
+                          내부
+                          <input
+                            type="number"
+                            min={1}
+                            value={headers.CLINIC?.internalTotal ?? ""}
+                            onChange={(e) =>
+                              updateHeader("CLINIC", { internalTotal: e.target.value })
+                            }
+                            className="w-12 rounded border border-slate-300 px-1 py-0.5"
+                          />
+                        </label>
+                        <label className="flex items-center gap-1">
+                          외부
+                          <input
+                            type="number"
+                            min={1}
+                            value={headers.CLINIC?.externalTotal ?? ""}
+                            onChange={(e) =>
+                              updateHeader("CLINIC", { externalTotal: e.target.value })
+                            }
+                            className="w-12 rounded border border-slate-300 px-1 py-0.5"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {(grid.data?.tests ?? []).flatMap((column) =>
+                  COLUMN_FIELDS[column.testType].map((field, i) => (
+                    <th
+                      key={`${column.testType}-${field}`}
+                      className={`px-3 py-1 text-left font-normal ${
+                        i === 0 ? "border-l border-slate-200" : ""
+                      }`}
+                    >
+                      {field}
+                    </th>
+                  )),
                 )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((row, index) => (
-                <tr key={row.studentId}>
-                  <td className="px-3 py-1.5 text-slate-900">{row.name}</td>
-                  <td className="px-3 py-1.5">
-                    <input
-                      data-cell={`raw-${index}`}
-                      type="number"
-                      inputMode="numeric"
-                      value={row.raw}
-                      onChange={(e) => updateRow(index, { raw: e.target.value })}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          focusNext(index, "raw");
-                        }
-                      }}
-                      className="w-20 rounded-lg border border-slate-300 px-2 py-1"
-                    />
+              {(grid.data?.students ?? []).map((student, index) => (
+                <tr key={student.studentId}>
+                  <td className="sticky left-0 z-10 bg-white px-3 py-1.5 text-slate-900">
+                    {student.name}
+                    {!student.enrolled && (
+                      <span className="ml-1 text-xs text-slate-400">퇴원</span>
+                    )}
                   </td>
-                  {scoreType !== "WORD" && (
-                    <td className="px-3 py-1.5">
-                      <input
-                        data-cell={`grade-${index}`}
-                        type="number"
-                        min={1}
-                        max={9}
-                        value={row.grade}
-                        onChange={(e) => updateRow(index, { grade: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            focusNext(index, "grade");
-                          }
-                        }}
-                        className="w-16 rounded-lg border border-slate-300 px-2 py-1"
-                      />
-                    </td>
-                  )}
-                  {scoreType === "WORD" && (
-                    <td className="px-3 py-1.5 text-slate-500">
-                      {row.raw.trim() === "" ? "—" : `${toRawScore(row) ?? "—"}점`}
-                    </td>
-                  )}
+                  {(grid.data?.tests ?? []).map((column) => (
+                    <CellGroup
+                      key={column.testType}
+                      type={column.testType}
+                      index={index}
+                      draft={cellOf(column.testType, student.studentId)}
+                      onChange={(patch) =>
+                        updateCell(column.testType, student.studentId, patch)
+                      }
+                      onEnter={(field) => focusNext(`${column.testType}-${field}`, index)}
+                    />
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -349,29 +338,116 @@ export default function ScorePage() {
       )}
 
       {save.isError && <FormError message={errorMessage(save.error)} />}
-      {save.isSuccess && (
-        <p className="text-sm text-emerald-700">
-          {save.data.created}건 저장, {save.data.updated}건 수정되었습니다.
-        </p>
-      )}
+      {save.isSuccess && <p className="text-sm text-emerald-700">저장되었습니다.</p>}
 
       {classRoomId !== "" && (
         <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t
                         border-slate-200 bg-white p-3">
           <span className="text-sm text-slate-500">
-            {rows.length}명 중 {filled.length}명 입력됨
+            {grid.data?.students.length ?? 0}명
           </span>
           <button
             type="button"
-            disabled={!canSave || save.isPending}
+            disabled={save.isPending}
             onClick={() => save.mutate()}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white
                        disabled:opacity-50"
           >
-            {save.isPending ? "저장 중…" : "일괄 저장"}
+            {save.isPending ? "저장 중…" : "저장"}
           </button>
         </div>
       )}
     </div>
   );
+}
+
+/** 종류마다 칸 구성이 다르다. 분기는 여기 한 곳에만 둔다. */
+function CellGroup({
+  type,
+  index,
+  draft,
+  onChange,
+  onEnter,
+}: {
+  type: WeeklyTestType;
+  index: number;
+  draft: CellDraft;
+  onChange: (patch: Partial<CellDraft>) => void;
+  onEnter: (field: string) => void;
+}) {
+  const numberInput = (field: "correctCount" | "internalCorrect" | "externalCorrect") => (
+    <input
+      data-cell={`${type}-${field}-${index}`}
+      type="number"
+      inputMode="numeric"
+      min={0}
+      value={draft[field]}
+      onChange={(e) => onChange({ [field]: e.target.value } as Partial<CellDraft>)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onEnter(field);
+        }
+      }}
+      className="w-16 rounded-lg border border-slate-300 px-2 py-1"
+    />
+  );
+
+  const resultSelect = (
+    <select
+      value={draft.result}
+      onChange={(e) => onChange({ result: e.target.value as TestResult | "" })}
+      className="rounded-lg border border-slate-300 bg-white px-1 py-1"
+    >
+      <option value="">—</option>
+      <option value="PASS">P</option>
+      <option value="FAIL">F</option>
+    </select>
+  );
+
+  // 재시험 통과는 Fail을 받은 학생에게만 붙는다. 서버도 400으로 막지만 화면에서 먼저 막는다
+  const retestBox = (
+    <input
+      type="checkbox"
+      checked={draft.retestPassed}
+      disabled={draft.result !== "FAIL"}
+      onChange={(e) => onChange({ retestPassed: e.target.checked })}
+      className="h-4 w-4 disabled:opacity-30"
+    />
+  );
+
+  switch (type) {
+    case "WORD":
+      return (
+        <>
+          <td className="border-l border-slate-200 px-3 py-1.5">
+            {numberInput("correctCount")}
+          </td>
+          <td className="px-3 py-1.5">{resultSelect}</td>
+          <td className="px-3 py-1.5">{retestBox}</td>
+        </>
+      );
+    case "REVIEW":
+      return (
+        <>
+          <td className="border-l border-slate-200 px-3 py-1.5">{resultSelect}</td>
+          <td className="px-3 py-1.5">{retestBox}</td>
+        </>
+      );
+    case "PRACTICE":
+      return (
+        <td className="border-l border-slate-200 px-3 py-1.5">
+          {numberInput("correctCount")}
+        </td>
+      );
+    case "CLINIC":
+      return (
+        <>
+          <td className="border-l border-slate-200 px-3 py-1.5">
+            {numberInput("internalCorrect")}
+          </td>
+          <td className="px-3 py-1.5">{numberInput("externalCorrect")}</td>
+        </>
+      );
+  }
 }
