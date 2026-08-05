@@ -1,14 +1,15 @@
+import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../../../shared/api/errors";
 import { Badge } from "../../../shared/components/Badge";
 import { FormError } from "../../../shared/components/FormError";
 import { TAKE_STATUS_LABELS } from "../../../shared/onlinetest/types";
-import { SCORE_TYPE_LABELS } from "../../../shared/score/types";
 import {
   deleteOnlineTest,
   getOnlineTest,
   getOnlineTestResults,
+  getOnlineTestStudentDetail,
   publishOnlineTest,
 } from "../api";
 
@@ -31,6 +32,14 @@ export default function OnlineTestDetailPage() {
   const results = useQuery({
     queryKey: ["teacher", "online-test-results", id],
     queryFn: () => getOnlineTestResults(id),
+  });
+
+  /** 펼친 학생만 문항별 상세를 불러온다. 20명치를 미리 받을 이유가 없다 */
+  const [openStudentId, setOpenStudentId] = useState<number | null>(null);
+  const studentDetail = useQuery({
+    queryKey: ["teacher", "online-test-detail", testId, openStudentId],
+    queryFn: () => getOnlineTestStudentDetail(Number(testId), openStudentId!),
+    enabled: openStudentId !== null,
   });
 
   const publish = useMutation({
@@ -83,12 +92,13 @@ export default function OnlineTestDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          {detail.scoreType ? (
+          {detail.internalQuestionCount != null ? (
             <Badge>
-              성적 반영 · {SCORE_TYPE_LABELS[detail.scoreType]} · {detail.subject}
+              내부지문 {detail.internalQuestionCount}문항 / 외부{" "}
+              {detail.questionCount - detail.internalQuestionCount}문항
             </Badge>
           ) : (
-            <Badge>연습용 (성적 미반영)</Badge>
+            <Badge>내부·외부 집계 없음</Badge>
           )}
           {detail.closesAt && (
             <span className="text-xs text-slate-500">
@@ -169,40 +179,110 @@ export default function OnlineTestDetailPage() {
             </span>
           </div>
 
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">학생</th>
-                <th className="px-3 py-2 text-left font-medium">상태</th>
-                <th className="px-3 py-2 text-right font-medium">점수</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {results.data.items.map((item) => (
-                <tr key={item.studentId}>
-                  <td className="px-3 py-2 text-slate-900">{item.name}</td>
-                  <td className="px-3 py-2">
-                    <Badge
-                      tone={
-                        item.status === "SUBMITTED"
-                          ? "ok"
-                          : item.status === "IN_PROGRESS"
-                            ? "warn"
-                            : "neutral"
-                      }
-                    >
-                      {TAKE_STATUS_LABELS[item.status]}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-right text-slate-700">
-                    {item.score != null
-                      ? `${item.score}점 (${item.correctCount}/${detail.questionCount})`
-                      : "—"}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-max text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">학생</th>
+                  <th className="px-3 py-2 text-left font-medium">상태</th>
+                  <th className="px-3 py-2 text-right font-medium">점수</th>
+                  {results.data.test.internalQuestionCount != null && (
+                    <>
+                      <th className="px-3 py-2 text-right font-medium">내부</th>
+                      <th className="px-3 py-2 text-right font-medium">외부</th>
+                    </>
+                  )}
+                  <th className="px-3 py-2 text-left font-medium">틀린 문항</th>
+                  <th className="px-3 py-2" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {results.data.items.map((item) => {
+                  const internalTotal = results.data.test.internalQuestionCount;
+                  const externalTotal =
+                    internalTotal == null ? null : detail.questionCount - internalTotal;
+                  const open = openStudentId === item.studentId;
+                  return (
+                    <Fragment key={item.studentId}>
+                      <tr>
+                        <td className="px-3 py-2 text-slate-900">{item.name}</td>
+                        <td className="px-3 py-2">
+                          <Badge
+                            tone={
+                              item.status === "SUBMITTED"
+                                ? "ok"
+                                : item.status === "IN_PROGRESS"
+                                  ? "warn"
+                                  : "neutral"
+                            }
+                          >
+                            {TAKE_STATUS_LABELS[item.status]}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-700">
+                          {item.score != null
+                            ? `${item.score}점 (${item.correctCount}/${detail.questionCount})`
+                            : "—"}
+                        </td>
+                        {internalTotal != null && (
+                          <>
+                            <td className="px-3 py-2 text-right text-slate-700">
+                              {item.internalCorrect != null
+                                ? `${item.internalCorrect}/${internalTotal}`
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-700">
+                              {item.externalCorrect != null
+                                ? `${item.externalCorrect}/${externalTotal}`
+                                : "—"}
+                            </td>
+                          </>
+                        )}
+                        {/* 1부터 센 번호다. 선생님이 시험지에서 찾는 번호와 같아야 한다 */}
+                        <td className="px-3 py-2 text-slate-500">
+                          {item.wrongQuestionNos.length === 0
+                            ? "—"
+                            : item.wrongQuestionNos.join(", ")}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {item.status === "SUBMITTED" && (
+                            <button
+                              type="button"
+                              onClick={() => setOpenStudentId(open ? null : item.studentId)}
+                              className="text-xs text-slate-500 underline"
+                            >
+                              {open ? "접기" : "문항별"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {open && studentDetail.data && (
+                        <tr>
+                          <td colSpan={internalTotal != null ? 7 : 5} className="bg-slate-50 px-3 py-2">
+                            <ul className="flex flex-wrap gap-1.5 text-xs">
+                              {studentDetail.data.results.map((result) => (
+                                <li
+                                  key={result.questionNo}
+                                  className={`rounded px-2 py-1 ${
+                                    result.isCorrect
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {result.questionNo}번 · 선택 {result.chosen ?? "—"} / 정답{" "}
+                                  {result.correct}
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>

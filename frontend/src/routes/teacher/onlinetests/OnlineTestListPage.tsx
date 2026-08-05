@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Badge } from "../../../shared/components/Badge";
-import { SCORE_TYPE_LABELS } from "../../../shared/score/types";
 import { listClassRooms, listOnlineTests } from "../api";
 import OnlineTestCreateModal from "./OnlineTestCreateModal";
 
@@ -110,12 +109,11 @@ export default function OnlineTestListPage() {
                   ) : (
                     <Badge tone="warn">미공개</Badge>
                   )}
-                  {test.scoreType ? (
+                  {test.internalQuestionCount != null && (
                     <Badge>
-                      성적 반영 · {SCORE_TYPE_LABELS[test.scoreType]} · {test.subject}
+                      내부 {test.internalQuestionCount} / 외부{" "}
+                      {test.questionCount - test.internalQuestionCount}
                     </Badge>
-                  ) : (
-                    <Badge>연습용</Badge>
                   )}
                 </div>
               </Link>

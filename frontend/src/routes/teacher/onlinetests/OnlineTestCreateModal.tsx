@@ -6,8 +6,6 @@ import { errorMessage } from "../../../shared/api/errors";
 import { FormError } from "../../../shared/components/FormError";
 import { Modal } from "../../../shared/components/Modal";
 import { SubmitButton } from "../../../shared/components/SubmitButton";
-import { SCORE_TYPE_LABELS } from "../../../shared/score/types";
-import type { ScoreType } from "../../../shared/score/types";
 import { createOnlineTest, issueAnswerUploadUrl, listClassRooms } from "../api";
 
 const NOW = new Date();
@@ -20,8 +18,8 @@ const MAX_ANSWER_BYTES = 50 * 1024 * 1024;
  * 실수를 눈으로 검산할 수 없다. 길이가 문항 수와 다르면 저장 전에 화면에서 막는다 —
  * 서버도 400으로 막지만 여기서 잡아야 선생님이 어디가 틀렸는지 안다.
  *
- * <p><b>성적 반영을 켜면 과목 입력란이 나타난다.</b> scores.subject가 NOT NULL이라
- * 과목 없이는 반영 행을 만들 수 없다. 코드에서 "영어"를 채워 보내지 않는다.
+ * <p><b>성적 자동 반영은 없다.</b> 이 테스트는 클리닉 테스트를 오프라인으로 못 보는
+ * 학생을 위한 대체본이고, 선생님이 결과를 보고 성적 기입 탭에 직접 적는다.
  */
 export default function OnlineTestCreateModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -35,9 +33,7 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth() + 1);
   const [week, setWeek] = useState(1);
-  const [reflect, setReflect] = useState(false);
-  const [scoreType, setScoreType] = useState<ScoreType>("WORD");
-  const [subject, setSubject] = useState("영어");
+  const [internalQuestionCount, setInternalQuestionCount] = useState("");
   const [closesAt, setClosesAt] = useState("");
   const [answerS3Key, setAnswerS3Key] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -97,8 +93,8 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
         correctChoices: parsed,
         points: null,
         answerS3Key,
-        scoreType: reflect ? scoreType : null,
-        subject: reflect ? subject.trim() : null,
+        internalQuestionCount:
+          internalQuestionCount.trim() === "" ? null : Number(internalQuestionCount),
         year,
         month,
         week,
@@ -117,8 +113,7 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
     && title.trim() !== ""
     && questions > 0
     && !lengthMismatch
-    && !outOfRange
-    && (!reflect || subject.trim() !== "");
+    && !outOfRange;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -259,48 +254,29 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
           <FormError message={uploadError} />
         </div>
 
+        {/*
+          클리닉 테스트를 온라인으로 대체할 때 쓴다. 앞 N문항이 내부지문이면
+          결과 화면이 내부·외부 맞힌 개수를 따로 집계해 주고, 선생님은 그 숫자를
+          성적 기입 탭의 클리닉 칸에 옮겨 적기만 하면 된다.
+        */}
         <div className="space-y-2 rounded-lg bg-slate-50 p-3">
           <label className="flex items-center gap-2 text-sm text-slate-700">
+            <span className="shrink-0">내부지문 문항 수</span>
             <input
-              type="checkbox"
-              checked={reflect}
-              onChange={(e) => setReflect(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
+              type="number"
+              min={0}
+              max={Number.isFinite(questions) && questions > 0 ? questions : undefined}
+              value={internalQuestionCount}
+              onChange={(e) => setInternalQuestionCount(e.target.value)}
+              placeholder="비우면 집계 안 함"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
             />
-            채점 결과를 성적에 반영
           </label>
-          {reflect && (
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <select
-                value={scoreType}
-                onChange={(e) => setScoreType(e.target.value as ScoreType)}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-2"
-              >
-                {(Object.keys(SCORE_TYPE_LABELS) as ScoreType[]).map((type) => (
-                  <option key={type} value={type}>
-                    {SCORE_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </select>
-              <input
-                list="onlinetest-subjects"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="과목 (필수)"
-                className="rounded-lg border border-slate-300 px-3 py-2"
-              />
-              <datalist id="onlinetest-subjects">
-                <option value="영어" />
-                <option value="국어" />
-                <option value="수학" />
-              </datalist>
-            </div>
-          )}
-          {reflect && (
-            <p className="text-xs text-slate-500">
-              제출 즉시 100점 환산 점수가 성적에 기록되어 학부모 그래프에 나타납니다.
-            </p>
-          )}
+          <p className="text-xs text-slate-500">
+            앞에서부터 이 개수만큼이 내부지문입니다. 결과 화면에서 내부·외부 맞힌 개수를
+            따로 보여줍니다. <b>성적에 자동 반영되지는 않습니다</b> — 선생님이 결과를 보고
+            성적 기입 탭에 직접 적습니다.
+          </p>
         </div>
 
         {save.isError && <FormError message={errorMessage(save.error)} />}
