@@ -160,15 +160,15 @@ class HomeServiceTest {
     }
 
     @Test
-    @DisplayName("자녀 전화번호는 서버에서 마스킹해 내려준다")
-    void 전화번호는_마스킹된다() {
+    @DisplayName("자녀 전화번호는 원본으로 내려준다 — 보호자가 자기 자녀 번호를 보는 것이다")
+    void 자녀_전화번호는_원본이다() {
         User user = Fixtures.user(500L, UserRole.STUDENT, "01011112222");
         ReflectionTestUtils.setField(me, "user", user);
         given(studentAccessGuard.requireAccessible(88L)).willReturn(me);
 
         ParentHomeResponse home = homeService.parentHome(88L);
 
-        assertThat(home.student().phone()).isEqualTo("010-****-2222");
+        assertThat(home.student().phone()).isEqualTo("01011112222");
     }
 
     @Test

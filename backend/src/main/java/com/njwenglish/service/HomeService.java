@@ -1,6 +1,5 @@
 package com.njwenglish.service;
 
-import com.njwenglish.common.util.PhoneNumbers;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.home.HomeHomeworkResponse;
@@ -118,7 +117,7 @@ public class HomeService {
 
     /**
      * 이름은 students.name이다 — 미가입 자녀는 users 행이 없어 users.name을 타면 사라진다.
-     * 전화번호는 <b>서버에서 마스킹</b>해 내려보낸다.
+     * 전화번호는 보호자가 자기 자녀 것을 보는 것이라 마스킹하지 않는다.
      */
     private ParentHomeResponse.ChildRef childRef(Student child) {
         List<String> classRooms =
@@ -131,7 +130,9 @@ public class HomeService {
         return new ParentHomeResponse.ChildRef(
             child.getId(),
             child.getName(),
-            child.getUser() == null ? null : PhoneNumbers.mask(child.getUser().getPhone()),
+            // 보호자가 자기 자녀 번호를 보는 것이라 마스킹하지 않는다.
+            // 미가입 자녀는 users 행이 없어 null이다
+            child.getUser() == null ? null : child.getUser().getPhone(),
             classRooms);
     }
 }

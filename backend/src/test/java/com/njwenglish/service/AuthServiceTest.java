@@ -104,14 +104,14 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("me는 전화번호를 마스킹해 내려준다")
-    void me는_번호를_마스킹한다() {
+    @DisplayName("me는 본인 번호를 원본으로 내려준다 — 자기 번호를 자기가 보는 것이다")
+    void me는_본인_번호를_원본으로_내려준다() {
         given(userRepository.findById(1L)).willReturn(Optional.of(teacher));
         Fixtures.login(Fixtures.teacher(1L));
 
         MeResponse me = authService.me();
 
-        assertThat(me.phone()).isEqualTo("010-****-0000");
+        assertThat(me.phone()).isEqualTo("01000000000");
         assertThat(me.role()).isEqualTo(UserRole.TEACHER);
         assertThat(me.mustChangePassword()).isFalse();
     }

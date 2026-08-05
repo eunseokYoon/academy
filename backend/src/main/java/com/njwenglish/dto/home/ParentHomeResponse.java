@@ -27,9 +27,8 @@ public record ParentHomeResponse(
     AttendanceSummaryResponse thisMonthAttendance
 ) {
     /**
-     * 이름은 students.name이다. phone은 <b>서버에서 마스킹한 값</b>이다 (010-****-1234).
-     * 원본을 내려주고 프론트에서 가리면 개발자 도구에 그대로 남는다.
-     * 미가입 자녀는 users 행이 없어 phone이 null이다.
+     * 이름은 students.name이다. phone은 <b>원본</b>이다 — 보호자가 자기 자녀 번호를
+     * 보는 것이라 가리지 않는다. 미가입 자녀는 users 행이 없어 phone이 null이다.
      */
     public record ChildRef(Long id, String name, String phone, List<String> classRooms) {
     }

@@ -53,11 +53,24 @@ export default function ParentHomePage() {
               {student.classRooms.length > 0 ? student.classRooms.join(" · ") : "반 배정 전"}
             </p>
             {/*
-              보는 사람 본인(학부모)의 번호다. 자녀 번호를 여기 띄우면 다자녀에서
-              자녀를 바꿀 때마다 번호가 바뀌어 "내 번호"로 읽히지 않는다.
-              /auth/me가 서버에서 마스킹해 내려준 값이다 — 프론트에서 가리면 원본이 남는다.
+              번호가 둘이라 라벨이 없으면 어느 쪽이 누구 것인지 알 수 없다.
+              학부모 번호는 /auth/me(본인), 자녀 번호는 홈 응답에서 온다.
+              둘 다 보호자 본인 가족 번호라 원본으로 내려온다.
+
+              자녀 번호는 미가입이면 null이라 그때는 학부모 번호만 뜬다.
             */}
-            {user?.phone && <p className="tnum mt-0.5 text-xs text-slate-400">{user.phone}</p>}
+            <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-400">
+              {user?.phone && (
+                <span>
+                  학부모 <span className="tnum">{user.phone}</span>
+                </span>
+              )}
+              {student.phone && (
+                <span>
+                  자녀 <span className="tnum">{student.phone}</span>
+                </span>
+              )}
+            </p>
           </div>
           {nextExam && (
             <DdayPill label={EXAM_TYPE_LABELS[nextExam.examType]} dDay={nextExam.dDay} />

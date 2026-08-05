@@ -72,7 +72,7 @@ export interface ParentHome {
   student: {
     id: number;
     name: string;
-    /** 서버가 마스킹한 값이다 (010-****-2222). 미가입 자녀는 null. */
+    /** 자녀 번호 원본. 보호자 본인이 보는 값이라 가리지 않는다. 미가입 자녀는 null. */
     phone: string | null;
     classRooms: string[];
   };
