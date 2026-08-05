@@ -8,7 +8,7 @@ const TABS: AppBarTab[] = [
   { to: "/student/lessons", label: "수업영상" },
   { to: "/student/online-tests", label: "테스트" },
   { to: "/student/attendances", label: "출석" },
-  { to: "/student/clinics", label: "클리닉" },
+  { to: "/student/clinics", label: "스케줄 변경" },
   { to: "/student/materials", label: "자료실" },
   { to: "/student/notices", label: "공지" },
   { to: "/student/scores", label: "내 정보" },
