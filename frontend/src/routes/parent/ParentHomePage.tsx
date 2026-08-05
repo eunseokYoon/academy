@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../shared/auth/AuthContext";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
 import { Badge } from "../../shared/components/Badge";
 import { DdayPill } from "../../shared/components/DdayPill";
@@ -16,6 +17,7 @@ import { getChildHome } from "./api";
  * <p>값이 없는 카드는 숨긴다. 0을 표시하면 "시험이 오늘"이나 "출석 0회"로 읽힌다.
  */
 export default function ParentHomePage() {
+  const { user } = useAuth();
   const { children, selectedStudentId, setSelectedStudentId } = useSelectedChild();
 
   const home = useQuery({
@@ -45,13 +47,17 @@ export default function ParentHomePage() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-lg font-bold tracking-[-0.01em] text-brand-900">
-              {student.name} 학생, 환영합니다
+              {student.name} 학생 학부모님, 환영합니다
             </p>
             <p className="mt-0.5 truncate text-sm text-slate-500">
               {student.classRooms.length > 0 ? student.classRooms.join(" · ") : "반 배정 전"}
             </p>
-            {/* 서버가 마스킹한 값이다. 프론트에서 가리는 방식이면 개발자 도구에 원본이 남는다 */}
-            {student.phone && <p className="tnum mt-0.5 text-xs text-slate-400">{student.phone}</p>}
+            {/*
+              보는 사람 본인(학부모)의 번호다. 자녀 번호를 여기 띄우면 다자녀에서
+              자녀를 바꿀 때마다 번호가 바뀌어 "내 번호"로 읽히지 않는다.
+              /auth/me가 서버에서 마스킹해 내려준 값이다 — 프론트에서 가리면 원본이 남는다.
+            */}
+            {user?.phone && <p className="tnum mt-0.5 text-xs text-slate-400">{user.phone}</p>}
           </div>
           {nextExam && (
             <DdayPill label={EXAM_TYPE_LABELS[nextExam.examType]} dDay={nextExam.dDay} />
