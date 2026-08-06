@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Badge } from "../../shared/components/Badge";
-import { DAY_LABELS } from "./format";
+import { DAY_LABELS } from "../../shared/date";
 import { getDashboard } from "./api";
 import type { TeacherDashboard } from "./api";
 

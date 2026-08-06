@@ -10,12 +10,8 @@ import {
   listPendingAttendance,
 } from "../api";
 import type { AttendanceException } from "../api";
-import { DAY_LABELS } from "../format";
+import { dayLabel } from "../../../shared/date";
 import { RosterEditor } from "./RosterEditor";
-
-function dayLabel(date: string): string {
-  return DAY_LABELS[new Date(date).getDay() || 7];
-}
 
 /**
  * T-5. 미확정 수업·클리닉을 먼저 보여주고, 하나를 고르면 그 자리에서 출석을 확정한다.

@@ -80,7 +80,8 @@ export interface ParentLessonDetail {
   homework: {
     homeworkId: number;
     title: string;
-    description: string | null;
+    /** 학부모 응답에서는 항상 null이다. 숙제 지시문은 P-3과 마찬가지로 내려오지 않는다. */
+    description: null;
     dueAt: string;
     submissionStatus: SubmissionStatus | null;
   } | null;

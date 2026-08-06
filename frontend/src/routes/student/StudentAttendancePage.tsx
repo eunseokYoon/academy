@@ -2,14 +2,14 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AttendanceCalendar } from "../../shared/components/AttendanceCalendar";
 import { DAY_STATUS_STYLE } from "../../shared/attendance/types";
-import { DAY_LABELS } from "../teacher/format";
+import { formatClinicSlot } from "../../shared/clinic/types";
 import { getMyAttendances, listMyClinics } from "./api";
 
 const NOW = new Date();
 
 /**
  * S-6. 본인 출석 현황. 학부모 화면(P-2)과 <b>같은 데이터·같은 구성</b>이다 —
- * 수업 출석 캘린더 위에 클리닉 점을 얹고, 아래에 그 달 클리닉의 출결을 나열한다.
+ * 캘린더 칸에 수업과 클리닉을 같은 칩으로 넣고, 아래에 그 달 클리닉의 출결을 나열한다.
  * 두 화면이 어긋나면 "엄마 폰에는 다르게 나온다"는 문의가 된다.
  */
 export default function StudentAttendancePage() {
@@ -81,9 +81,7 @@ export default function StudentAttendancePage() {
                            shadow-sm"
               >
                 <p className="text-sm font-medium text-slate-900">
-                  {clinic.clinicDate.slice(5)} (
-                  {DAY_LABELS[new Date(clinic.clinicDate).getDay() || 7]}) {clinic.startTime}~
-                  {clinic.endTime}
+                  {formatClinicSlot(clinic)}
                 </p>
                 {/* attendStatus가 null이면 결석이 아니라 아직 출석 확정 전이다 */}
                 <span

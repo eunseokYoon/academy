@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
 import { AttendanceCalendar } from "../../shared/components/AttendanceCalendar";
 import { DAY_STATUS_STYLE } from "../../shared/attendance/types";
-import { DAY_LABELS } from "../teacher/format";
+import { formatClinicSlot } from "../../shared/clinic/types";
 import { getChildAttendances, getChildClinics } from "./api";
 
 const NOW = new Date();
@@ -92,9 +92,7 @@ export default function ParentSchedulePage() {
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">
-                    {clinic.clinicDate.slice(5)} (
-                    {DAY_LABELS[new Date(clinic.clinicDate).getDay() || 7]}) {clinic.startTime}~
-                    {clinic.endTime}
+                    {formatClinicSlot(clinic)}
                   </p>
                   {clinic.changeRequestStatus === "PENDING" && (
                     <p className="text-xs text-amber-700">시간 변경을 요청해 둔 상태입니다.</p>

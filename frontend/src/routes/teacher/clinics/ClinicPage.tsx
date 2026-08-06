@@ -22,25 +22,16 @@ import {
   unassignClinicStudent,
   updateClinic,
 } from "../api";
-import type { AttendanceException, Clinic, LessonSlot } from "../api";
-import { DAY_LABELS, today } from "../format";
+import { formatLessonSlot } from "../../../shared/lessonchange/types";
+import type { AttendanceException, Clinic } from "../api";
+import { dayLabel } from "../../../shared/date";
+import { today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
 
 function addDays(date: string, days: number): string {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next.toISOString().slice(0, 10);
-}
-
-function dayLabel(date: string): string {
-  return DAY_LABELS[new Date(date).getDay() || 7];
-}
-
-/** "08-13 (목) A고 2학년 목요일반 19:00". 그 반에 그 요일 슬롯이 없으면 시각을 뺀다. */
-function lessonLabel(lesson: LessonSlot): string {
-  const time = lesson.startTime ? ` ${lesson.startTime.slice(0, 5)}` : "";
-  return `${lesson.lessonDate.slice(5)} (${dayLabel(lesson.lessonDate)}) ` +
-    `${lesson.classRoomName}${time}`;
 }
 
 /**
@@ -179,8 +170,8 @@ function LessonChangeRequestList() {
         {requests.data.map((request) => (
           <li key={request.requestId} className="rounded-lg bg-white p-3">
             <p className="text-sm font-medium text-slate-900">{request.studentName}</p>
-            <p className="mt-0.5 text-sm text-slate-600">{lessonLabel(request.from)}</p>
-            <p className="text-sm font-medium text-slate-900">→ {lessonLabel(request.to)}</p>
+            <p className="mt-0.5 text-sm text-slate-600">{formatLessonSlot(request.from)}</p>
+            <p className="text-sm font-medium text-slate-900">→ {formatLessonSlot(request.to)}</p>
             <p className="mt-0.5 text-xs text-slate-500">사유: {request.reason}</p>
             <div className="mt-2 flex gap-2">
               <button

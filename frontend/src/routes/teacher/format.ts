@@ -1,15 +1,5 @@
+import { DAY_LABELS } from "../../shared/date";
 import type { ClassRoomSchedule } from "./api";
-
-/** 1=월 ~ 7=일 (ISO-8601). 서버의 dayOfWeek와 같은 기준이다. */
-export const DAY_LABELS: Record<number, string> = {
-  1: "월",
-  2: "화",
-  3: "수",
-  4: "목",
-  5: "금",
-  6: "토",
-  7: "일",
-};
 
 /**
  * 반의 수업 시간을 한 줄로. "화 19:00~21:00 · 목 19:00"

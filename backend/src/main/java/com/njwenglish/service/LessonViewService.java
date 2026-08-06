@@ -240,7 +240,7 @@ public class LessonViewService {
      * 없으면 미제출로 본다.
      */
     private LessonReportResponse.Homework toHomework(Homework homework, Long studentId) {
-        return new LessonReportResponse.Homework(
+        return LessonReportResponse.Homework.forStudent(
             homework.getId(),
             homework.getTitle(),
             homework.getDescription(),
@@ -248,13 +248,11 @@ public class LessonViewService {
             submissionStatusOf(homework.getId(), studentId));
     }
 
-    /** 학부모용. 학생용과 필드가 같지만 DTO가 달라 따로 만든다 — 그 분리가 영상 차단의 근거다. */
-    private LessonReportResponse.Homework toParentHomework(Homework homework,
-                                                                 Long studentId) {
-        return new LessonReportResponse.Homework(
+    /** 학부모용. <b>description을 넘기지 않는다</b> — 팩토리가 인자로 받지도 않는다. */
+    private LessonReportResponse.Homework toParentHomework(Homework homework, Long studentId) {
+        return LessonReportResponse.Homework.forParent(
             homework.getId(),
             homework.getTitle(),
-            homework.getDescription(),
             homework.getDueAt(),
             submissionStatusOf(homework.getId(), studentId));
     }

@@ -13,8 +13,8 @@ import { getChildLesson } from "./api";
  * <p>영상 재생 버튼이나 iframe을 여기 붙이지 마라. 응답에 embedUrl 필드는 있지만
  * 학부모에게는 언제나 null이다 — 서버가 forParent 팩토리에서 고정해 보낸다.
  *
- * <p>숙제는 제목·마감·제출 여부까지다. 학생 숙제 화면으로 링크를 걸지 마라 —
- * 사진과 선생님 피드백이 거기 있고, 그건 학부모에게 열지 않는다.
+ * <p>숙제는 제목·마감·제출 여부까지다. 숙제 지시문(description)·사진·피드백은 오지 않는다 —
+ * P-3 숙제 목록과 같은 규칙이다. 학생 숙제 화면으로 링크를 걸지도 마라.
  */
 export default function ParentLessonDetailPage() {
   const { lessonId } = useParams();
@@ -90,12 +90,8 @@ export default function ParentLessonDetailPage() {
 
       {data.homework && (
         <Section title="숙제">
+          {/* description은 학부모 응답에서 항상 null이다. 제목·마감·제출 여부까지가 전부다 */}
           <p className="text-sm font-medium text-slate-900">{data.homework.title}</p>
-          {data.homework.description && (
-            <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
-              {data.homework.description}
-            </p>
-          )}
           <div className="mt-2 flex items-center gap-2">
             <Badge
               tone={

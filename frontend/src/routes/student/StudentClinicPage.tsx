@@ -4,7 +4,7 @@ import { errorCode, errorMessage } from "../../shared/api/errors";
 import { Badge } from "../../shared/components/Badge";
 import { Modal } from "../../shared/components/Modal";
 import { TextAreaField } from "../../shared/components/TextAreaField";
-import { DAY_LABELS } from "../teacher/format";
+import { formatClinicSlot } from "../../shared/clinic/types";
 import {
   cancelClinicReservation,
   listLessonChangeCandidates,
@@ -15,7 +15,8 @@ import {
   requestLessonChange,
   reserveClinic,
 } from "./api";
-import type { LessonSlot, StudentClinic } from "./api";
+import { formatLessonSlot } from "../../shared/lessonchange/types";
+import type { StudentClinic } from "./api";
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -27,19 +28,9 @@ function addDays(date: string, days: number): string {
   return next.toISOString().slice(0, 10);
 }
 
-function slotLabel(clinic: { clinicDate: string; startTime: string; endTime: string }): string {
-  const day = DAY_LABELS[new Date(clinic.clinicDate).getDay() || 7];
+function formatClinicSlot(clinic: { clinicDate: string; startTime: string; endTime: string }): string {
+  const day = dayLabel(clinic.clinicDate);
   return `${clinic.clinicDate.slice(5)} (${day}) ${clinic.startTime}~${clinic.endTime}`;
-}
-
-/**
- * "08-13 (목) A고 2학년 목요일반 19:00".
- * 시각은 없을 수 있다 — 그 반에 그 요일 슬롯이 없는 경우다. 없으면 빼고 쓴다.
- */
-function lessonLabel(lesson: LessonSlot): string {
-  const day = DAY_LABELS[new Date(lesson.lessonDate).getDay() || 7];
-  const time = lesson.startTime ? ` ${lesson.startTime.slice(0, 5)}` : "";
-  return `${lesson.lessonDate.slice(5)} (${day}) ${lesson.classRoomName}${time}`;
 }
 
 /**
@@ -113,7 +104,7 @@ export default function StudentClinicPage() {
             {mine.map((clinic) => (
               <li key={clinic.clinicId} className="rounded-xl bg-white p-3 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-900">{slotLabel(clinic)}</span>
+                  <span className="text-sm font-medium text-slate-900">{formatClinicSlot(clinic)}</span>
                   {clinic.myReservation?.changeRequestStatus === "PENDING" ? (
                     <Badge tone="warn">변경 요청 중</Badge>
                   ) : (
@@ -159,7 +150,7 @@ export default function StudentClinicPage() {
                            shadow-sm"
               >
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{slotLabel(clinic)}</p>
+                  <p className="text-sm font-medium text-slate-900">{formatClinicSlot(clinic)}</p>
                   <p className="text-xs text-slate-500">
                     {clinic.reservedCount}
                     {clinic.capacity === null ? "" : `/${clinic.capacity}`}명
@@ -248,8 +239,8 @@ function LessonChangeSection() {
             <li key={request.requestId} className="rounded-xl bg-white p-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 text-sm">
-                  <p className="text-slate-500">{lessonLabel(request.from)}</p>
-                  <p className="font-medium text-slate-900">→ {lessonLabel(request.to)}</p>
+                  <p className="text-slate-500">{formatLessonSlot(request.from)}</p>
+                  <p className="font-medium text-slate-900">→ {formatLessonSlot(request.to)}</p>
                 </div>
                 <Badge
                   tone={
@@ -341,7 +332,7 @@ function LessonChangeModal({
           <option value="">선택하세요</option>
           {(myLessons.data ?? []).map((lesson) => (
             <option key={lesson.lessonId} value={lesson.lessonId}>
-              {lessonLabel(lesson)}
+              {formatLessonSlot(lesson)}
             </option>
           ))}
         </select>
@@ -364,7 +355,7 @@ function LessonChangeModal({
           </option>
           {(candidates.data ?? []).map((lesson) => (
             <option key={lesson.lessonId} value={lesson.lessonId}>
-              {lessonLabel(lesson)}
+              {formatLessonSlot(lesson)}
             </option>
           ))}
         </select>
@@ -444,7 +435,7 @@ function ChangeRequestModal({
 
   return (
     <Modal title="시간 변경 요청" onClose={onClose}>
-      <p className="text-sm text-slate-600">현재 {slotLabel(clinic)}</p>
+      <p className="text-sm text-slate-600">현재 {formatClinicSlot(clinic)}</p>
 
       <label className="mt-3 block">
         <span className="block text-sm font-medium text-slate-700">옮길 시간</span>
@@ -456,7 +447,7 @@ function ChangeRequestModal({
           <option value="">취소 요청 (다른 시간 없이 취소)</option>
           {candidates.map((candidate) => (
             <option key={candidate.clinicId} value={candidate.clinicId}>
-              {slotLabel(candidate)}
+              {formatClinicSlot(candidate)}
             </option>
           ))}
         </select>

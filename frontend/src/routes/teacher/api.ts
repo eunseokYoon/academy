@@ -4,6 +4,7 @@ import type { AttendanceStatus, AttendanceSummary } from "../../shared/attendanc
 import type { HomeworkCounts, SubmissionStatus } from "../../shared/homework/types";
 import type { MaterialCategory, MaterialVisibility } from "../../shared/material/types";
 import type { NoticeScope } from "../../shared/notice/api";
+import type { LessonChangeRequest } from "../../shared/lessonchange/types";
 import type { OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type {
   ExamType,
@@ -457,32 +458,6 @@ export const decideClinicChangeRequest = (requestId: number, approve: boolean) =
   });
 
 // ---------- 수업일 변경 (T-13) ----------
-
-/**
- * 수업 한 칸. 시각은 lessons가 아니라 반의 요일 슬롯에서 온다 —
- * 슬롯이 없으면 null이다. 값을 지어내 채우지 마라.
- */
-export interface LessonSlot {
-  lessonId: number;
-  classRoomId: number;
-  classRoomName: string;
-  lessonDate: string;
-  startTime: string | null;
-  endTime: string | null;
-}
-
-export interface LessonChangeRequest {
-  requestId: number;
-  studentId: number;
-  studentName: string;
-  from: LessonSlot;
-  to: LessonSlot;
-  /** 필수값이고 승인 공지 본문에 그대로 들어간다. */
-  reason: string;
-  status: ChangeRequestStatus;
-  decidedAt: string | null;
-  createdAt: string;
-}
 
 export const listLessonChangeRequests = (status: ChangeRequestStatus = "PENDING") =>
   get<LessonChangeRequest[]>("/teacher/lesson-change-requests", { status });

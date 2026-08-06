@@ -37,7 +37,15 @@ public record LessonReportResponse(
     Homework homework,
     AttendanceStatus attendanceStatus
 ) {
-    /** 수업에 딸린 숙제가 없으면 null이다. 사진·피드백은 어느 쪽에도 오지 않는다. */
+    /**
+     * 수업에 딸린 숙제가 없으면 null이다. 사진·피드백은 어느 쪽에도 오지 않는다.
+     *
+     * <p><b>description은 학부모에게 가지 않는다.</b> 학부모가 보는 건 "냈는지"까지고,
+     * 그건 P-3 숙제 목록(ParentHomeworkResponse)이 지키는 규칙과 같아야 한다 —
+     * 한쪽에서 막고 다른 쪽으로 흘리면 막은 의미가 없다.
+     *
+     * <p>여기도 {@code new} 대신 팩토리를 쓴다. forParent는 description을 인자로 받지 않는다.
+     */
     public record Homework(
         Long homeworkId,
         String title,
@@ -45,6 +53,17 @@ public record LessonReportResponse(
         OffsetDateTime dueAt,
         SubmissionStatus submissionStatus
     ) {
+        public static Homework forStudent(Long homeworkId, String title, String description,
+                                          OffsetDateTime dueAt,
+                                          SubmissionStatus submissionStatus) {
+            return new Homework(homeworkId, title, description, dueAt, submissionStatus);
+        }
+
+        /** P-5. description 자리는 여기서 null로 고정된다. */
+        public static Homework forParent(Long homeworkId, String title, OffsetDateTime dueAt,
+                                         SubmissionStatus submissionStatus) {
+            return new Homework(homeworkId, title, null, dueAt, submissionStatus);
+        }
     }
 
     /** S-5. 영상을 포함한다. */

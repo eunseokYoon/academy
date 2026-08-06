@@ -5,6 +5,7 @@ import type { SubmissionStatus } from "../../shared/homework/types";
 import type { MaterialCategory } from "../../shared/material/types";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
+import type { LessonChangeRequest, LessonSlot } from "../../shared/lessonchange/types";
 
 export type ReservationStatus = "RESERVED" | "CANCELED" | "MOVED";
 export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -64,35 +65,6 @@ export const requestClinicChange = (body: {
 );
 
 // ---------- 수업일 변경 (S-9) ----------
-
-/**
- * 수업 한 칸. 내 수업과 다른 반 후보가 같은 모양이다.
- *
- * <p>수업 제목·영상·레포트는 여기 없다. 다른 반 수업까지 나오는 목록이라
- * 서버가 날짜·반 이름·시각만 내려준다. 필드를 늘려 달라고 하지 마라.
- *
- * <p>startTime은 null일 수 있다 — 그 반에 그 요일 슬롯이 없는 경우다.
- */
-export interface LessonSlot {
-  lessonId: number;
-  classRoomId: number;
-  classRoomName: string;
-  lessonDate: string;
-  startTime: string | null;
-  endTime: string | null;
-}
-
-export interface LessonChangeRequest {
-  requestId: number;
-  studentId: number;
-  studentName: string;
-  from: LessonSlot;
-  to: LessonSlot;
-  reason: string;
-  status: ChangeRequestStatus;
-  decidedAt: string | null;
-  createdAt: string;
-}
 
 /** 못 가는 회차로 고를 수 있는 내 수업. 오늘부터 한 달. */
 export const listMyChangeableLessons = () =>

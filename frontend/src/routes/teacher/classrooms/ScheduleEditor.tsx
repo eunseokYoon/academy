@@ -1,5 +1,5 @@
 import type { ClassRoomSchedule } from "../api";
-import { DAY_LABELS } from "../format";
+import { DAY_LABELS } from "../../../shared/date";
 
 interface Props {
   value: ClassRoomSchedule[];

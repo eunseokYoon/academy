@@ -9,7 +9,8 @@ import { Modal } from "../../../shared/components/Modal";
 import { SubmitButton } from "../../../shared/components/SubmitButton";
 import { TextField } from "../../../shared/components/TextField";
 import { bulkCreateLessons, createLesson, listClassRooms, listLessons } from "../api";
-import { DAY_LABELS, formatScheduleDays, today } from "../format";
+import { dayLabel } from "../../../shared/date";
+import { formatScheduleDays, today } from "../format";
 
 const NOW = new Date();
 
@@ -130,7 +131,7 @@ export default function LessonListPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-slate-900">
-                    {lesson.lessonDate} ({DAY_LABELS[new Date(lesson.lessonDate).getDay() || 7]})
+                    {lesson.lessonDate} ({dayLabel(lesson.lessonDate)})
                   </span>
                   <span className="text-xs text-slate-400">{lesson.week}주차</span>
                 </div>
