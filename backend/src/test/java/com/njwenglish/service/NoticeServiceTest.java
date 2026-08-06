@@ -92,7 +92,8 @@ class NoticeServiceTest {
     void studentId를_받으면_접근_권한을_검증한다() {
         given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
-        given(noticeRepository.findForStudent(any(), any(Pageable.class))).willReturn(Page.empty());
+        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+            .willReturn(Page.empty());
 
         noticeService.list(88L, PageRequest.of(0, 20));
 
@@ -105,7 +106,8 @@ class NoticeServiceTest {
     void studentId가_없으면_본인_조회다() {
         given(studentAccessGuard.requireSelf()).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
-        given(noticeRepository.findForStudent(any(), any(Pageable.class))).willReturn(Page.empty());
+        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+            .willReturn(Page.empty());
 
         noticeService.list(null, PageRequest.of(0, 20));
 
@@ -123,7 +125,7 @@ class NoticeServiceTest {
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.STUDENT_NOT_ACCESSIBLE);
 
-        verify(noticeRepository, never()).findForStudent(any(), any(Pageable.class));
+        verify(noticeRepository, never()).findForStudent(any(), any(), any(Pageable.class));
     }
 
     @Test
@@ -131,11 +133,12 @@ class NoticeServiceTest {
     void 배정_전_학생도_공지를_조회할_수_있다() {
         given(studentAccessGuard.requireSelf()).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of());
-        given(noticeRepository.findForStudent(any(), any(Pageable.class))).willReturn(Page.empty());
+        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+            .willReturn(Page.empty());
 
         noticeService.list(null, PageRequest.of(0, 20));
 
-        verify(noticeRepository).findForStudent(eq(List.of(-1L)), any(Pageable.class));
+        verify(noticeRepository).findForStudent(eq(88L), eq(List.of(-1L)), any(Pageable.class));
     }
 
     @Test
@@ -143,7 +146,7 @@ class NoticeServiceTest {
     void 대상이_아닌_공지_상세는_404다() {
         given(studentAccessGuard.requireSelf()).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
-        given(noticeRepository.findForStudent(15L, List.of(3L))).willReturn(Optional.empty());
+        given(noticeRepository.findForStudent(15L, 88L, List.of(3L))).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> noticeService.detail(15L, null))
             .isInstanceOf(BusinessException.class)

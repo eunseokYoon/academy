@@ -2,9 +2,9 @@ package com.njwenglish.controller.student;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.common.response.PageResponse;
+import com.njwenglish.dto.lesson.LessonReportListItemResponse;
+import com.njwenglish.dto.lesson.LessonReportResponse;
 import com.njwenglish.dto.lesson.LessonViewRequest;
-import com.njwenglish.dto.lesson.StudentLessonDetailResponse;
-import com.njwenglish.dto.lesson.StudentLessonListItemResponse;
 import com.njwenglish.service.LessonViewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +19,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * S-5. 수업 영상과 레포트는 <b>학생만</b> 본다.
- * 같은 내용을 학부모에게 열어 주는 경로를 만들지 마라 (확정 사항).
+ * S-5. <b>수업 영상은 학생만</b> 본다.
+ *
+ * <p>레포트(내용·중점·다음 예고·숙제)는 학부모도 본다 —
+ * /api/parent/children/{studentId}/lessons가 그 경로다. 영상만 빠진다.
+ * 시청 기록(/view)은 여기에만 있다. 학부모 경로에 만들지 마라.
  */
 @RestController
 @RequestMapping("/api/student/lessons")
@@ -30,7 +33,7 @@ public class StudentLessonController {
     private final LessonViewService lessonViewService;
 
     @GetMapping
-    public ApiResponse<PageResponse<StudentLessonListItemResponse>> list(
+    public ApiResponse<PageResponse<LessonReportListItemResponse>> list(
         @RequestParam(required = false) Short year,
         @RequestParam(required = false) Short month,
         @RequestParam(required = false) Short week,
@@ -39,7 +42,7 @@ public class StudentLessonController {
     }
 
     @GetMapping("/{lessonId}")
-    public ApiResponse<StudentLessonDetailResponse> detail(@PathVariable Long lessonId) {
+    public ApiResponse<LessonReportResponse> detail(@PathVariable Long lessonId) {
         return ApiResponse.ok(lessonViewService.myLesson(lessonId));
     }
 

@@ -4,6 +4,7 @@ import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.attendance.PendingClinicResponse;
 import com.njwenglish.dto.clinic.ClinicCreateRequest;
 import com.njwenglish.dto.clinic.ClinicCreateResponse;
 import com.njwenglish.dto.clinic.ClinicListItemResponse;
@@ -112,6 +113,25 @@ public class ClinicService {
         clinicRepository.delete(clinic);
     }
 
+    /**
+     * T-5 미확정 클리닉. 출석 확정 화면에서 수업과 나란히 보여준다.
+     *
+     * <p>수업과 판정 기준이 다르다 — clinics에는 확정 컬럼이 없어서 예약의
+     * attend_status가 비었는지로 본다. 신청자가 없는 시간대는 확정할 것이 없어 빠진다.
+     */
+    @Transactional(readOnly = true)
+    public List<PendingClinicResponse> pendingAttendance() {
+        List<Clinic> clinics = reservationRepository.findPendingUntil(LocalDate.now());
+        Map<Long, Long> counts = reservedCounts(clinics);
+
+        return clinics.stream()
+            .map(clinic -> new PendingClinicResponse(
+                clinic.getId(), clinic.getClinicDate(),
+                clinic.getStartTime(), clinic.getEndTime(),
+                counts.getOrDefault(clinic.getId(), 0L)))
+            .toList();
+    }
+
     /** T-13 목록. 기간 조회라 페이징이 없다. */
     @Transactional(readOnly = true)
     public List<ClinicListItemResponse> listForTeacher(LocalDate from, LocalDate to,
@@ -160,6 +180,8 @@ public class ClinicService {
                 reservedCount, clinic.isFull(reservedCount),
                 reservation == null ? null : new MyReservationResponse(
                     reservation.getId(), reservation.getStatus(),
+                    // null이면 결석이 아니라 아직 확정 전이다. S-6이 이 값으로 출결을 그린다
+                    reservation.getAttendStatus(),
                     pendingChanges.contains(reservation.getId())
                         ? ChangeRequestStatus.PENDING : null)));
         }

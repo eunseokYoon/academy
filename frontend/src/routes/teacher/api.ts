@@ -304,6 +304,25 @@ export interface PendingLesson {
   studentCount: number;
 }
 
+/**
+ * 미확정 클리닉. 반 이름이 없다 — 클리닉은 반과 무관하게 열리는 보충 시간대라
+ * 시각이 그 시간대의 이름 역할을 한다.
+ */
+export interface PendingClinic {
+  clinicId: number;
+  clinicDate: string;
+  startTime: string;
+  endTime: string;
+  /** 신청 인원. 수업의 재원 인원과 뜻이 다르다. */
+  studentCount: number;
+}
+
+/** 확정 API가 서로 달라서 한 배열로 합쳐 오지 않는다. */
+export interface PendingAttendance {
+  lessons: PendingLesson[];
+  clinics: PendingClinic[];
+}
+
 /** 안 온 학생만 담는다. 전원 출석이면 빈 배열이다. */
 export interface AttendanceException {
   studentId: number;
@@ -323,7 +342,7 @@ export const confirmAttendance = (lessonId: number, exceptions: AttendanceExcept
   }>(`/teacher/lessons/${lessonId}/attendance/confirm`, { exceptions });
 
 export const listPendingAttendance = () =>
-  get<PendingLesson[]>("/teacher/attendance/pending");
+  get<PendingAttendance>("/teacher/attendance/pending");
 
 // ---------- 클리닉 (T-13) ----------
 
@@ -436,6 +455,44 @@ export const decideClinicChangeRequest = (requestId: number, approve: boolean) =
     approve,
     note: null,
   });
+
+// ---------- 수업일 변경 (T-13) ----------
+
+/**
+ * 수업 한 칸. 시각은 lessons가 아니라 반의 요일 슬롯에서 온다 —
+ * 슬롯이 없으면 null이다. 값을 지어내 채우지 마라.
+ */
+export interface LessonSlot {
+  lessonId: number;
+  classRoomId: number;
+  classRoomName: string;
+  lessonDate: string;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface LessonChangeRequest {
+  requestId: number;
+  studentId: number;
+  studentName: string;
+  from: LessonSlot;
+  to: LessonSlot;
+  /** 필수값이고 승인 공지 본문에 그대로 들어간다. */
+  reason: string;
+  status: ChangeRequestStatus;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export const listLessonChangeRequests = (status: ChangeRequestStatus = "PENDING") =>
+  get<LessonChangeRequest[]>("/teacher/lesson-change-requests", { status });
+
+/**
+ * 승인하면 그 순간 학생·학부모에게 개인 공지가 발행된다.
+ * <b>반 배정도 수업도 출석도 바뀌지 않는다</b> — 원래 반 출석은 직접 처리해야 한다.
+ */
+export const decideLessonChangeRequest = (requestId: number, approve: boolean) =>
+  post<LessonChangeRequest>(`/teacher/lesson-change-requests/${requestId}/decide`, { approve });
 
 // ---------- 숙제 (T-6 · T-7) ----------
 
@@ -913,6 +970,9 @@ export interface TeacherNotice {
   scope: NoticeScope;
   classRoomId: number | null;
   classRoomName: string | null;
+  /** scope가 STUDENT일 때만 값이 있다 — 수업일 변경 승인이 만든 개인 공지다. */
+  studentId: number | null;
+  studentName: string | null;
   pinned: boolean;
   publishedAt: string | null;
   createdAt: string;

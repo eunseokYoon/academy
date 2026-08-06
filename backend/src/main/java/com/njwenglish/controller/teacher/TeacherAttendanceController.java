@@ -6,10 +6,10 @@ import com.njwenglish.dto.attendance.AttendanceConfirmResponse;
 import com.njwenglish.dto.attendance.AttendanceCorrectRequest;
 import com.njwenglish.dto.attendance.AttendanceDetailResponse;
 import com.njwenglish.dto.attendance.AttendanceRosterResponse;
-import com.njwenglish.dto.attendance.PendingLessonResponse;
+import com.njwenglish.dto.attendance.PendingAttendanceResponse;
 import com.njwenglish.service.AttendanceService;
+import com.njwenglish.service.ClinicService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TeacherAttendanceController {
 
     private final AttendanceService attendanceService;
+    private final ClinicService clinicService;
 
     @GetMapping("/lessons/{lessonId}/attendance")
     public ApiResponse<AttendanceRosterResponse> roster(@PathVariable Long lessonId) {
@@ -53,8 +54,16 @@ public class TeacherAttendanceController {
         return ApiResponse.ok(attendanceService.correct(attendanceId, request));
     }
 
+    /**
+     * 확정할 것 전부 — 수업과 클리닉을 한 번에 내려준다.
+     *
+     * <p>두 서비스를 여기서 합치는 이유는 확정하는 대상이 서로 다른 테이블이기 때문이다.
+     * 수업은 attendances에, 클리닉은 clinic_reservations.attend_status에 쓴다.
+     * 한쪽 서비스가 다른 도메인 리포지토리를 들고 있게 만들지 않는다.
+     */
     @GetMapping("/attendance/pending")
-    public ApiResponse<List<PendingLessonResponse>> pending() {
-        return ApiResponse.ok(attendanceService.pending());
+    public ApiResponse<PendingAttendanceResponse> pending() {
+        return ApiResponse.ok(new PendingAttendanceResponse(
+            attendanceService.pending(), clinicService.pendingAttendance()));
     }
 }

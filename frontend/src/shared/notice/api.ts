@@ -1,7 +1,12 @@
 import { get } from "../api/client";
 import type { PageResponse } from "../api/types";
 
-export type NoticeScope = "ALL" | "CLASS";
+/**
+ * STUDENT는 수업일 변경 승인이 만드는 개인 공지다. 그 학생과 학부모만 본다.
+ * 선생님이 손으로 쓰는 공지는 ALL·CLASS 둘뿐이라 작성 폼에는 이 값이 없다 —
+ * 서버도 STUDENT로 오는 작성 요청을 400으로 막는다.
+ */
+export type NoticeScope = "ALL" | "CLASS" | "STUDENT";
 
 export interface NoticeSummary {
   noticeId: number;

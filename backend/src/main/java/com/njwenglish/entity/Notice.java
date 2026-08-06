@@ -44,10 +44,20 @@ public class Notice extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private NoticeScope scope;
 
-    /** ALL이면 null이어야 한다 (ck_notices_target). */
+    /** CLASS일 때만 값이 있다 (ck_notices_target). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_room_id")
     private ClassRoom classRoom;
+
+    /**
+     * STUDENT일 때만 값이 있다 (ck_notices_target). 그 학생과 학부모만 이 공지를 본다.
+     *
+     * <p>수업일 변경 승인이 만드는 공지가 여기 해당한다. 본문에 변경 사유가 들어가므로
+     * <b>CLASS로 보내면 같은 반 전원에게 사유가 노출된다.</b>
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "student_id")
+    private Student student;
 
     @Column(nullable = false)
     private boolean pinned;
@@ -77,16 +87,39 @@ public class Notice extends BaseTimeEntity {
         return notice;
     }
 
+    /**
+     * 개인 공지. <b>초안 단계 없이 바로 발행된다</b> — 수업일 변경 승인 시점에 알리는 것이
+     * 목적이라 선생님이 발행 버튼을 한 번 더 누를 이유가 없다. 안 누르면 아무에게도 안 간다.
+     *
+     * <p>pinned는 false 고정이다. 개인 공지가 반 공지 위로 올라가면 목록 정렬이 뒤집힌다.
+     */
+    public static Notice publishedForStudent(String title, String content, Student student,
+                                             Teacher createdBy, OffsetDateTime now) {
+        Notice notice = new Notice();
+        notice.title = title;
+        notice.content = content;
+        notice.scope = NoticeScope.STUDENT;
+        notice.student = student;
+        notice.pinned = false;
+        notice.createdBy = createdBy;
+        notice.publishedAt = now;
+        return notice;
+    }
+
     public void edit(String title, String content, boolean pinned) {
         this.title = title;
         this.content = content;
         this.pinned = pinned;
     }
 
-    /** 대상 변경. scope와 classRoom은 항상 함께 바뀐다 — 따로 두면 CHECK 제약에 걸린다. */
+    /**
+     * 대상 변경. scope와 대상은 항상 함께 바뀐다 — 따로 두면 ck_notices_target에 걸린다.
+     * ALL·CLASS 사이의 이동만 쓴다. student를 비우는 것은 그래서다.
+     */
     public void retarget(NoticeScope scope, ClassRoom classRoom) {
         this.scope = scope;
         this.classRoom = classRoom;
+        this.student = null;
     }
 
     /** 이미 발행된 공지를 다시 발행해도 최초 발행 시각을 유지한다. 목록 정렬 기준이라 흔들리면 안 된다. */

@@ -23,6 +23,8 @@ import ParentLayout from "./routes/parent/ParentLayout";
 import ParentHomePage from "./routes/parent/ParentHomePage";
 import ParentMePage from "./routes/parent/ParentMePage";
 import ParentNoticePage from "./routes/parent/ParentNoticePage";
+import ParentLessonDetailPage from "./routes/parent/ParentLessonDetailPage";
+import ParentLessonPage from "./routes/parent/ParentLessonPage";
 import ParentSchedulePage from "./routes/parent/ParentSchedulePage";
 import ParentHomeworkPage from "./routes/parent/ParentHomeworkPage";
 import ParentScorePage from "./routes/parent/ParentScorePage";
@@ -94,6 +96,8 @@ export const router = createBrowserRouter([
       { index: true, element: <ParentHomePage /> },
       { path: "schedule", element: <ParentSchedulePage /> },
       { path: "homeworks", element: <ParentHomeworkPage /> },
+      { path: "lessons", element: <ParentLessonPage /> },
+      { path: "lessons/:lessonId", element: <ParentLessonDetailPage /> },
       { path: "scores", element: <ParentScorePage /> },
       { path: "notices", element: <ParentNoticePage /> },
       { path: "me", element: <ParentMePage /> },

@@ -9,15 +9,13 @@ import java.util.List;
  *
  * <p>nextLesson·nextExam은 null일 수 있다. 프론트는 해당 카드를 숨긴다.
  *
- * <p>unreadFeedbackCount는 학생이 S-4 상세를 열면 줄어든다
- * (submissions.feedback_read_at). 공지 읽음 표시는 범위 밖이라 noticeCount는 전체 건수다.
+ * <p>공지 읽음 표시는 범위 밖이라 noticeCount는 전체 건수다.
  */
 public record StudentHomeResponse(
     StudentRef student,
     NextLessonResponse nextLesson,
     NextExamResponse nextExam,
     List<HomeHomeworkResponse> currentHomeworks,
-    long unreadFeedbackCount,
     long noticeCount
 ) {
     /** 이름은 students.name이다. 미가입 학생은 users 행이 없다. */

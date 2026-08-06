@@ -45,6 +45,57 @@ export const getChildHomeworks = (
   params: { status?: SubmissionStatus; page?: number },
 ) => get<PageResponse<ParentHomework>>(`/parent/children/${studentId}/homeworks`, params);
 
+// ---------- 수업 레포트 (P-5) ----------
+
+/**
+ * 학생 화면(S-5)과 <b>같은 응답</b>이다. 영상 값만 null로 내려온다.
+ *
+ * <p>videoId·embedUrl이 null인 것은 "영상이 없다"가 아니라 "학부모는 못 본다"는 뜻이다.
+ * 서버가 forParent 팩토리에서 고정해 보낸다. 프론트에서 이 값을 채워 재생을 붙이지 마라.
+ */
+export interface ParentLessonListItem {
+  lessonId: number;
+  lessonDate: string;
+  title: string | null;
+  classRoomName: string;
+  /** 학부모 응답에서는 항상 null이다. false(영상 없음)와 다르다. */
+  hasVideo: boolean | null;
+  isNew: boolean;
+  /** 학부모 응답에서는 항상 null이다. */
+  viewed: boolean | null;
+  homeworkTitle: string | null;
+}
+
+export interface ParentLessonDetail {
+  lessonId: number;
+  lessonDate: string;
+  title: string | null;
+  classRoomName: string;
+  /** 학부모 응답에서는 항상 null이다. 프론트는 영상 영역을 그리지 않는다. */
+  videoId: string | null;
+  embedUrl: string | null;
+  content: string | null;
+  keyPoints: string | null;
+  nextPreview: string | null;
+  homework: {
+    homeworkId: number;
+    title: string;
+    description: string | null;
+    dueAt: string;
+    submissionStatus: SubmissionStatus | null;
+  } | null;
+  /** null이면 아직 출석 확정 전이다. 결석이 아니다. */
+  attendanceStatus: AttendanceStatus | null;
+}
+
+export const getChildLessons = (
+  studentId: number,
+  params: { year?: number; month?: number; week?: number; page?: number },
+) => get<PageResponse<ParentLessonListItem>>(`/parent/children/${studentId}/lessons`, params);
+
+export const getChildLesson = (studentId: number, lessonId: number) =>
+  get<ParentLessonDetail>(`/parent/children/${studentId}/lessons/${lessonId}`);
+
 // ---------- 테스트 결과 (P-4) ----------
 
 /**
@@ -82,8 +133,10 @@ export interface ParentHome {
     scopeNote: string | null;
     dDay: number;
   } | null;
-  /** 날짜만 온다. 수업 내용은 학부모에게 노출하지 않는다. */
+  /** 날짜와 시각만 온다. 수업 내용은 학부모에게 노출하지 않는다. */
   nextLessonDate: string | null;
+  /** 반에 그 요일 슬롯이 없으면 null이다. 그때는 날짜만 그린다. */
+  nextLessonTime: string | null;
   notices: { totalCount: number; recent: NoticeSummary[] };
   pendingHomeworkCount: number;
   nextClinic: { clinicId: number; clinicDate: string; startTime: string; dDay: number } | null;

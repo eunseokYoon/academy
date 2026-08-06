@@ -109,17 +109,10 @@ public class SubmissionService {
         }));
     }
 
-    /**
-     * 읽기 조회지만 쓰기 트랜잭션이다. 이 화면을 여는 것이 곧 피드백 확인이고,
-     * S-1 홈의 미확인 수가 여기서만 줄어든다.
-     */
-    @Transactional
+    @Transactional(readOnly = true)
     public StudentHomeworkDetailResponse myHomework(Long homeworkId) {
         Submission submission = findMySubmission(homeworkId);
         Feedback feedback = feedbackRepository.findBySubmissionId(submission.getId()).orElse(null);
-        if (feedback != null) {
-            submission.markFeedbackRead(OffsetDateTime.now());
-        }
 
         return new StudentHomeworkDetailResponse(
             StudentHomeworkResponse.from(submission.getHomework()),

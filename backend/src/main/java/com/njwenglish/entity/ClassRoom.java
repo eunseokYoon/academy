@@ -16,9 +16,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -111,6 +113,19 @@ public class ClassRoom extends BaseTimeEntity {
     }
 
     /** 서비스 계층이 슬롯을 넘길 때 쓰는 값 객체. DTO를 엔티티로 들이지 않기 위한 것이다. */
+    /**
+     * 그 날짜의 요일에 해당하는 슬롯. 수업 시각은 lessons가 아니라 여기 있다.
+     *
+     * <p>비어 있을 수 있다 — 요일 슬롯이 아직 없거나, 요일을 바꾼 뒤 예전 날짜의 수업이
+     * 남아 있는 경우다. 그런 수업의 시각을 지어내지 말고 시각 없이 날짜만 보여줘라.
+     */
+    public Optional<ClassRoomSchedule> scheduleOn(LocalDate date) {
+        short dayOfWeek = (short) date.getDayOfWeek().getValue();
+        return schedules.stream()
+            .filter(schedule -> schedule.getDayOfWeek() == dayOfWeek)
+            .findFirst();
+    }
+
     public record Slot(Short dayOfWeek, LocalTime startTime, LocalTime endTime) {
     }
 

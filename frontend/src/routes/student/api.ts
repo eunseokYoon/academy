@@ -12,6 +12,11 @@ export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export interface MyReservation {
   reservationId: number;
   status: ReservationStatus;
+  /**
+   * null이면 결석이 아니라 <b>아직 출석 확정 전</b>이다.
+   * 캘린더의 PENDING과 같은 뜻이라 화면에서도 같은 회색 "미확인"으로 그린다.
+   */
+  attendStatus: AttendanceStatus | null;
   /** 대기 중인 변경 요청이 있을 때만 값이 있다. */
   changeRequestStatus: ChangeRequestStatus | null;
 }
@@ -57,6 +62,58 @@ export const requestClinicChange = (body: {
   "/student/clinic-change-requests",
   body,
 );
+
+// ---------- 수업일 변경 (S-9) ----------
+
+/**
+ * 수업 한 칸. 내 수업과 다른 반 후보가 같은 모양이다.
+ *
+ * <p>수업 제목·영상·레포트는 여기 없다. 다른 반 수업까지 나오는 목록이라
+ * 서버가 날짜·반 이름·시각만 내려준다. 필드를 늘려 달라고 하지 마라.
+ *
+ * <p>startTime은 null일 수 있다 — 그 반에 그 요일 슬롯이 없는 경우다.
+ */
+export interface LessonSlot {
+  lessonId: number;
+  classRoomId: number;
+  classRoomName: string;
+  lessonDate: string;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface LessonChangeRequest {
+  requestId: number;
+  studentId: number;
+  studentName: string;
+  from: LessonSlot;
+  to: LessonSlot;
+  reason: string;
+  status: ChangeRequestStatus;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+/** 못 가는 회차로 고를 수 있는 내 수업. 오늘부터 한 달. */
+export const listMyChangeableLessons = () =>
+  get<LessonSlot[]>("/student/lesson-changes/my-lessons");
+
+/** 대신 갈 수업 후보. 그 수업이 있는 주(월~일)의 다른 반 수업만 나온다. */
+export const listLessonChangeCandidates = (fromLessonId: number) =>
+  get<LessonSlot[]>("/student/lesson-changes/candidates", { fromLessonId });
+
+export const listMyLessonChanges = () =>
+  get<LessonChangeRequest[]>("/student/lesson-changes");
+
+/**
+ * 요청만 한다. 승인해도 <b>배정과 수업 자체는 바뀌지 않고</b> 공지가 한 건 발행될 뿐이다.
+ * 원래 반 출석부에는 그 날이 그대로 남는다.
+ */
+export const requestLessonChange = (body: {
+  fromLessonId: number;
+  toLessonId: number;
+  reason: string;
+}) => post<LessonChangeRequest>("/student/lesson-changes", body);
 
 // ---------- 숙제 (S-2 · S-3 · S-4) ----------
 
@@ -253,7 +310,13 @@ export const getMaterialDownloadUrl = (materialId: number) =>
  */
 export interface StudentHome {
   student: { name: string };
-  nextLesson: { lessonDate: string; dDay: number; classRoomName: string } | null;
+  nextLesson: {
+    lessonDate: string;
+    /** 반에 그 요일 슬롯이 없으면 null이다. 그때는 날짜만 그린다. */
+    startTime: string | null;
+    dDay: number;
+    classRoomName: string;
+  } | null;
   nextExam: {
     examType: ExamType;
     startDate: string;
@@ -269,8 +332,6 @@ export interface StudentHome {
     /** 음수면 마감이 지난 것이다. */
     remainingMinutes: number;
   }[];
-  /** S-4 상세를 열면 줄어든다. */
-  unreadFeedbackCount: number;
   noticeCount: number;
 }
 

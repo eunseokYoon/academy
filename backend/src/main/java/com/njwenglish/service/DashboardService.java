@@ -1,7 +1,6 @@
 package com.njwenglish.service;
 
 import com.njwenglish.dto.home.TeacherDashboardResponse;
-import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.ClassRoomSchedule;
 import com.njwenglish.entity.enums.ChangeRequestStatus;
 import com.njwenglish.entity.enums.ClassRoomStatus;
@@ -14,7 +13,6 @@ import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.time.ZoneId;
@@ -69,7 +67,12 @@ public class DashboardService {
             .map(lesson -> new TeacherDashboardResponse.Lesson(
                 lesson.getId(),
                 lesson.getClassRoom().getName(),
-                startTimeOf(lesson.getClassRoom(), lesson.getLessonDate()),
+                // 시각은 lessons에 없다. 그 날짜의 요일에 해당하는 반 슬롯에서 온다 —
+                // 반이 주 2회면 요일마다 시각이 달라 반 단위로 하나를 고를 수 없다.
+                // 슬롯이 없으면 null이다(요일 미정이거나, 요일을 바꾼 뒤 남은 예전 날짜)
+                lesson.getClassRoom().scheduleOn(lesson.getLessonDate())
+                    .map(ClassRoomSchedule::getStartTime)
+                    .orElse(null),
                 enrollmentRepository.countActiveStudentsOn(
                     lesson.getClassRoom().getId(), lesson.getLessonDate()),
                 lesson.getAttendanceStatus(),
@@ -79,22 +82,6 @@ public class DashboardService {
             .sorted(Comparator.comparing(TeacherDashboardResponse.Lesson::startTime,
                 Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
-    }
-
-    /**
-     * 그 수업 날짜의 요일에 해당하는 슬롯의 시작시각.
-     *
-     * <p>반이 주 2회면 요일마다 시각이 다를 수 있어 반 단위로 하나를 고를 수 없다.
-     * 슬롯이 없거나(요일 미정) 수업 날짜가 어느 슬롯과도 안 맞으면 null이다 —
-     * 요일을 바꾼 뒤에도 예전 날짜의 수업은 남아 있어서 생길 수 있는 상태다.
-     */
-    private LocalTime startTimeOf(ClassRoom classRoom, LocalDate lessonDate) {
-        short dayOfWeek = (short) lessonDate.getDayOfWeek().getValue();
-        return classRoom.getSchedules().stream()
-            .filter(schedule -> schedule.getDayOfWeek() == dayOfWeek)
-            .map(ClassRoomSchedule::getStartTime)
-            .findFirst()
-            .orElse(null);
     }
 
     /**

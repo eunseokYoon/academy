@@ -2,6 +2,7 @@ package com.njwenglish.repository;
 
 import com.njwenglish.entity.Lesson;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -177,4 +178,49 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         """)
     Optional<Lesson> findForStudent(@Param("lessonId") Long lessonId,
                                     @Param("studentId") Long studentId);
+
+    /**
+     * S-9 수업일 변경에서 "못 가는 내 수업"으로 고를 수 있는 회차.
+     *
+     * <p><b>published_at을 보지 않는다.</b> 옮기려는 건 앞으로 올 수업인데 그건 아직 발행
+     * 전이라, 이 조건을 넣으면 목록이 늘 비어서 기능 자체가 동작하지 않는다. 대신 응답에
+     * 수업 내용을 담지 않는다 — 날짜와 반 이름까지가 이 목록의 전부다.
+     *
+     * <p>재원 기간 조건은 S-5 목록과 같다. 이게 빠지면 퇴원 이후 수업까지 고를 수 있다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l JOIN FETCH l.classRoom c
+        WHERE l.lessonDate BETWEEN :from AND :to
+          AND EXISTS (SELECT 1 FROM Enrollment e
+                      WHERE e.classRoom.id = l.classRoom.id
+                        AND e.student.id = :studentId
+                        AND e.joinedAt <= l.lessonDate
+                        AND (e.leftAt IS NULL OR e.leftAt > l.lessonDate))
+        ORDER BY l.lessonDate ASC, l.id ASC
+        """)
+    List<Lesson> findUpcomingForStudent(@Param("studentId") Long studentId,
+                                        @Param("from") LocalDate from,
+                                        @Param("to") LocalDate to);
+
+    /**
+     * S-9에서 "대신 갈 수업" 후보. 같은 주(월~일)에 열리는 다른 반 수업이다.
+     *
+     * <p>여기도 published_at을 보지 않는다. 위와 같은 이유이고, 같은 이유로
+     * <b>다른 반 수업의 제목·영상·레포트는 절대 응답에 넣지 마라.</b> 날짜·반 이름·시각까지다.
+     *
+     * <p>종료된 반은 뺀다. 이미 끝난 반의 수업일을 대체 수업으로 고를 수는 없다.
+     *
+     * <p>excludedClassRoomIds는 빈 컬렉션이면 안 된다(SQL 오류). 호출부에서 더미를 넣는다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l JOIN FETCH l.classRoom c
+        WHERE l.lessonDate BETWEEN :from AND :to
+          AND c.id NOT IN :excludedClassRoomIds
+          AND c.status = 'ACTIVE'
+        ORDER BY l.lessonDate ASC, c.name ASC
+        """)
+    List<Lesson> findWeekCandidates(@Param("from") LocalDate from,
+                                    @Param("to") LocalDate to,
+                                    @Param("excludedClassRoomIds")
+                                    Collection<Long> excludedClassRoomIds);
 }

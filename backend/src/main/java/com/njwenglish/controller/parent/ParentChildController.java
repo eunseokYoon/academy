@@ -6,6 +6,8 @@ import com.njwenglish.dto.attendance.AttendanceCalendarResponse;
 import com.njwenglish.dto.clinic.ParentClinicResponse;
 import com.njwenglish.dto.home.ParentHomeResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
+import com.njwenglish.dto.lesson.LessonReportListItemResponse;
+import com.njwenglish.dto.lesson.LessonReportResponse;
 import com.njwenglish.dto.member.ChildResponse;
 import com.njwenglish.dto.score.StudentExamScheduleResponse;
 import com.njwenglish.dto.studentscore.StudentScoreResponse;
@@ -13,6 +15,7 @@ import com.njwenglish.service.AttendanceService;
 import com.njwenglish.service.ClinicService;
 import com.njwenglish.service.ExamScheduleService;
 import com.njwenglish.service.HomeService;
+import com.njwenglish.service.LessonViewService;
 import com.njwenglish.service.ParentService;
 import com.njwenglish.service.StudentScoreQueryService;
 import com.njwenglish.service.SubmissionService;
@@ -44,6 +47,7 @@ public class ParentChildController {
     private final AttendanceService attendanceService;
     private final ClinicService clinicService;
     private final SubmissionService submissionService;
+    private final LessonViewService lessonViewService;
     private final StudentScoreQueryService studentScoreQueryService;
     private final ExamScheduleService examScheduleService;
 
@@ -92,6 +96,28 @@ public class ParentChildController {
         @RequestParam(required = false) String status,
         @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.ok(submissionService.childHomeworks(studentId, status, pageable));
+    }
+
+    /**
+     * P-5 수업 레포트. <b>videoId·embedUrl은 null로 나간다</b> —
+     * LessonReportResponse.forParent가 그 자리를 고정한다.
+     * 시청 기록(POST /view)도 학부모 경로에는 없다. 보기만 한다.
+     */
+    @GetMapping("/{studentId}/lessons")
+    public ApiResponse<PageResponse<LessonReportListItemResponse>> lessons(
+        @PathVariable Long studentId,
+        @RequestParam(required = false) Short year,
+        @RequestParam(required = false) Short month,
+        @RequestParam(required = false) Short week,
+        @PageableDefault(size = 20) Pageable pageable) {
+        return ApiResponse.ok(
+            lessonViewService.childLessons(studentId, year, month, week, pageable));
+    }
+
+    @GetMapping("/{studentId}/lessons/{lessonId}")
+    public ApiResponse<LessonReportResponse> lesson(@PathVariable Long studentId,
+                                                    @PathVariable Long lessonId) {
+        return ApiResponse.ok(lessonViewService.childLesson(studentId, lessonId));
     }
 
     /**

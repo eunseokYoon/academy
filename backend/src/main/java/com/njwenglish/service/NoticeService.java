@@ -63,7 +63,7 @@ public class NoticeService {
     public PageResponse<NoticeSummaryResponse> list(Long studentId, Pageable pageable) {
         Student student = resolveStudent(studentId);
         return PageResponse.from(noticeRepository
-            .findForStudent(classRoomIdsOf(student.getId()), pageable)
+            .findForStudent(student.getId(), classRoomIdsOf(student.getId()), pageable)
             .map(NoticeSummaryResponse::from));
     }
 
@@ -71,7 +71,8 @@ public class NoticeService {
     public NoticeDetailResponse detail(Long noticeId, Long studentId) {
         Student student = resolveStudent(studentId);
         // 목록과 같은 조건으로 조회한다. 대상이 아니거나 초안이면 아예 나오지 않는다
-        return noticeRepository.findForStudent(noticeId, classRoomIdsOf(student.getId()))
+        return noticeRepository
+            .findForStudent(noticeId, student.getId(), classRoomIdsOf(student.getId()))
             .map(NoticeDetailResponse::from)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
@@ -79,17 +80,34 @@ public class NoticeService {
     /** 홈 화면용. 목록과 같은 조건이라 개수와 목록이 어긋나지 않는다. */
     @Transactional(readOnly = true)
     public long countFor(Long studentId) {
-        return noticeRepository.countForStudent(classRoomIdsOf(studentId));
+        return noticeRepository.countForStudent(studentId, classRoomIdsOf(studentId));
     }
 
     /** P-1 홈 배너. 상단 몇 건만 필요하다. */
     @Transactional(readOnly = true)
     public List<NoticeSummaryResponse> recentFor(Long studentId) {
         return noticeRepository
-            .findRecentForStudent(classRoomIdsOf(studentId), PageRequest.of(0, HOME_RECENT_SIZE))
+            .findRecentForStudent(studentId, classRoomIdsOf(studentId),
+                PageRequest.of(0, HOME_RECENT_SIZE))
             .stream()
             .map(NoticeSummaryResponse::from)
             .toList();
+    }
+
+    /**
+     * 개인 공지를 즉시 발행한다. <b>수업일 변경 승인이 유일한 호출부다.</b>
+     *
+     * <p>초안을 거치지 않는다 — 승인 순간 알리는 것이 목적이라 선생님이 발행을 한 번 더
+     * 눌러야 한다면 안 누른 알림은 아무에게도 안 간다.
+     *
+     * <p>엔티티를 그대로 돌려주는 이유는 호출부가 notice_id를 요청에 걸어야 하기 때문이다.
+     * 같은 트랜잭션 안이라 영속 상태 그대로 넘어간다.
+     */
+    @Transactional
+    public Notice publishForStudent(String title, String content, Student student,
+                                    Teacher teacher) {
+        return noticeRepository.save(
+            Notice.publishedForStudent(title, content, student, teacher, OffsetDateTime.now()));
     }
 
     // ---------- 선생님 (T-10) ----------
@@ -170,8 +188,17 @@ public class NoticeService {
         return ids.isEmpty() ? NO_CLASS_ROOM : ids;
     }
 
-    /** ALL이면 반이 없어야 하고, CLASS면 있어야 한다. 어긋나면 400이다. */
+    /**
+     * ALL이면 반이 없어야 하고, CLASS면 있어야 한다. 어긋나면 400이다.
+     *
+     * <p><b>STUDENT는 여기서 막는다.</b> 개인 공지는 수업일 변경 승인만 만든다 —
+     * 선생님이 임의로 개인에게 공지를 쓰는 화면은 없고, 열어 주면 대상 학생을 고르는
+     * UI부터 권한 검증까지 따라붙는다. 개인에게 갈 말은 숙제 피드백에 쓴다.
+     */
     private ClassRoom resolveTarget(NoticeScope scope, Long classRoomId) {
+        if (scope == NoticeScope.STUDENT) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
         if (scope == NoticeScope.ALL) {
             if (classRoomId != null) {
                 throw new BusinessException(ErrorCode.VALIDATION_FAILED);

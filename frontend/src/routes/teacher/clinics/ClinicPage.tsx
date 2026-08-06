@@ -12,15 +12,17 @@ import {
   confirmClinicAttendance,
   createClinic,
   decideClinicChangeRequest,
+  decideLessonChangeRequest,
   deleteClinic,
   listClinicChangeRequests,
   listClinicReservations,
   listClinics,
+  listLessonChangeRequests,
   listStudents,
   unassignClinicStudent,
   updateClinic,
 } from "../api";
-import type { AttendanceException, Clinic } from "../api";
+import type { AttendanceException, Clinic, LessonSlot } from "../api";
 import { DAY_LABELS, today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
 
@@ -32,6 +34,13 @@ function addDays(date: string, days: number): string {
 
 function dayLabel(date: string): string {
   return DAY_LABELS[new Date(date).getDay() || 7];
+}
+
+/** "08-13 (목) A고 2학년 목요일반 19:00". 그 반에 그 요일 슬롯이 없으면 시각을 뺀다. */
+function lessonLabel(lesson: LessonSlot): string {
+  const time = lesson.startTime ? ` ${lesson.startTime.slice(0, 5)}` : "";
+  return `${lesson.lessonDate.slice(5)} (${dayLabel(lesson.lessonDate)}) ` +
+    `${lesson.classRoomName}${time}`;
 }
 
 /**
@@ -64,6 +73,7 @@ export default function ClinicPage() {
         </button>
       </div>
 
+      <LessonChangeRequestList />
       <ChangeRequestList />
 
       <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-3 shadow-sm">
@@ -125,7 +135,81 @@ export default function ClinicPage() {
   );
 }
 
-/** 대기 중인 변경 요청. to가 null이면 취소 요청이다. */
+/**
+ * 대기 중인 수업일 변경 요청. 클리닉 변경과 나란히 두지만 <b>동작이 전혀 다르다.</b>
+ *
+ * <p>승인해도 반 배정도 수업도 출석도 바뀌지 않는다. 학생·학부모에게 안내 공지가 한 건
+ * 발행되는 것이 전부다. 그래서 <b>원래 반 출석부에는 그 날이 그대로 남는다</b> —
+ * 출석 확정할 때 선생님이 손으로 처리해야 하고, 그 사실을 화면에도 적어 둔다.
+ */
+function LessonChangeRequestList() {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const requests = useQuery({
+    queryKey: ["teacher", "lesson-change-requests"],
+    queryFn: () => listLessonChangeRequests("PENDING"),
+  });
+
+  const mutation = useMutation({
+    mutationFn: ({ requestId, approve }: { requestId: number; approve: boolean }) =>
+      decideLessonChangeRequest(requestId, approve),
+    onSuccess: async () => {
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "lesson-change-requests"] });
+      // 승인은 공지를 만든다. 공지 목록을 열어 두었다면 새 글이 보여야 한다
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "notices"] });
+    },
+    onError: (e) => setError(errorMessage(e, "처리하지 못했습니다.")),
+  });
+
+  if (!requests.data || requests.data.length === 0) return null;
+
+  return (
+    <section className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+      <h3 className="text-sm font-semibold text-sky-900">
+        수업일 변경 요청 {requests.data.length}건 대기
+      </h3>
+      <p className="mt-0.5 text-xs text-sky-800">
+        승인하면 학생·학부모에게 안내 공지가 올라갑니다. 반 배정은 바뀌지 않으니 원래 반
+        출석은 확정할 때 직접 처리해 주세요.
+      </p>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      <ul className="mt-2 space-y-2">
+        {requests.data.map((request) => (
+          <li key={request.requestId} className="rounded-lg bg-white p-3">
+            <p className="text-sm font-medium text-slate-900">{request.studentName}</p>
+            <p className="mt-0.5 text-sm text-slate-600">{lessonLabel(request.from)}</p>
+            <p className="text-sm font-medium text-slate-900">→ {lessonLabel(request.to)}</p>
+            <p className="mt-0.5 text-xs text-slate-500">사유: {request.reason}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate({ requestId: request.requestId, approve: true })}
+                className="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white
+                           disabled:opacity-50"
+              >
+                승인
+              </button>
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate({ requestId: request.requestId, approve: false })}
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm
+                           text-slate-700 disabled:opacity-50"
+              >
+                거절
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** 대기 중인 클리닉 변경 요청. to가 null이면 취소 요청이다. */
 function ChangeRequestList() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);

@@ -34,6 +34,7 @@ export default function ParentHomePage() {
     student,
     nextExam,
     nextLessonDate,
+    nextLessonTime,
     notices,
     pendingHomeworkCount,
     nextClinic,
@@ -132,9 +133,19 @@ export default function ParentHomePage() {
       </section>
 
       <div className="grid grid-cols-2 gap-2.5">
+        {/*
+          시각은 반의 요일 슬롯에서 오는데 그 슬롯이 없으면 null이다.
+          그때는 날짜만 그린다 — 없는 시각을 지어내면 학부모가 그 시각에 맞춰 보낸다.
+        */}
         <InfoCard
           label="다음 수업"
-          value={nextLessonDate ? nextLessonDate.slice(5).replace("-", "/") : null}
+          value={
+            nextLessonDate
+              ? `${nextLessonDate.slice(5).replace("-", "/")}${
+                  nextLessonTime ? ` ${nextLessonTime}` : ""
+                }`
+              : null
+          }
         />
         <InfoCard
           label="다음 클리닉"
@@ -155,7 +166,12 @@ export default function ParentHomePage() {
         />
       </div>
 
-      {/* 메뉴 4개. 수업영상·자료실·후기는 학부모 화면에 없다 */}
+      {/*
+        메뉴 4개. 수업영상·자료실·후기는 학부모 화면에 없다.
+        수업 레포트는 영상 없이 내용·중점·다음 예고·숙제까지만 본다.
+
+        숙제 타일은 위 "안 낸 숙제" 카드와 상단 탭이 이미 가리키고 있어서 여기서 뺐다.
+      */}
       <nav className="grid grid-cols-2 gap-2.5">
         <MenuTile
           to="/parent/schedule"
@@ -165,10 +181,10 @@ export default function ParentHomePage() {
         />
         <MenuTile to="/parent/scores" icon="chart" label="테스트 결과" sub="시험별 점수 확인" />
         <MenuTile
-          to="/parent/homeworks"
+          to="/parent/lessons"
           icon="homework"
-          label="숙제 제출 현황"
-          sub="제출·미제출 내역"
+          label="수업 레포트"
+          sub="수업 내용 · 중점 사항"
         />
         <MenuTile to="/parent/me" icon="user" label="내 정보" sub="연락처·비밀번호 변경" />
       </nav>

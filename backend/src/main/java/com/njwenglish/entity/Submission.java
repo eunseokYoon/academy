@@ -61,12 +61,12 @@ public class Submission extends BaseTimeEntity {
     @Column(name = "video_bytes")
     private Integer videoBytes;
 
-    /**
-     * 학생이 피드백을 마지막으로 열어 본 시각. S-1 홈의 미확인 수를 세는 유일한 근거다.
-     * 피드백이 없으면 계속 null이다.
+    /*
+     * feedback_read_at 컬럼은 DB에 남아 있지만 매핑하지 않는다. 이 값을 읽던 곳은
+     * S-1 홈의 미확인 피드백 수 하나뿐이었고 그 표시가 없어졌다. 컬럼을 지우려면
+     * 되돌릴 수 없는 마이그레이션이 필요해서 스키마는 그대로 뒀다.
+     * 읽음 표시를 되살릴 거라면 이 필드부터 복구하면 된다.
      */
-    @Column(name = "feedback_read_at")
-    private OffsetDateTime feedbackReadAt;
 
     /** 출제 시 대상 전원에게 미리 깔린다. 사진은 이 행에 붙어야 하므로 제출 전에도 존재한다. */
     public static Submission notSubmitted(Homework homework, Student student) {
@@ -122,11 +122,4 @@ public class Submission extends BaseTimeEntity {
         return status == SubmissionStatus.SUBMITTED;
     }
 
-    /**
-     * 학생이 S-4 상세를 열었다. 피드백이 있을 때만 호출한다 —
-     * 피드백이 없는데 찍어 두면 나중에 달린 피드백이 처음부터 확인 처리된다.
-     */
-    public void markFeedbackRead(OffsetDateTime now) {
-        this.feedbackReadAt = now;
-    }
 }

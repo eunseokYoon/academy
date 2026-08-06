@@ -8,7 +8,9 @@ import com.njwenglish.dto.home.NextLessonResponse;
 import com.njwenglish.dto.home.ParentHomeResponse;
 import com.njwenglish.dto.home.StudentHomeResponse;
 import com.njwenglish.entity.ClassRoom;
+import com.njwenglish.entity.ClassRoomSchedule;
 import com.njwenglish.entity.Enrollment;
+import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.AttendanceRepository;
@@ -22,6 +24,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,7 +77,6 @@ public class HomeService {
                 .orElse(null),
             examScheduleService.findNextExam(me.getId()).orElse(null),
             homeworks,
-            submissionRepository.countUnreadFeedback(me.getId()),
             noticeService.countFor(me.getId()));
     }
 
@@ -95,12 +97,17 @@ public class HomeService {
             attendanceRepository.findConfirmedStatuses(
                 child.getId(), thisMonth.atDay(1), thisMonth.atEndOfMonth()));
 
+        // 날짜와 시각만 꺼낸다. 제목·내용은 학부모에게 노출하지 않는다
+        Optional<Lesson> nextLesson = lessonRepository.findNextForStudent(child.getId(), today);
+
         return new ParentHomeResponse(
             childRef(child),
             examScheduleService.findNextExam(child.getId()).orElse(null),
-            // 날짜만 꺼낸다. 제목·내용은 학부모에게 노출하지 않는다
-            lessonRepository.findNextForStudent(child.getId(), today)
-                .map(lesson -> lesson.getLessonDate())
+            nextLesson.map(Lesson::getLessonDate).orElse(null),
+            // 시각은 lessons가 아니라 그 날짜 요일의 반 슬롯에 있다. 슬롯이 없으면 null이다
+            nextLesson
+                .flatMap(lesson -> lesson.getClassRoom().scheduleOn(lesson.getLessonDate()))
+                .map(ClassRoomSchedule::getStartTime)
                 .orElse(null),
             new ParentHomeResponse.NoticesBlock(
                 noticeService.countFor(child.getId()),

@@ -121,7 +121,6 @@ export default function StudentLessonDetailPage() {
               ▶ 수업영상 시청하기
             </button>
           )}
-          <p className="text-xs text-slate-500">영상 시청 기록이 선생님께 전달됩니다</p>
         </section>
       )}
 

@@ -219,6 +219,9 @@ export default function StudentOnlineTestTakePage() {
 
 /** 제출 후에만 정답과 해설지가 내려온다. */
 function ResultView({ result }: { result: OnlineTestResult }) {
+  // 두 칸으로 나눌 때 왼쪽이 앞 문항 전부를 갖는다. 25문항이면 왼쪽 1~13, 오른쪽 14~25
+  const rowCount = Math.ceil(result.results.length / 2);
+
   return (
     <div className="space-y-4">
       <Link to="/student/online-tests" className="text-sm text-slate-500 underline">
@@ -247,7 +250,19 @@ function ResultView({ result }: { result: OnlineTestResult }) {
 
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <h3 className="mb-2 text-sm font-semibold text-slate-900">문항별 정오</h3>
-        <ul className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+        {/*
+          문항 번호가 세로로 이어진다 — 1,2,3…이 왼쪽 칸을 채우고 나머지가 오른쪽으로 넘어간다.
+          가로로 흐르면 눈이 1→2로 옆으로 갔다가 3에서 다시 왼쪽으로 돌아와야 해서,
+          "7번이 어디 있지" 하고 찾을 때 번호를 한 줄씩 훑을 수가 없다.
+
+          grid-flow-col만으로는 부족하고 행 수를 명시해야 한다. 안 그러면 브라우저가
+          문항마다 새 열을 만들어 한 줄로 늘어선다. 인라인 style인 이유는 문항 수에 따라
+          값이 달라져서다 — 좁은 화면에서는 grid-cols-1이라 이 값이 아무 영향을 주지 않는다.
+        */}
+        <ul
+          className="grid grid-cols-1 gap-1 text-sm sm:grid-flow-col sm:grid-cols-2"
+          style={{ gridTemplateRows: `repeat(${rowCount}, auto)` }}
+        >
           {result.results.map((item) => (
             <li
               key={item.questionNo}

@@ -82,8 +82,16 @@ export default function NoticePage() {
                     ) : (
                       <Badge tone="ok">발행</Badge>
                     )}
+                    {/*
+                      STUDENT는 수업일 변경 승인이 만든 개인 공지다. classRoomName이
+                      null이라 이 분기가 없으면 배지가 빈 칸으로 뜬다.
+                    */}
                     <Badge tone="neutral">
-                      {notice.scope === "ALL" ? "전체" : notice.classRoomName}
+                      {notice.scope === "ALL"
+                        ? "전체"
+                        : notice.scope === "STUDENT"
+                          ? `${notice.studentName} 개인`
+                          : notice.classRoomName}
                     </Badge>
                     <span className="truncate text-sm font-medium text-slate-900">
                       {notice.title}

@@ -5,15 +5,16 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.common.util.YoutubeUrls;
+import com.njwenglish.dto.lesson.LessonReportListItemResponse;
+import com.njwenglish.dto.lesson.LessonReportResponse;
 import com.njwenglish.dto.lesson.LessonViewRequest;
 import com.njwenglish.dto.lesson.LessonViewsResponse;
-import com.njwenglish.dto.lesson.StudentLessonDetailResponse;
-import com.njwenglish.dto.lesson.StudentLessonListItemResponse;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.LessonView;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
+import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.HomeworkRepository;
@@ -34,8 +35,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * S-5 수업 영상·레포트. <b>학생 전용이다.</b>
- * 학부모용 수업 조회 경로(/api/parent/children/{id}/lessons)를 만들지 마라 — 범위 밖이다.
+ * S-5 수업 레포트와 영상, P-5 학부모 조회.
+ *
+ * <p><b>영상은 학생만 본다.</b> 학부모는 같은 수업의 레포트(내용·중점·다음 예고·숙제)를
+ * 보되 영상은 못 본다. 응답 DTO는 하나를 같이 쓰고 학부모 쪽 영상 값이 null이다.
+ *
+ * <p>그래서 <b>DTO를 new로 직접 만들지 마라.</b> LessonReportResponse.forStudent /
+ * forParent 두 팩토리만 쓴다. forParent는 영상을 인자로 받지도 않아서 채울 방법이 없다 —
+ * 여기서 null을 손으로 넘기기 시작하면 언젠가 한 곳에서 값이 들어간다.
  *
  * <p>조회 조건 네 가지가 항상 함께 간다: 본인 · 소속 반 · 공개됨 · 재원 기간 안.
  * 마지막 조건이 빠지면 5월에 입반한 학생이 3월 수업 영상을 본다.
@@ -57,8 +64,8 @@ public class LessonViewService {
     private final StudentAccessGuard studentAccessGuard;
 
     @Transactional(readOnly = true)
-    public PageResponse<StudentLessonListItemResponse> myLessons(Short year, Short month,
-                                                                 Short week, Pageable pageable) {
+    public PageResponse<LessonReportListItemResponse> myLessons(Short year, Short month,
+                                                                Short week, Pageable pageable) {
         Student me = studentAccessGuard.requireSelf();
         Page<Lesson> lessons = lessonRepository.findForStudent(me.getId(), year, month, week,
             pageable);
@@ -71,7 +78,7 @@ public class LessonViewService {
 
         return PageResponse.from(lessons.map(lesson -> {
             Homework homework = homeworks.get(lesson.getId());
-            return new StudentLessonListItemResponse(
+            return LessonReportListItemResponse.forStudent(
                 lesson.getId(),
                 lesson.getLessonDate(),
                 lesson.getTitle(),
@@ -84,14 +91,14 @@ public class LessonViewService {
     }
 
     @Transactional(readOnly = true)
-    public StudentLessonDetailResponse myLesson(Long lessonId) {
+    public LessonReportResponse myLesson(Long lessonId) {
         Student me = studentAccessGuard.requireSelf();
         Lesson lesson = findAccessible(lessonId, me.getId());
 
         String videoId = YoutubeUrls.videoId(lesson.getVideoUrl());
         Homework homework = firstHomeworkByLesson(List.of(lesson.getId())).get(lesson.getId());
 
-        return new StudentLessonDetailResponse(
+        return LessonReportResponse.forStudent(
             lesson.getId(),
             lesson.getLessonDate(),
             lesson.getTitle(),
@@ -103,6 +110,64 @@ public class LessonViewService {
             lesson.getNextPreview(),
             homework == null ? null : toHomework(homework, me.getId()),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), me.getId())
+                .map(a -> a.getStatus())
+                .orElse(null));
+    }
+
+    /**
+     * P-5 목록. <b>첫 줄이 requireAccessible이다</b> — 학부모 A가 학부모 B의 자녀
+     * studentId를 넣으면 여기서 403이다.
+     *
+     * <p>조회 조건은 학생 목록과 같은 findForStudent를 그대로 쓴다. 재원 기간 밖 수업과
+     * 미공개 수업을 거르는 조건이 거기 다 들어 있어서, 따로 짜면 그중 하나를 빠뜨린다.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<LessonReportListItemResponse> childLessons(Long studentId, Short year,
+                                                                   Short month, Short week,
+                                                                   Pageable pageable) {
+        Student child = studentAccessGuard.requireAccessible(studentId);
+        Page<Lesson> lessons = lessonRepository.findForStudent(child.getId(), year, month, week,
+            pageable);
+
+        Map<Long, Homework> homeworks = firstHomeworkByLesson(
+            lessons.getContent().stream().map(Lesson::getId).toList());
+        OffsetDateTime newSince = OffsetDateTime.now().minusDays(NEW_DAYS);
+
+        return PageResponse.from(lessons.map(lesson -> {
+            Homework homework = homeworks.get(lesson.getId());
+            // hasVideo·viewed는 팩토리가 null로 채운다. 여기서 넘길 방법 자체가 없다
+            return LessonReportListItemResponse.forParent(
+                lesson.getId(),
+                lesson.getLessonDate(),
+                lesson.getTitle(),
+                lesson.getClassRoom().getName(),
+                lesson.getPublishedAt().isAfter(newSince),
+                homework == null ? null : homework.getTitle());
+        }));
+    }
+
+    /**
+     * P-5 상세. <b>첫 줄이 requireAccessible이다.</b>
+     *
+     * <p>영상은 내려주지 않는다. videoUrl을 파싱하지도 않는다 —
+     * forParent 팩토리가 videoId·embedUrl을 인자로 받지 않아서 넘길 방법이 없다.
+     */
+    @Transactional(readOnly = true)
+    public LessonReportResponse childLesson(Long studentId, Long lessonId) {
+        Student child = studentAccessGuard.requireAccessible(studentId);
+        Lesson lesson = findAccessible(lessonId, child.getId());
+        Homework homework = firstHomeworkByLesson(List.of(lesson.getId())).get(lesson.getId());
+
+        return LessonReportResponse.forParent(
+            lesson.getId(),
+            lesson.getLessonDate(),
+            lesson.getTitle(),
+            lesson.getClassRoom().getName(),
+            lesson.getContent(),
+            lesson.getKeyPoints(),
+            lesson.getNextPreview(),
+            homework == null ? null : toParentHomework(homework, child.getId()),
+            attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), child.getId())
                 .map(a -> a.getStatus())
                 .orElse(null));
     }
@@ -174,14 +239,29 @@ public class LessonViewService {
      * 숙제 출제 시 대상 전원의 submissions를 미리 만들지만, 그 뒤에 입반한 학생은 행이 없다.
      * 없으면 미제출로 본다.
      */
-    private StudentLessonDetailResponse.Homework toHomework(Homework homework, Long studentId) {
-        return new StudentLessonDetailResponse.Homework(
+    private LessonReportResponse.Homework toHomework(Homework homework, Long studentId) {
+        return new LessonReportResponse.Homework(
             homework.getId(),
             homework.getTitle(),
             homework.getDescription(),
             homework.getDueAt(),
-            submissionRepository.findByHomeworkAndStudent(homework.getId(), studentId)
-                .map(Submission::getStatus)
-                .orElse(null));
+            submissionStatusOf(homework.getId(), studentId));
+    }
+
+    /** 학부모용. 학생용과 필드가 같지만 DTO가 달라 따로 만든다 — 그 분리가 영상 차단의 근거다. */
+    private LessonReportResponse.Homework toParentHomework(Homework homework,
+                                                                 Long studentId) {
+        return new LessonReportResponse.Homework(
+            homework.getId(),
+            homework.getTitle(),
+            homework.getDescription(),
+            homework.getDueAt(),
+            submissionStatusOf(homework.getId(), studentId));
+    }
+
+    private SubmissionStatus submissionStatusOf(Long homeworkId, Long studentId) {
+        return submissionRepository.findByHomeworkAndStudent(homeworkId, studentId)
+            .map(Submission::getStatus)
+            .orElse(null);
     }
 }

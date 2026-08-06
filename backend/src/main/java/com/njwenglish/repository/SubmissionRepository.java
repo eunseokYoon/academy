@@ -177,16 +177,4 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         """)
     List<Submission> findOpenByStudent(@Param("studentId") Long studentId);
 
-    /**
-     * S-1 홈의 미확인 피드백 수. 학생이 S-4 상세를 열면 feedback_read_at이 찍혀 줄어든다.
-     *
-     * <p>비교가 f.updatedAt인 이유: 선생님이 피드백을 고치면 다시 미확인이어야 한다.
-     */
-    @Query("""
-        SELECT COUNT(f) FROM Feedback f
-        JOIN f.submission s
-        WHERE s.student.id = :studentId
-          AND (s.feedbackReadAt IS NULL OR s.feedbackReadAt < f.updatedAt)
-        """)
-    long countUnreadFeedback(@Param("studentId") Long studentId);
 }

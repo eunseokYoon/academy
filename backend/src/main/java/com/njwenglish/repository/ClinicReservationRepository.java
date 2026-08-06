@@ -1,5 +1,6 @@
 package com.njwenglish.repository;
 
+import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.enums.ReservationStatus;
 import java.time.LocalDate;
@@ -46,6 +47,27 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
         GROUP BY r.clinic.id
         """)
     List<Long> findAttendanceConfirmedClinicIds(@Param("clinicIds") Collection<Long> clinicIds);
+
+    /**
+     * T-5 미확정 클리닉. 수업과 같은 자리에서 확정하려고 뽑는다.
+     *
+     * <p>판정 기준이 수업과 다르다. lessons에는 attendance_status가 있지만 clinics에는
+     * 없어서 <b>예약 쪽 attend_status가 비었는지로 본다.</b>
+     *
+     * <p>예약이 하나도 없는 시간대는 나오지 않는다 — 조인이 예약에서 시작하기 때문이고,
+     * 그게 맞다. 아무도 신청 안 한 시간대는 확정할 것이 없는데 목록에 뜨면 매주 쌓인다.
+     *
+     * <p>미래 클리닉도 제외한다(clinicDate <= today). 아직 오지도 않은 날이
+     * "확정해야 할 것"으로 뜨면 목록이 신호 역할을 못 한다.
+     */
+    @Query("""
+        SELECT DISTINCT c FROM ClinicReservation r JOIN r.clinic c
+        WHERE c.clinicDate <= :today
+          AND r.status = 'RESERVED'
+          AND r.attendStatus IS NULL
+        ORDER BY c.clinicDate DESC, c.startTime DESC
+        """)
+    List<Clinic> findPendingUntil(@Param("today") LocalDate today);
 
     /** S-9·P-2에서 본인(자녀) 예약을 한 번에 가져온다. */
     @Query("""

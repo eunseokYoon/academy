@@ -7,11 +7,15 @@ import { TextAreaField } from "../../shared/components/TextAreaField";
 import { DAY_LABELS } from "../teacher/format";
 import {
   cancelClinicReservation,
+  listLessonChangeCandidates,
+  listMyChangeableLessons,
   listMyClinics,
+  listMyLessonChanges,
   requestClinicChange,
+  requestLessonChange,
   reserveClinic,
 } from "./api";
-import type { StudentClinic } from "./api";
+import type { LessonSlot, StudentClinic } from "./api";
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -26,6 +30,16 @@ function addDays(date: string, days: number): string {
 function slotLabel(clinic: { clinicDate: string; startTime: string; endTime: string }): string {
   const day = DAY_LABELS[new Date(clinic.clinicDate).getDay() || 7];
   return `${clinic.clinicDate.slice(5)} (${day}) ${clinic.startTime}~${clinic.endTime}`;
+}
+
+/**
+ * "08-13 (목) A고 2학년 목요일반 19:00".
+ * 시각은 없을 수 있다 — 그 반에 그 요일 슬롯이 없는 경우다. 없으면 빼고 쓴다.
+ */
+function lessonLabel(lesson: LessonSlot): string {
+  const day = DAY_LABELS[new Date(lesson.lessonDate).getDay() || 7];
+  const time = lesson.startTime ? ` ${lesson.startTime.slice(0, 5)}` : "";
+  return `${lesson.lessonDate.slice(5)} (${day}) ${lesson.classRoomName}${time}`;
 }
 
 /**
@@ -81,8 +95,12 @@ export default function StudentClinicPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">클리닉 신청</h2>
+      <h2 className="text-lg font-semibold text-slate-900">스케줄 변경</h2>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      <LessonChangeSection />
+
+      <h3 className="pt-2 text-base font-semibold text-slate-900">클리닉 신청</h3>
 
       <section>
         <h3 className="text-sm font-semibold text-slate-700">내 클리닉</h3>
@@ -182,6 +200,210 @@ export default function StudentClinicPage() {
         />
       )}
     </div>
+  );
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: "승인 대기",
+  APPROVED: "승인됨",
+  REJECTED: "거절됨",
+};
+
+/**
+ * 수업일 변경. 클리닉과 별개이고 <b>예약이 아니다.</b>
+ *
+ * <p>승인되면 학생·학부모에게 공지가 한 건 뜨는 것이 전부다. 반 배정도 수업도 바뀌지
+ * 않고 원래 반 출석부에는 그 날이 그대로 남는다. 그래서 "변경됨"이 아니라 "안내가 갔다"에
+ * 가깝고, 화면에서도 그렇게 읽히도록 안내 문구를 붙였다.
+ */
+function LessonChangeSection() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const requests = useQuery({
+    queryKey: ["student", "lesson-changes"],
+    queryFn: listMyLessonChanges,
+  });
+
+  async function refresh() {
+    await queryClient.invalidateQueries({ queryKey: ["student", "lesson-changes"] });
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-700">수업일 변경</h3>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+        >
+          수업 변경
+        </button>
+      </div>
+
+      {requests.data && requests.data.length > 0 ? (
+        <ul className="mt-2 space-y-2">
+          {requests.data.map((request) => (
+            <li key={request.requestId} className="rounded-xl bg-white p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 text-sm">
+                  <p className="text-slate-500">{lessonLabel(request.from)}</p>
+                  <p className="font-medium text-slate-900">→ {lessonLabel(request.to)}</p>
+                </div>
+                <Badge
+                  tone={
+                    request.status === "APPROVED"
+                      ? "ok"
+                      : request.status === "REJECTED"
+                        ? "danger"
+                        : "warn"
+                  }
+                >
+                  {STATUS_LABELS[request.status]}
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">사유 · {request.reason}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 rounded-xl bg-white p-4 text-sm text-slate-500 shadow-sm">
+          변경 요청한 수업이 없습니다.
+        </p>
+      )}
+
+      {open && <LessonChangeModal onClose={() => setOpen(false)} onDone={refresh} />}
+    </section>
+  );
+}
+
+/**
+ * 못 가는 내 수업을 먼저 고르면 <b>그 수업이 있는 주(월~일)</b>의 다른 반 수업이 후보로 뜬다.
+ * 후보는 학생이 고를 때마다 서버에 다시 물어본다 — 주가 바뀌면 후보도 통째로 바뀌기 때문이다.
+ */
+function LessonChangeModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const [fromLessonId, setFromLessonId] = useState<string>("");
+  const [toLessonId, setToLessonId] = useState<string>("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const myLessons = useQuery({
+    queryKey: ["student", "lesson-changes", "my-lessons"],
+    queryFn: listMyChangeableLessons,
+  });
+
+  const candidates = useQuery({
+    queryKey: ["student", "lesson-changes", "candidates", fromLessonId],
+    queryFn: () => listLessonChangeCandidates(Number(fromLessonId)),
+    enabled: fromLessonId !== "",
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      requestLessonChange({
+        fromLessonId: Number(fromLessonId),
+        toLessonId: Number(toLessonId),
+        reason: reason.trim(),
+      }),
+    onSuccess: async () => {
+      await onDone();
+      onClose();
+    },
+    onError: (e) =>
+      setError(
+        errorCode(e) === "DUPLICATE_RESOURCE"
+          ? "이미 그 수업에 변경 요청을 보냈습니다."
+          : errorMessage(e, "요청을 보내지 못했습니다."),
+      ),
+  });
+
+  return (
+    <Modal title="수업일 변경 요청" onClose={onClose}>
+      <label className="block">
+        <span className="block text-sm font-medium text-slate-700">못 가는 수업</span>
+        <select
+          value={fromLessonId}
+          onChange={(e) => {
+            setFromLessonId(e.target.value);
+            // 주가 바뀌면 후보 목록이 통째로 달라진다. 이전 선택을 남기면
+            // 화면에 없는 수업이 그대로 제출된다
+            setToLessonId("");
+          }}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base"
+        >
+          <option value="">선택하세요</option>
+          {(myLessons.data ?? []).map((lesson) => (
+            <option key={lesson.lessonId} value={lesson.lessonId}>
+              {lessonLabel(lesson)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {myLessons.data && myLessons.data.length === 0 && (
+        <p className="mt-1 text-xs text-slate-500">앞으로 한 달 안에 예정된 수업이 없습니다.</p>
+      )}
+
+      <label className="mt-3 block">
+        <span className="block text-sm font-medium text-slate-700">대신 갈 수업</span>
+        <select
+          value={toLessonId}
+          onChange={(e) => setToLessonId(e.target.value)}
+          disabled={fromLessonId === ""}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base
+                     disabled:bg-slate-100"
+        >
+          <option value="">
+            {fromLessonId === "" ? "못 가는 수업을 먼저 고르세요" : "선택하세요"}
+          </option>
+          {(candidates.data ?? []).map((lesson) => (
+            <option key={lesson.lessonId} value={lesson.lessonId}>
+              {lessonLabel(lesson)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {fromLessonId !== "" && candidates.data && candidates.data.length === 0 && (
+        <p className="mt-1 text-xs text-slate-500">그 주에 갈 수 있는 다른 반 수업이 없습니다.</p>
+      )}
+
+      {/*
+        사유가 곧 공지 본문이다. 선택지를 두지 않은 것은 옵션 목록이 미확정이라
+        값을 지어내지 않기 위해서다. 확정되면 select로 바꾼다.
+      */}
+      <div className="mt-3">
+        <TextAreaField
+          label="변경 사유 (필수)"
+          rows={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </div>
+
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      <button
+        type="button"
+        disabled={
+          fromLessonId === "" || toLessonId === "" || reason.trim() === "" || mutation.isPending
+        }
+        onClick={() => mutation.mutate()}
+        className="mt-4 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white
+                   disabled:opacity-50"
+      >
+        요청 보내기
+      </button>
+      <p className="mt-2 text-xs text-slate-500">
+        선생님이 승인하면 학생·학부모에게 변경 안내 공지가 올라갑니다. 반 배정이 바뀌는 것은
+        아니라서, 원래 반 출석은 선생님이 따로 처리합니다.
+      </p>
+    </Modal>
   );
 }
 

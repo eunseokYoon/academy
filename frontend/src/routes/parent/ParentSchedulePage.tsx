@@ -34,9 +34,13 @@ export default function ParentSchedulePage() {
     enabled: selectedStudentId !== null,
   });
 
-  // 캘린더 칸에 클리닉 점을 얹는다. 수업일과 다른 표시여야 구분된다
-  const clinicDates = useMemo(
-    () => new Set((clinics.data ?? []).map((clinic) => clinic.clinicDate)),
+  // 캘린더는 수업과 같은 칩으로 그린다. attendStatus가 null이면 아직 확정 전이라 PENDING이다
+  const clinicEntries = useMemo(
+    () =>
+      (clinics.data ?? []).map((clinic) => ({
+        date: clinic.clinicDate,
+        status: clinic.attendStatus ?? ("PENDING" as const),
+      })),
     [clinics.data],
   );
 
@@ -72,21 +76,9 @@ export default function ParentSchedulePage() {
           data={attendances.data}
           onPrev={() => shift(-1)}
           onNext={() => shift(1)}
-          dayBadge={(date) =>
-            clinicDates.has(date) ? (
-              <span
-                className="mt-0.5 inline-block h-1.5 w-1.5 rounded-full bg-violet-500"
-                aria-label="클리닉"
-              />
-            ) : null
-          }
+          clinics={clinicEntries}
         />
       )}
-
-      <p className="flex items-center gap-1 text-xs text-slate-500">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-500" /> 보라색 점은
-        클리닉이 있는 날입니다.
-      </p>
 
       <section>
         <h3 className="text-sm font-semibold text-slate-700">클리닉</h3>
