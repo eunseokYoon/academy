@@ -173,8 +173,9 @@ public class HomeworkService {
             throw new BusinessException(ErrorCode.SUBMISSION_EXISTS);
         }
 
-        List<Long> submissionIds = submissionRepository.findByHomeworkForTeacher(homeworkId)
-            .stream().map(Submission::getId).toList();
+        // findByHomeworkForTeacher는 GRID를 재제출 대상으로 좁혀 놓았다(T-7).
+        // 여기서 그걸 쓰면 대상 밖 학생의 사진이 S3에 남는다 — 전량 id 조회를 따로 쓴다.
+        List<Long> submissionIds = submissionRepository.findAllIdsByHomeworkId(homeworkId);
         List<SubmissionPhoto> photos = submissionIds.isEmpty()
             ? List.of() : submissionPhotoRepository.findBySubmissionIds(submissionIds);
 

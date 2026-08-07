@@ -312,7 +312,7 @@ public class SubmissionService {
     // ---------- 학부모 (P-3) ----------
 
     /**
-     * <b>제출 여부만</b> 내려준다. 학생용 DTO를 재사용하면 사진 URL과 피드백이 따라 나간다.
+     * <b>제목과 채점 결과까지</b> 내려준다. 학생용 DTO를 재사용하면 사진 URL과 피드백이 따라 나간다.
      *
      * <p>첫 줄이 권한 검증이다. 학부모가 URL의 숫자만 바꿔 남의 아이 숙제를 보는 걸 여기서 막는다.
      */
@@ -327,6 +327,10 @@ public class SubmissionService {
             Homework homework = submission.getHomework();
             return new ParentHomeworkResponse(
                 homework.getId(), homework.getTitle(), homework.getClassRoom().getName(),
+                homework.getKind(),
+                homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
+                submission.getResult(), submission.getCompletionRate(),
+                submission.isResolvedByResubmission(),
                 homework.getDueAt(), submission.getStatus(), submission.isLate(),
                 submission.getStatus() == SubmissionStatus.CHECKED);
         }));

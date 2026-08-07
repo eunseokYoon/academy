@@ -162,7 +162,7 @@ class HomeworkServiceTest {
         Homework homework = homework(720L);
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(homework));
         given(submissionRepository.countGradedOrSubmitted(720L)).willReturn(0L);
-        given(submissionRepository.findByHomeworkForTeacher(720L)).willReturn(List.of());
+        given(submissionRepository.findAllIdsByHomeworkId(720L)).willReturn(List.of());
 
         homeworkService.delete(720L);
 

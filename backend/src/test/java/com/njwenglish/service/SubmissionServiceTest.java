@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
@@ -37,6 +39,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +48,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -376,8 +381,39 @@ class SubmissionServiceTest {
         // 학생 DTO를 재사용하면 그대로 새어 나간다. 필드 목록 자체를 고정한다
         assertThat(Arrays.stream(ParentHomeworkResponse.class.getRecordComponents())
             .map(RecordComponent::getName))
-            .containsExactly("homeworkId", "title", "classRoomName", "dueAt",
+            .containsExactly("homeworkId", "title", "classRoomName", "kind", "lessonDate",
+                "result", "completionRate", "resolvedByResubmission", "dueAt",
                 "status", "isLate", "checked");
+    }
+
+    @Test
+    @DisplayName("학부모 응답에 채점 결과가 담기고 사진·피드백은 없다")
+    void childHomeworksExposesGradeOnly() {
+        ClassRoom classRoom = ClassRoom.create(Fixtures.teacherEntity(1L),
+            "동성고1 수요일반", "HK7F2Q", null);
+        ReflectionTestUtils.setField(classRoom, "id", 3L);
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission cell = Fixtures.submission(1L, column, Fixtures.student(88L, "고연준"));
+        cell.grade(HomeworkResult.PARTIAL, (short) 50);
+
+        given(studentAccessGuard.requireAccessible(88L))
+            .willReturn(Fixtures.student(88L, "고연준"));
+        given(submissionRepository.findByStudent(eq(88L), any(), any()))
+            .willReturn(new PageImpl<>(List.of(cell)));
+
+        PageResponse<ParentHomeworkResponse> response =
+            submissionService.childHomeworks(88L, null, PageRequest.of(0, 20));
+
+        ParentHomeworkResponse item = response.items().get(0);
+        assertThat(item.title()).isEqualTo("독해 5-8");
+        assertThat(item.result()).isEqualTo(HomeworkResult.PARTIAL);
+        assertThat(item.completionRate()).isEqualTo((short) 50);
+        assertThat(item.lessonDate()).isEqualTo(LocalDate.of(2026, 7, 29));
+        // 학부모 DTO에는 사진·피드백·숙제 내용 필드가 아예 없다
+        assertThat(ParentHomeworkResponse.class.getRecordComponents())
+            .extracting(RecordComponent::getName)
+            .doesNotContain("photos", "photoCount", "thumbnailUrl", "feedback", "description");
     }
 
     // ---------- 헬퍼 ----------

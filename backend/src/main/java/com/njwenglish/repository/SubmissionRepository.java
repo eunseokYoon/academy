@@ -35,17 +35,32 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     /**
      * T-7 명단. 페이징 없이 반 전체(30명 내외)를 한 번에 준다.
      *
+     * <p><b>GRID 숙제는 재제출 대상만 나온다.</b> 반 전원을 담으면 ⭕를 받아 낼 필요가
+     * 없는 학생까지 "미제출"로 보인다.
+     *
      * <p>정렬은 처리할 것이 위로 온다: 확인대기 → 미제출 → 완료.
      * 이름은 students.name이다. user.name으로 쓰면 미가입 학생이 통째로 사라진다.
      */
     @Query("""
         SELECT s FROM Submission s
         JOIN FETCH s.student st
-        WHERE s.homework.id = :homeworkId
+        JOIN s.homework h
+        WHERE h.id = :homeworkId
+          AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+               OR s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                               com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
+               OR s.status <> com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
         ORDER BY CASE s.status WHEN 'SUBMITTED' THEN 0 WHEN 'NOT_SUBMITTED' THEN 1 ELSE 2 END,
                  st.name
         """)
     List<Submission> findByHomeworkForTeacher(@Param("homeworkId") Long homeworkId);
+
+    /**
+     * 숙제 삭제 시 사진 정리용 id 전체 조회. {@link #findByHomeworkForTeacher}는 GRID를
+     * 재제출 대상으로 좁혀 놓았다 — 삭제에 그걸 쓰면 대상 밖 학생의 사진이 S3에 남는다.
+     */
+    @Query("SELECT s.id FROM Submission s WHERE s.homework.id = :homeworkId")
+    List<Long> findAllIdsByHomeworkId(@Param("homeworkId") Long homeworkId);
 
     /**
      * S-2 · P-3 목록. <b>해야 할 일이 남은 것</b>이 위로 온다.
