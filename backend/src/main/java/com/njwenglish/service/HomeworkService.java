@@ -14,6 +14,7 @@ import com.njwenglish.dto.homework.HomeworkGridSaveRequest;
 import com.njwenglish.dto.homework.HomeworkListItemResponse;
 import com.njwenglish.dto.homework.HomeworkUpdateRequest;
 import com.njwenglish.dto.homework.PendingHomeworkResponse;
+import com.njwenglish.dto.homework.ResubmitOpenResponse;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
@@ -32,6 +33,7 @@ import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.SubmissionRepository.CountRow;
 import com.njwenglish.repository.TeacherRepository;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -133,10 +135,18 @@ public class HomeworkService {
     /**
      * 내용·마감 수정. <b>마감은 늦추는 방향만</b> 허용한다.
      * 앞당기면 이미 제출한 학생의 is_late를 전부 다시 계산해야 한다.
+     *
+     * <p>GRID 열은 이 경로로 dueAt을 받지 않는다. GRID에서 dueAt은 "재제출 마감"이고
+     * 그 값은 openResubmit/closeResubmit에서만 관리한다 — 열려 있지 않은 열은 dueAt이
+     * null이라 canExtendTo(!newDueAt.isBefore(dueAt))가 NPE를 낸다. 조용히 무시하지 않고
+     * 400으로 막아 재제출 경로가 아닌 곳에서 마감이 새어 들어오지 못하게 한다.
      */
     @Transactional
     public HomeworkDetailResponse update(Long homeworkId, HomeworkUpdateRequest request) {
         Homework homework = findHomework(homeworkId);
+        if (homework.isGrid() && request.dueAt() != null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
         homework.edit(request.title(), request.description(),
             findLessonInClassRoom(request.lessonId(), homework.getClassRoom()));
 
@@ -388,6 +398,72 @@ public class HomeworkService {
 
     private static String cellKey(Long homeworkId, Long studentId) {
         return homeworkId + ":" + studentId;
+    }
+
+    /** 재제출 마감 기본 시각. 다음 수업일 밤 9시다. */
+    private static final LocalTime DEFAULT_RESUBMIT_TIME = LocalTime.of(21, 0);
+
+    /** 다음 수업이 없을 때의 여유. 방학이나 학기 말이면 수업일이 안 잡혀 있다. */
+    private static final int FALLBACK_RESUBMIT_DAYS = 7;
+
+    /**
+     * 재제출 열기. 이 순간부터 🔺·❌를 받은 학생만 온라인으로 낼 수 있다.
+     *
+     * <p>이미 열린 열에 다시 부르면 <b>마감 연장</b>이다. 앞당기면 이미 낸 학생의
+     * is_late를 전부 재계산해야 해서 막는다.
+     *
+     * <p>요청 후 선생님이 어떤 칸을 🔺❌로 새로 고치면 그 학생도 자동으로 대상이 된다.
+     * 다시 열 필요가 없다 — 판정이 result를 실시간으로 보기 때문이다.
+     */
+    @Transactional
+    public ResubmitOpenResponse openResubmit(Long homeworkId, OffsetDateTime dueAt) {
+        Homework homework = findHomework(homeworkId);
+        if (!homework.isGrid()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        List<Submission> targets = submissionRepository.findResubmitTargets(homeworkId);
+        if (targets.isEmpty()) {
+            throw new BusinessException(ErrorCode.NO_RESUBMIT_TARGET);
+        }
+
+        OffsetDateTime resolved = dueAt != null ? dueAt : defaultDueAt(homework);
+        if (homework.isResubmitOpen() && !homework.canExtendTo(resolved)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        homework.openResubmit(resolved);
+
+        return new ResubmitOpenResponse(targets.size(), resolved);
+    }
+
+    /**
+     * 잘못 연 열을 되돌린다. <b>이미 낸 학생이 있으면 409다</b> —
+     * 올린 사진이 조용히 사라지면 안 된다.
+     */
+    @Transactional
+    public void closeResubmit(Long homeworkId) {
+        Homework homework = findHomework(homeworkId);
+        if (!homework.isGrid()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (submissionRepository.countByHomeworkIdAndStatusNot(
+            homeworkId, SubmissionStatus.NOT_SUBMITTED) > 0) {
+            throw new BusinessException(ErrorCode.SUBMISSION_EXISTS);
+        }
+        homework.closeResubmit();
+    }
+
+    /**
+     * 마감 기본값은 <b>오늘 이후</b> 그 반의 다음 수업일이다.
+     * 열이 붙은 수업일 기준이 아니다 — 지난 수업 숙제를 뒤늦게 채점하는 경우가 있다.
+     */
+    private OffsetDateTime defaultDueAt(Homework homework) {
+        LocalDate today = LocalDate.now(KST);
+        LocalDate target = lessonRepository
+            .findNextLessonDates(homework.getClassRoom().getId(), today)
+            .stream().findFirst()
+            .orElse(today.plusDays(FALLBACK_RESUBMIT_DAYS));
+        return target.atTime(DEFAULT_RESUBMIT_TIME).atZone(KST).toOffsetDateTime();
     }
 
     // ---------- 내부 ----------

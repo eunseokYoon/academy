@@ -13,6 +13,8 @@ import com.njwenglish.dto.homework.HomeworkTemplateCreateRequest;
 import com.njwenglish.dto.homework.HomeworkTemplateResponse;
 import com.njwenglish.dto.homework.HomeworkUpdateRequest;
 import com.njwenglish.dto.homework.PendingHomeworkResponse;
+import com.njwenglish.dto.homework.ResubmitOpenRequest;
+import com.njwenglish.dto.homework.ResubmitOpenResponse;
 import com.njwenglish.service.HomeworkService;
 import com.njwenglish.service.HomeworkTemplateService;
 import com.njwenglish.service.SubmissionService;
@@ -129,5 +131,24 @@ public class TeacherHomeworkController {
     public ApiResponse<HomeworkGridResponse> saveGrid(
             @Valid @RequestBody HomeworkGridSaveRequest request) {
         return ApiResponse.ok(homeworkService.saveGrid(request));
+    }
+
+    /**
+     * 재제출 열기. 🔺·❌를 받은 학생에게만 제출 경로가 열린다.
+     * dueAt을 생략하면 그 반의 다음 수업일 21:00이다.
+     */
+    @PostMapping("/homeworks/{homeworkId}/resubmit-request")
+    public ApiResponse<ResubmitOpenResponse> openResubmit(
+            @PathVariable Long homeworkId,
+            @RequestBody(required = false) ResubmitOpenRequest request) {
+        return ApiResponse.ok(homeworkService.openResubmit(
+            homeworkId, request == null ? null : request.dueAt()));
+    }
+
+    /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */
+    @DeleteMapping("/homeworks/{homeworkId}/resubmit-request")
+    public ApiResponse<Void> closeResubmit(@PathVariable Long homeworkId) {
+        homeworkService.closeResubmit(homeworkId);
+        return ApiResponse.ok();
     }
 }

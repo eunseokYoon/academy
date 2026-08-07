@@ -223,4 +223,16 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
                                     @Param("to") LocalDate to,
                                     @Param("excludedClassRoomIds")
                                     Collection<Long> excludedClassRoomIds);
+
+    /**
+     * 재제출 마감 기본값용. 오늘 이후 그 반의 수업일을 가까운 것부터 준다.
+     * Pageable 없이 첫 값만 쓰므로 호출부가 findFirst로 꺼낸다.
+     */
+    @Query("""
+        SELECT l.lessonDate FROM Lesson l
+        WHERE l.classRoom.id = :classRoomId AND l.lessonDate > :after
+        ORDER BY l.lessonDate ASC
+        """)
+    List<LocalDate> findNextLessonDates(@Param("classRoomId") Long classRoomId,
+                                        @Param("after") LocalDate after);
 }

@@ -190,4 +190,17 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         """)
     List<Submission> findByLessonForGrid(@Param("lessonId") Long lessonId);
 
+    /**
+     * 재제출 대상. 열이 열려 있는지는 호출부가 이미 알고 있으므로 여기서는 result만 본다.
+     * 목록으로 받는 이유는 수를 세는 것 말고 화면에 이름을 띄울 여지를 남기기 위해서다.
+     */
+    @Query("""
+        SELECT s FROM Submission s
+        JOIN FETCH s.student
+        WHERE s.homework.id = :homeworkId
+          AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                           com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
+        """)
+    List<Submission> findResubmitTargets(@Param("homeworkId") Long homeworkId);
+
 }
