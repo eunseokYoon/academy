@@ -169,8 +169,7 @@ public class HomeworkService {
     @Transactional
     public void delete(Long homeworkId) {
         Homework homework = findHomework(homeworkId);
-        if (submissionRepository.countByHomeworkIdAndStatusNot(
-            homeworkId, SubmissionStatus.NOT_SUBMITTED) > 0) {
+        if (submissionRepository.countGradedOrSubmitted(homeworkId) > 0) {
             throw new BusinessException(ErrorCode.SUBMISSION_EXISTS);
         }
 

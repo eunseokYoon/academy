@@ -147,8 +147,7 @@ class HomeworkServiceTest {
     @DisplayName("제출한 학생이 있는 숙제는 삭제할 수 없다")
     void 제출한_학생이_있는_숙제는_삭제할_수_없다() {
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(homework(720L)));
-        given(submissionRepository.countByHomeworkIdAndStatusNot(
-            720L, SubmissionStatus.NOT_SUBMITTED)).willReturn(1L);
+        given(submissionRepository.countGradedOrSubmitted(720L)).willReturn(1L);
 
         assertThatThrownBy(() -> homeworkService.delete(720L))
             .isInstanceOf(BusinessException.class)
@@ -162,8 +161,7 @@ class HomeworkServiceTest {
     void 전원_미제출인_숙제는_submissions와_함께_삭제된다() {
         Homework homework = homework(720L);
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(homework));
-        given(submissionRepository.countByHomeworkIdAndStatusNot(
-            720L, SubmissionStatus.NOT_SUBMITTED)).willReturn(0L);
+        given(submissionRepository.countGradedOrSubmitted(720L)).willReturn(0L);
         given(submissionRepository.findByHomeworkForTeacher(720L)).willReturn(List.of());
 
         homeworkService.delete(720L);

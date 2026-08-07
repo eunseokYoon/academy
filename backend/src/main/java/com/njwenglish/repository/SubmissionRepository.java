@@ -76,8 +76,26 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     /**
      * 숙제 삭제 차단 판정. "행이 있으면 409"로 짜면 어떤 숙제도 못 지운다 —
      * 출제 시 대상 전원의 행이 NOT_SUBMITTED로 미리 깔리기 때문이다.
+     *
+     * <p>재제출 취소(closeResubmit) 전용이다. 삭제 차단은 채점 결과도 봐야 하므로
+     * {@link #countGradedOrSubmitted}를 쓴다 — 지우지 않는다.
      */
     long countByHomeworkIdAndStatusNot(Long homeworkId, SubmissionStatus status);
+
+    /**
+     * 숙제 삭제 차단 판정. "행이 있으면 409"로 짜면 어떤 숙제도 못 지운다 —
+     * 출제·열 생성 시 대상 전원의 행이 미리 깔리기 때문이다.
+     *
+     * <p>제출물뿐 아니라 <b>채점 결과</b>도 지켜야 한다. result 조건을 빼면
+     * 선생님이 채운 ⭕🔺❌가 경고 없이 사라진다.
+     */
+    @Query("""
+        SELECT COUNT(s) FROM Submission s
+        WHERE s.homework.id = :homeworkId
+          AND (s.status <> com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED
+               OR s.result IS NOT NULL)
+        """)
+    long countGradedOrSubmitted(@Param("homeworkId") Long homeworkId);
 
     /**
      * T-6 목록과 T-7 상단의 집계. 목록 한 페이지의 숙제 id를 한 번에 넘겨 1쿼리로 끝낸다.

@@ -37,7 +37,7 @@ public class FeedbackService {
 
         Feedback feedback = feedbackRepository.save(
             Feedback.create(submission, currentTeacher(), content));
-        submission.check();
+        confirm(submission);
         return FeedbackResponse.from(feedback);
     }
 
@@ -55,7 +55,21 @@ public class FeedbackService {
      */
     @Transactional
     public void check(Long submissionId) {
-        findCheckable(submissionId).check();
+        confirm(findCheckable(submissionId));
+    }
+
+    /**
+     * 확인 처리. <b>GRID 숙제면 채점 결과까지 ⭕로 올린다.</b>
+     * 재제출을 확인했는데 채점이 🔺·❌로 남아 있으면 그 학생이 영영 대상으로 남는다.
+     *
+     * <p>확인했는데도 부족하면 선생님이 그리드에서 다시 🔺·❌로 고친다.
+     * 그러면 Submission.grade가 재제출 표시를 내리고 대상으로 되돌린다.
+     */
+    private void confirm(Submission submission) {
+        submission.check();
+        if (submission.getHomework().isGrid()) {
+            submission.resolveByResubmission();
+        }
     }
 
     /**

@@ -640,6 +640,19 @@ class HomeworkGridServiceTest {
         assertThat(column.getDueAt()).isNull();
     }
 
+    @Test
+    @DisplayName("채점 결과가 있는 열은 삭제되지 않는다")
+    void deleteBlockedByGrade() {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+
+        given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
+        given(submissionRepository.countGradedOrSubmitted(720L)).willReturn(5L);
+
+        assertThatThrownBy(() -> homeworkService.delete(720L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SUBMISSION_EXISTS);
+    }
+
     private PhotoCountRow photoCountRow(Long submissionId, long photoCount) {
         return new PhotoCountRow() {
             @Override
