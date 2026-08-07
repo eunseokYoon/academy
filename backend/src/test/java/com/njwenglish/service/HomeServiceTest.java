@@ -203,4 +203,16 @@ class HomeServiceTest {
 
         assertThat(homeService.parentHome(88L).nextClinic()).isNull();
     }
+
+    @Test
+    @DisplayName("안 낸 숙제 수는 재제출 대상 기준이다 — ⭕를 받은 GRID 칸은 세지 않는다")
+    void 안_낸_숙제_수는_재제출_대상_기준이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(me);
+        given(submissionRepository.countPendingHomeworks(88L)).willReturn(2L);
+
+        ParentHomeResponse home = homeService.parentHome(88L);
+
+        assertThat(home.pendingHomeworkCount()).isEqualTo(2L);
+        verify(submissionRepository).countPendingHomeworks(88L);
+    }
 }

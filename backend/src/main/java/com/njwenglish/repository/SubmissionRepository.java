@@ -194,15 +194,35 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * 캘린더 색띠(Phase 4)의 원본. lesson에 연결된 숙제만 센다 —
      * h.lesson.id 경로가 내부 조인이라 lesson_id가 null인 숙제는 자동으로 빠진다.
      *
-     * <p>행이 없는 수업일은 "그날 숙제가 없었다"이지 0%가 아니다.
-     * 서비스에서 0으로 바꾸지 마라. 캘린더에 빨간 띠가 뜬다.
+     * <p><b>근거는 status가 아니라 result다.</b> GRID에서 ⭕를 받은 학생은 온라인 제출을
+     * 하지 않아 status가 영원히 NOT_SUBMITTED다. status로 세면 숙제를 다 해온 학생의
+     * 캘린더가 새빨개진다.
+     *
+     * <p>⭕=100, 🔺=퍼센트, ❌=0으로 누적한 합이 scoreSum이다.
+     * ONLINE은 기존대로 제출했으면 100이다.
+     *
+     * <p><b>미채점(result IS NULL)인 GRID 칸은 아예 제외한다.</b> 채점 전에 0%로 잡히면
+     * 빨간 띠가 뜬다. 대상이 0이면 행 자체가 안 나오고 서비스가 null을 내린다 —
+     * coalesce(...,0)을 붙이지 마라.
      */
     @Query("""
         SELECT h.lesson.id AS lessonId,
-               SUM(CASE WHEN s.status IN ('SUBMITTED','CHECKED') THEN 1 ELSE 0 END) AS doneCount,
-               COUNT(s) AS totalCount
+               SUM(CASE
+                     WHEN h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID THEN
+                       CASE s.result
+                         WHEN com.njwenglish.entity.enums.HomeworkResult.DONE THEN 100
+                         WHEN com.njwenglish.entity.enums.HomeworkResult.PARTIAL
+                              THEN s.completionRate
+                         ELSE 0 END
+                     WHEN s.status IN (com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED,
+                                       com.njwenglish.entity.enums.SubmissionStatus.CHECKED)
+                          THEN 100
+                     ELSE 0 END) AS scoreSum,
+               COUNT(s) AS targetCount
         FROM Submission s JOIN s.homework h
         WHERE s.student.id = :studentId AND h.lesson.id IN :lessonIds
+          AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+               OR s.result IS NOT NULL)
         GROUP BY h.lesson.id
         """)
     List<HomeworkRateRow> findHomeworkRates(@Param("studentId") Long studentId,
@@ -211,16 +231,31 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     interface HomeworkRateRow {
         Long getLessonId();
 
-        long getDoneCount();
+        /** ⭕=100, 🔺=퍼센트, ❌=0의 합. targetCount로 나누면 완료율이다. */
+        long getScoreSum();
 
-        long getTotalCount();
+        long getTargetCount();
     }
 
     /** T-1 할 일: 확인 대기 제출물. SUBMITTED는 학생이 냈지만 선생님이 아직 안 본 것이다. */
     long countByStatus(SubmissionStatus status);
 
-    /** P-3 홈의 미제출 숙제 수. 마감이 지난 것도 포함한다 — 여전히 안 낸 것이다. */
-    long countByStudentIdAndStatus(Long studentId, SubmissionStatus status);
+    /**
+     * P-1·S-1 홈의 "안 낸 숙제" 수.
+     *
+     * <p>GRID는 <b>재제출 대상인데 아직 안 낸 것</b>만 센다. ⭕를 받은 칸은 status가
+     * 영원히 NOT_SUBMITTED라 status만 보면 다 해온 학생의 홈에 큰 숫자가 뜬다.
+     */
+    @Query("""
+        SELECT COUNT(s) FROM Submission s JOIN s.homework h
+        WHERE s.student.id = :studentId
+          AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED
+          AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+               OR (h.dueAt IS NOT NULL
+                   AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                    com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)))
+        """)
+    long countPendingHomeworks(@Param("studentId") Long studentId);
 
     /**
      * S-1 홈의 "지금 할 숙제". 미제출 <b>전부</b>다.
@@ -234,12 +269,20 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * (Short·LocalDate와 달리 OffsetDateTime은 통하지 않는다).
      *
      * <p>정렬은 마감 오름차순이라 <b>가장 오래 밀린 것이 맨 위</b>다. S-2 목록과 같은 순서다.
+     *
+     * <p><b>GRID는 재제출 대상만 담는다.</b> ⭕를 받은 칸은 status가 영원히 NOT_SUBMITTED라
+     * 이 조건이 없으면 다 해온 학생의 홈에도 "할 일"이 남아 보인다. 미채점(재제출 미오픈)
+     * 열도 같은 이유로 뺀다 — 선생님이 아직 확인하지 않은 것이지 학생이 할 일이 아니다.
      */
     @Query("""
         SELECT s FROM Submission s
         JOIN FETCH s.homework h
         JOIN FETCH h.classRoom
         WHERE s.student.id = :studentId AND s.status = 'NOT_SUBMITTED'
+          AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+               OR (h.dueAt IS NOT NULL
+                   AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                    com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)))
         ORDER BY h.dueAt, h.id
         """)
     List<Submission> findOpenByStudent(@Param("studentId") Long studentId);

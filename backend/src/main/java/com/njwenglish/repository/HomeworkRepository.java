@@ -60,6 +60,10 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
     /**
      * T-1 대시보드의 미확인 요약. 아직 손댈 것이 남은 숙제만 나온다.
      *
+     * <p><b>재제출을 안 연 GRID 열은 통째로 빠진다.</b> ⭕를 받은 학생까지 미제출로 잡혀
+     * T-1이 처리할 일 없는 항목으로 가득 찬다. 미채점 열은 여기 띄우지 않는다 —
+     * 선생님은 그리드 화면에서 직접 확인한다.
+     *
      * <p>JPQL에는 FILTER 절이 없어 SUM(CASE ...)로 센다. 숙제 수가 연 수백 건이라
      * 전체를 훑어도 문제가 없다.
      */
@@ -71,6 +75,11 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
                SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) AS notSubmitted,
                SUM(CASE WHEN s.status = 'SUBMITTED' THEN 1 ELSE 0 END) AS awaitingCheck
         FROM Homework h JOIN Submission s ON s.homework = h
+        WHERE h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+           OR (h.dueAt IS NOT NULL
+               AND (s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                 com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
+                    OR s.status = com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED))
         GROUP BY h.id, h.title, h.classRoom.name, h.dueAt
         HAVING SUM(CASE WHEN s.status <> 'CHECKED' THEN 1 ELSE 0 END) > 0
         ORDER BY h.dueAt DESC

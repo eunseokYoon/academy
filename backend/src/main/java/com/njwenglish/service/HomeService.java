@@ -12,7 +12,6 @@ import com.njwenglish.entity.ClassRoomSchedule;
 import com.njwenglish.entity.Enrollment;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
-import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.EnrollmentRepository;
@@ -112,8 +111,7 @@ public class HomeService {
             new ParentHomeResponse.NoticesBlock(
                 noticeService.countFor(child.getId()),
                 noticeService.recentFor(child.getId())),
-            submissionRepository.countByStudentIdAndStatus(
-                child.getId(), SubmissionStatus.NOT_SUBMITTED),
+            submissionRepository.countPendingHomeworks(child.getId()),
             clinicReservationRepository.findNextReserved(child.getId(), today)
                 .map(reservation -> NextClinicResponse.from(reservation.getClinic(), today))
                 .orElse(null),

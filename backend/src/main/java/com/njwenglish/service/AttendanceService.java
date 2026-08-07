@@ -200,19 +200,21 @@ public class AttendanceService {
             // 0은 "전부 미제출"이라 캘린더에 빨간 띠가 뜨고 학부모는 그걸 그렇게 읽는다
             days.add(new AttendanceDayResponse(row.getLessonDate(),
                 isConfirmed ? row.getAttendStatus().name() : AttendanceDayResponse.PENDING,
-                rate == null ? null : percent(rate.getDoneCount(), rate.getTotalCount())));
+                rate == null || rate.getTargetCount() == 0
+                    ? null : (int) (rate.getScoreSum() / rate.getTargetCount())));
 
             if (isConfirmed) {
                 confirmed.add(row.getAttendStatus());
             }
             if (rate != null) {
-                doneTotal += rate.getDoneCount();
-                assignedTotal += rate.getTotalCount();
+                doneTotal += rate.getScoreSum();
+                assignedTotal += rate.getTargetCount();
             }
         }
 
-        // 그 달에 숙제가 하나도 없으면 월 전체도 null이다
-        Integer monthlyRate = assignedTotal == 0 ? null : percent(doneTotal, assignedTotal);
+        // 그 달에 숙제가 하나도 없으면 월 전체도 null이다.
+        // doneTotal은 이미 0~100 스케일로 누적된 값이라 여기서 다시 *100을 하면 안 된다
+        Integer monthlyRate = assignedTotal == 0 ? null : (int) (doneTotal / assignedTotal);
 
         return new AttendanceCalendarResponse(yearMonth.getYear(), yearMonth.getMonthValue(),
             AttendanceSummaryResponse.of(confirmed), monthlyRate, days);
@@ -240,11 +242,6 @@ public class AttendanceService {
             rates.put(rate.getLessonId(), rate);
         }
         return rates;
-    }
-
-    /** 반올림한다. 5문항 중 3개면 60이다. */
-    private int percent(long done, long total) {
-        return Math.toIntExact(Math.round(done * 100.0 / total));
     }
 
     private Map<Long, Attendance> indexByStudent(List<Attendance> attendances) {

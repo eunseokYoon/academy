@@ -229,9 +229,9 @@ class AttendanceServiceTest {
                     LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT),
                 row(502L, LocalDate.of(2026, 5, 13),
                     LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
-        // 5/6에만 숙제가 있다. 5문항 중 3개 제출
+        // 5/6에만 숙제가 있다. 5문항 중 3개 제출 → scoreSum 300(=3*100), targetCount 5
         given(submissionRepository.findHomeworkRates(88L, List.of(501L, 502L)))
-            .willReturn(List.of(rate(501L, 3, 5)));
+            .willReturn(List.of(rate(501L, 300, 5)));
 
         AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
 
@@ -241,7 +241,8 @@ class AttendanceServiceTest {
         assertThat(calendar.homeworkCompletionRate()).isEqualTo(60);
     }
 
-    private SubmissionRepository.HomeworkRateRow rate(Long lessonId, long done, long total) {
+    /** ⭕=100, 🔺=퍼센트, ❌=0의 합이 scoreSum이다. done*100이 아니다. */
+    private SubmissionRepository.HomeworkRateRow rate(Long lessonId, long scoreSum, long targetCount) {
         return new SubmissionRepository.HomeworkRateRow() {
             @Override
             public Long getLessonId() {
@@ -249,15 +250,69 @@ class AttendanceServiceTest {
             }
 
             @Override
-            public long getDoneCount() {
-                return done;
+            public long getScoreSum() {
+                return scoreSum;
             }
 
             @Override
-            public long getTotalCount() {
-                return total;
+            public long getTargetCount() {
+                return targetCount;
             }
         };
+    }
+
+    @Test
+    @DisplayName("동그라미만 있는 수업일의 숙제율은 100이다 - 온라인 제출이 없어도")
+    void 동그라미는_온라인_제출이_없어도_숙제율_100이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(attendanceRepository.findCalendarRows(88L,
+            LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31)))
+            .willReturn(List.of(
+                row(501L, LocalDate.of(2026, 5, 6),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
+        // ⭕ 2칸 = 100 + 100
+        given(submissionRepository.findHomeworkRates(88L, List.of(501L)))
+            .willReturn(List.of(rate(501L, 200, 2)));
+
+        AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
+
+        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("세모 50과 동그라미가 섞이면 숙제율은 75다")
+    void 세모50과_동그라미가_섞이면_숙제율은_75다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(attendanceRepository.findCalendarRows(88L,
+            LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31)))
+            .willReturn(List.of(
+                row(501L, LocalDate.of(2026, 5, 6),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
+        // ⭕(100) + 🔺50(50) = 150, 대상 2칸
+        given(submissionRepository.findHomeworkRates(88L, List.of(501L)))
+            .willReturn(List.of(rate(501L, 150, 2)));
+
+        AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
+
+        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(75);
+    }
+
+    @Test
+    @DisplayName("미채점만 있는 수업일의 숙제율은 0이 아니라 null이다")
+    void 미채점만_있는_수업일의_숙제율은_null이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(attendanceRepository.findCalendarRows(88L,
+            LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31)))
+            .willReturn(List.of(
+                row(501L, LocalDate.of(2026, 5, 6),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
+        // 미채점 칸은 쿼리에서 제외되므로 그 lessonId 행 자체가 안 나온다
+        given(submissionRepository.findHomeworkRates(88L, List.of(501L)))
+            .willReturn(List.of());
+
+        AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
+
+        assertThat(calendar.days().get(0).homeworkRate()).isNull();
     }
 
     @Test
