@@ -38,6 +38,16 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * <p><b>GRID 숙제는 재제출 대상만 나온다.</b> 반 전원을 담으면 ⭕를 받아 낼 필요가
      * 없는 학생까지 "미제출"로 보인다.
      *
+     * <p>둘째 줄의 {@code h.dueAt IS NOT NULL AND s.result IN (...)}는
+     * {@link com.njwenglish.entity.Submission#isResubmitTarget()}
+     * ({@code homework.isResubmitOpen() && result IN (PARTIAL, NOT_DONE)})를 그대로 SQL로
+     * 옮긴 것이다. dueAt 조건을 빼면 채점만 하고 재제출을 아직 안 연 열(출제·채점과 재제출
+     * 오픈은 별개 동작이다)까지 여기 걸려, 아무도 제출한 적 없는 칸이 "미제출"로 잡힌다.
+     * 두 절을 분리해서 하나만 고치지 마라 — 나머지 절이 다시 같은 버그를 만든다.
+     *
+     * <p>셋째 줄의 {@code s.status <> NOT_SUBMITTED}는 확인이 끝나 ⭕가 된 학생을 위한
+     * 별도 조건이다. 이게 없으면 선생님이 방금 확인한 결과가 목록에서 사라진다.
+     *
      * <p>정렬은 처리할 것이 위로 온다: 확인대기 → 미제출 → 완료.
      * 이름은 students.name이다. user.name으로 쓰면 미가입 학생이 통째로 사라진다.
      */
@@ -47,8 +57,9 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         JOIN s.homework h
         WHERE h.id = :homeworkId
           AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
-               OR s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
-                               com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
+               OR (h.dueAt IS NOT NULL
+                   AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                    com.njwenglish.entity.enums.HomeworkResult.NOT_DONE))
                OR s.status <> com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
         ORDER BY CASE s.status WHEN 'SUBMITTED' THEN 0 WHEN 'NOT_SUBMITTED' THEN 1 ELSE 2 END,
                  st.name

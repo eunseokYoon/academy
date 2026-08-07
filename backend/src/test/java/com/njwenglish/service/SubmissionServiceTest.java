@@ -15,10 +15,13 @@ import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.homework.HomeworkCountsResponse;
+import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
+import com.njwenglish.dto.homework.SubmissionListItemResponse;
 import com.njwenglish.dto.homework.SubmitResponse;
 import com.njwenglish.dto.homework.VideoRegisterRequest;
 import com.njwenglish.dto.homework.VideoUploadUrlRequest;
@@ -35,11 +38,11 @@ import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -360,6 +363,70 @@ class SubmissionServiceTest {
 
         assertThat(response.s3Key()).isNotBlank();
     }
+
+    // ---------- 선생님 (T-7) ----------
+
+    /*
+     * 리포지토리 필터링 자체(findByHomeworkForTeacher의 JPQL)는 이 스위트에서 검증하지
+     * 않는다 — 이 프로젝트에는 @DataJpaTest 같은 JPQL 실행 인프라가 없다. 대신 리포지토리가
+     * "이 명단을 넘겨줬다"고 가정했을 때 서비스가 그 명단을 손대지 않고 그대로 응답에
+     * 옮기는지를 검증한다. 리포지토리를 스텁하고 스텁 내용을 그대로 되묻는 테스트가
+     * 아니라, submissionsOf가 실제로 책임지는 매핑·집계 로직을 검증하는 것이다.
+     */
+
+    @Test
+    @DisplayName("ONLINE 숙제는 리포지토리가 돌려준 명단 전원을 그대로 응답에 담는다")
+    void submissionsOfKeepsFullRosterForOnlineHomework() {
+        Homework online = Fixtures.homework(700L, classRoom, FUTURE_DUE);
+        Submission notSubmitted = Fixtures.submission(11L, online, Fixtures.student(1L, "가나다"));
+        Submission submitted = Fixtures.submission(12L, online, Fixtures.student(2L, "나다라"));
+        submitted.submit(OffsetDateTime.now(), false);
+        Submission checked = Fixtures.submission(13L, online, Fixtures.student(3L, "다라마"));
+        checked.submit(OffsetDateTime.now(), false);
+        checked.check();
+
+        given(homeworkService.findHomework(700L)).willReturn(online);
+        given(submissionRepository.findByHomeworkForTeacher(700L))
+            .willReturn(List.of(notSubmitted, submitted, checked));
+        given(homeworkService.countsOf(List.of(700L)))
+            .willReturn(Map.of(700L, new HomeworkCountsResponse(3, 1, 1, 1)));
+
+        HomeworkSubmissionsResponse response = submissionService.submissionsOf(700L);
+
+        // 리포지토리가 넘긴 3명 전부가 응답에 남는다 — 서비스가 자체적으로 다시 거르지 않는다
+        assertThat(response.items())
+            .extracting(SubmissionListItemResponse::studentId)
+            .containsExactlyInAnyOrder(1L, 2L, 3L);
+        assertThat(response.counts().total()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("확인이 끝나 재제출로 해결된 GRID 제출물도 명단에 남는다")
+    void submissionsOfKeepsResubmissionResolvedGridSubmission() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        Submission resolved = Fixtures.submission(9L, column, Fixtures.student(88L, "고연준"));
+        resolved.grade(HomeworkResult.NOT_DONE, null);
+        resolved.submit(OffsetDateTime.now(), false);
+        resolved.check();
+        resolved.resolveByResubmission();
+
+        given(homeworkService.findHomework(720L)).willReturn(column);
+        given(submissionRepository.findByHomeworkForTeacher(720L)).willReturn(List.of(resolved));
+        given(homeworkService.countsOf(List.of(720L)))
+            .willReturn(Map.of(720L, new HomeworkCountsResponse(1, 0, 0, 1)));
+
+        HomeworkSubmissionsResponse response = submissionService.submissionsOf(720L);
+
+        // s.status <> NOT_SUBMITTED 절이 지키는 대상이다. 없었다면 이 학생은 목록에서 빠진다
+        assertThat(response.items()).hasSize(1);
+        SubmissionListItemResponse item = response.items().get(0);
+        assertThat(item.studentId()).isEqualTo(88L);
+        assertThat(item.status()).isEqualTo(SubmissionStatus.CHECKED);
+    }
+
+    // ---------- 학부모 (P-3) ----------
 
     @Test
     @DisplayName("학부모는 자녀의 숙제만 조회할 수 있다")
