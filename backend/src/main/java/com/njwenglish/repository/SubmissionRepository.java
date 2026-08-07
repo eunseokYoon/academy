@@ -48,21 +48,31 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     List<Submission> findByHomeworkForTeacher(@Param("homeworkId") Long homeworkId);
 
     /**
-     * S-2 · P-3 목록. 미제출이면서 마감 임박한 것이 위로 온다.
+     * S-2 · P-3 목록. <b>해야 할 일이 남은 것</b>이 위로 온다.
      *
-     * <p>두 번째 키가 CASE인 이유는 그룹별로 방향이 반대이기 때문이다.
-     * 미제출은 마감이 가까운 순(ASC), 나머지는 최근 것부터(DESC)다.
-     * 미제출이 아닌 행은 두 번째 키가 NULL이 되어 세 번째 키로 넘어간다.
+     * <p>GRID는 재제출 대상, ONLINE은 미제출이 "할 일"이다. 그 안에서는 마감이 가까운 순이고,
+     * 나머지는 수업일 최신순이다.
+     *
+     * <p>lesson은 반드시 LEFT JOIN이다. INNER로 들어가면 lesson_id가 null인 ONLINE 숙제가
+     * 목록에서 통째로 사라진다 — 에러도 안 난다.
      */
     @Query(value = """
         SELECT s FROM Submission s
         JOIN FETCH s.homework h
         JOIN FETCH h.classRoom
+        LEFT JOIN FETCH h.lesson l
         WHERE s.student.id = :studentId
           AND (:status IS NULL OR CAST(s.status AS string) = :status)
-        ORDER BY CASE WHEN s.status = 'NOT_SUBMITTED' THEN 0 ELSE 1 END,
-                 CASE WHEN s.status = 'NOT_SUBMITTED' THEN h.dueAt END ASC,
-                 h.dueAt DESC
+        ORDER BY CASE WHEN (h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+                            AND h.dueAt IS NOT NULL
+                            AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                             com.njwenglish.entity.enums.HomeworkResult.NOT_DONE))
+                        OR (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+                            AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
+                      THEN 0 ELSE 1 END,
+                 CASE WHEN h.dueAt IS NOT NULL THEN h.dueAt END ASC,
+                 l.lessonDate DESC NULLS LAST,
+                 h.id DESC
         """,
         countQuery = """
         SELECT COUNT(s) FROM Submission s

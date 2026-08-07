@@ -13,6 +13,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
@@ -21,14 +22,17 @@ import com.njwenglish.dto.homework.VideoRegisterRequest;
 import com.njwenglish.dto.homework.VideoUploadUrlRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
+import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
+import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.FeedbackRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
 import java.lang.reflect.RecordComponent;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -253,6 +257,61 @@ class SubmissionServiceTest {
         assertThatThrownBy(() -> submissionService.submit(720L))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.SUBMISSION_ALREADY_CHECKED);
+    }
+
+    @Test
+    @DisplayName("재제출 대상이 아닌 GRID 숙제의 업로드 URL 발급은 409다")
+    void uploadUrlBlockedWhenNotResubmitTarget() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission cell = Fixtures.submission(1L, column, seo);
+        cell.grade(HomeworkResult.DONE, null);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
+            .willReturn(Optional.of(cell));
+
+        assertThatThrownBy(() -> submissionService.issueUploadUrl(720L,
+            new PhotoUploadUrlRequest("image/webp", 284012)))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.RESUBMIT_NOT_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("재제출을 연 열에서 X를 받은 학생은 제출할 수 있다")
+    void uploadUrlAllowedForResubmitTarget() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        Submission cell = Fixtures.submission(1L, column, seo);
+        cell.grade(HomeworkResult.NOT_DONE, null);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
+            .willReturn(Optional.of(cell));
+        given(photoRepository.countBySubmissionId(1L)).willReturn(0L);
+
+        MediaUploadUrlResponse response = submissionService.issueUploadUrl(720L,
+            new PhotoUploadUrlRequest("image/webp", 284012));
+
+        assertThat(response.s3Key()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("ONLINE 숙제는 재제출 판정과 무관하게 제출할 수 있다")
+    void uploadUrlAllowedForOnlineHomework() {
+        Homework online = Fixtures.homework(700L, classRoom, FUTURE_DUE);
+        Submission submission = Fixtures.submission(2L, online, seo);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(700L, 88L))
+            .willReturn(Optional.of(submission));
+        given(photoRepository.countBySubmissionId(2L)).willReturn(0L);
+
+        MediaUploadUrlResponse response = submissionService.issueUploadUrl(700L,
+            new PhotoUploadUrlRequest("image/webp", 284012));
+
+        assertThat(response.s3Key()).isNotBlank();
     }
 
     @Test

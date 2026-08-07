@@ -101,6 +101,10 @@ public class SubmissionService {
             Homework homework = submission.getHomework();
             return new StudentHomeworkListItemResponse(
                 homework.getId(), homework.getTitle(), homework.getClassRoom().getName(),
+                homework.getKind(),
+                homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
+                submission.getResult(), submission.getCompletionRate(),
+                submission.isResolvedByResubmission(), submission.isResubmitTarget(),
                 homework.getDueAt(), submission.getStatus(), submission.isLate(),
                 photoCounts.getOrDefault(submission.getId(), 0),
                 submission.hasVideo(),
@@ -340,11 +344,18 @@ public class SubmissionService {
     /**
      * 선생님이 이미 확인한 제출물은 학생이 손대지 못한다.
      * 본 내용이 뒤바뀌면 피드백이 엉뚱한 사진에 붙는다.
+     *
+     * <p>그리고 <b>GRID 숙제는 재제출 대상만 손댈 수 있다.</b> 목록에서 버튼을 안 그리는
+     * 것만으로는 부족하다 — URL을 직접 치면 뚫린다. 학생이 거치는 변경 경로가 전부
+     * 이 메서드를 지나므로 여기서 한 번만 막으면 된다.
      */
     private Submission findEditableSubmission(Long homeworkId) {
         Submission submission = findMySubmission(homeworkId);
         if (submission.isChecked()) {
             throw new BusinessException(ErrorCode.SUBMISSION_ALREADY_CHECKED);
+        }
+        if (submission.getHomework().isGrid() && !submission.isResubmitTarget()) {
+            throw new BusinessException(ErrorCode.RESUBMIT_NOT_REQUIRED);
         }
         return submission;
     }
@@ -410,7 +421,11 @@ public class SubmissionService {
         return index + 1 < awaiting.size() ? awaiting.get(index + 1) : null;
     }
 
-    private long remainingMinutes(OffsetDateTime now, OffsetDateTime dueAt) {
+    /** 마감이 없는 GRID 열은 남은 시간도 없다. 0을 내리면 "마감 임박"으로 보인다. */
+    private Long remainingMinutes(OffsetDateTime now, OffsetDateTime dueAt) {
+        if (dueAt == null) {
+            return null;
+        }
         return Duration.between(now, dueAt).toMinutes();
     }
 }
