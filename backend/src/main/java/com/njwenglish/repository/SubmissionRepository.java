@@ -53,6 +53,13 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * <p>GRID는 재제출 대상, ONLINE은 미제출이 "할 일"이다. 그 안에서는 마감이 가까운 순이고,
      * 나머지는 수업일 최신순이다.
      *
+     * <p>1번째·2번째 정렬 키의 CASE 조건이 글자 그대로 같다. JPQL의 ORDER BY는 SELECT 별칭이나
+     * 계산된 버킷을 참조할 방법이 없어서, "할 일" 판정을 두 번 그대로 반복하는 것 말고는 방법이
+     * 없다. 2번째 키(마감 오름차순)를 조건 없이 두면 ONLINE의 dueAt은 항상 NOT NULL이라
+     * 이미 낸 ONLINE 행이 재제출 안 열린 GRID 열(dueAt NULL)보다 앞서 버려, 3번째 키(수업일)가
+     * "나머지" 그룹 안에서 거의 동작하지 않는다. 둘 중 하나만 고쳐서 "간단히" 만들지 마라 —
+     * 같은 버그가 조용히 되돌아온다.
+     *
      * <p>lesson은 반드시 LEFT JOIN이다. INNER로 들어가면 lesson_id가 null인 ONLINE 숙제가
      * 목록에서 통째로 사라진다 — 에러도 안 난다.
      */
@@ -70,7 +77,13 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
                         OR (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
                             AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
                       THEN 0 ELSE 1 END,
-                 CASE WHEN h.dueAt IS NOT NULL THEN h.dueAt END ASC,
+                 CASE WHEN (h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+                            AND h.dueAt IS NOT NULL
+                            AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                             com.njwenglish.entity.enums.HomeworkResult.NOT_DONE))
+                        OR (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+                            AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
+                      THEN h.dueAt END ASC,
                  l.lessonDate DESC NULLS LAST,
                  h.id DESC
         """,

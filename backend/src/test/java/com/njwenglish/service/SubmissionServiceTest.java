@@ -278,6 +278,28 @@ class SubmissionServiceTest {
     }
 
     @Test
+    @DisplayName("재제출을 연 열이어도 본인이 DONE이면 업로드 URL 발급은 409다")
+    void uploadUrlBlockedWhenResubmitOpenButOwnResultIsDone() {
+        // 같은 열에서 다른 학생은 재제출 대상일 수 있다(NOT_DONE/PARTIAL). 열이 열려 있다는
+        // 사실만으로 통과시키면, 그 열의 DONE인 학생까지 URL을 직접 쳐서 뚫을 수 있다.
+        // 판정은 항상 이 학생 본인의 result여야 한다.
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        Submission cell = Fixtures.submission(1L, column, seo);
+        cell.grade(HomeworkResult.DONE, null);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
+            .willReturn(Optional.of(cell));
+
+        assertThatThrownBy(() -> submissionService.issueUploadUrl(720L,
+            new PhotoUploadUrlRequest("image/webp", 284012)))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.RESUBMIT_NOT_REQUIRED);
+    }
+
+    @Test
     @DisplayName("재제출을 연 열에서 X를 받은 학생은 제출할 수 있다")
     void uploadUrlAllowedForResubmitTarget() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
@@ -285,6 +307,26 @@ class SubmissionServiceTest {
         column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.NOT_DONE, null);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
+            .willReturn(Optional.of(cell));
+        given(photoRepository.countBySubmissionId(1L)).willReturn(0L);
+
+        MediaUploadUrlResponse response = submissionService.issueUploadUrl(720L,
+            new PhotoUploadUrlRequest("image/webp", 284012));
+
+        assertThat(response.s3Key()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("재제출을 연 열에서 세모(PARTIAL)를 받은 학생도 제출할 수 있다")
+    void uploadUrlAllowedForResubmitTargetWithPartialResult() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        Submission cell = Fixtures.submission(1L, column, seo);
+        cell.grade(HomeworkResult.PARTIAL, (short) 60);
 
         given(studentAccessGuard.requireSelf()).willReturn(seo);
         given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
