@@ -37,6 +37,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -229,6 +230,17 @@ public class HomeworkService {
             Homework column, List<Student> students,
             Map<Long, Submission> cellsByStudent, Map<Long, Integer> photoCounts) {
 
+        /*
+         * cellsByStudent엔 그 반을 나간 학생의 옛 칸도 남아 있다 — 숙제 데이터는 지우지 않고
+         * 상태만 바꾸기 때문이다(StudentService 퇴원 처리). targets/awaiting을 이 맵 전체로
+         * 세면 화면에 안 보이는 학생이 배지 숫자에 섞여 들어간다. 반드시 재원생 명단(students)
+         * 기준으로 걸러낸 칸만 센다. "간단하게" cellsByStudent.values()로 되돌리지 마라.
+         */
+        List<Submission> rosterCells = students.stream()
+            .map(student -> cellsByStudent.get(student.getId()))
+            .filter(Objects::nonNull)
+            .toList();
+
         List<HomeworkGridResponse.CellInfo> cellInfos = students.stream()
             .map(student -> {
                 Submission cell = cellsByStudent.get(student.getId());
@@ -243,9 +255,9 @@ public class HomeworkService {
             })
             .toList();
 
-        int targets = (int) cellsByStudent.values().stream()
+        int targets = (int) rosterCells.stream()
             .filter(Submission::isResubmitTarget).count();
-        int awaiting = (int) cellsByStudent.values().stream()
+        int awaiting = (int) rosterCells.stream()
             .filter(Submission::isSubmitted).count();
 
         return new HomeworkGridResponse.ColumnInfo(column.getId(), column.getTitle(),
