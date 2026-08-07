@@ -34,6 +34,7 @@ import com.njwenglish.repository.TeacherRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -512,6 +513,27 @@ class HomeworkGridServiceTest {
     }
 
     @Test
+    @DisplayName("다음 수업이 없으면 7일 뒤 21시로 잡는다")
+    void openResubmitFallsBackToSevenDaysWhenNoNextLesson() {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission partial = Fixtures.submission(2L, column, kwonTaeHo);
+        partial.grade(HomeworkResult.PARTIAL, (short) 50);
+
+        given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
+        given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of(partial));
+        // 방학·학기 말처럼 앞으로 잡힌 수업일이 하나도 없는 경우 — FALLBACK_RESUBMIT_DAYS로 빠진다.
+        given(lessonRepository.findNextLessonDates(eq(3L), any(LocalDate.class)))
+            .willReturn(List.of());
+
+        ResubmitOpenResponse response = homeworkService.openResubmit(720L, null);
+
+        // 오늘 날짜를 테스트 안에서 계산한다. 달력 날짜를 박아 두면 해가 바뀌며 테스트가 썩는다.
+        LocalDate expected = LocalDate.now(ZoneId.of("Asia/Seoul")).plusDays(7);
+        assertThat(response.dueAt().toLocalDate()).isEqualTo(expected);
+        assertThat(response.dueAt().toLocalTime().getHour()).isEqualTo(21);
+    }
+
+    @Test
     @DisplayName("세모·X가 없는 열의 재제출 요청은 409다")
     void openResubmitWithoutTarget() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
@@ -583,6 +605,22 @@ class HomeworkGridServiceTest {
         assertThatThrownBy(() -> homeworkService.closeResubmit(720L))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SUBMISSION_EXISTS);
+    }
+
+    @Test
+    @DisplayName("이미 닫힌 재제출을 다시 닫아도 에러 없이 닫힌 상태를 유지한다")
+    void closeResubmitIsIdempotent() {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+
+        given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
+        given(submissionRepository.countByHomeworkIdAndStatusNot(720L, SubmissionStatus.NOT_SUBMITTED))
+            .willReturn(0L);
+
+        homeworkService.closeResubmit(720L);
+        homeworkService.closeResubmit(720L);
+
+        assertThat(column.isResubmitOpen()).isFalse();
     }
 
     @Test
