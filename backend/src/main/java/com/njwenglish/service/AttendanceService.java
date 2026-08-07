@@ -201,7 +201,7 @@ public class AttendanceService {
             days.add(new AttendanceDayResponse(row.getLessonDate(),
                 isConfirmed ? row.getAttendStatus().name() : AttendanceDayResponse.PENDING,
                 rate == null || rate.getTargetCount() == 0
-                    ? null : (int) (rate.getScoreSum() / rate.getTargetCount())));
+                    ? null : average(rate.getScoreSum(), rate.getTargetCount())));
 
             if (isConfirmed) {
                 confirmed.add(row.getAttendStatus());
@@ -214,7 +214,7 @@ public class AttendanceService {
 
         // 그 달에 숙제가 하나도 없으면 월 전체도 null이다.
         // doneTotal은 이미 0~100 스케일로 누적된 값이라 여기서 다시 *100을 하면 안 된다
-        Integer monthlyRate = assignedTotal == 0 ? null : (int) (doneTotal / assignedTotal);
+        Integer monthlyRate = assignedTotal == 0 ? null : average(doneTotal, assignedTotal);
 
         return new AttendanceCalendarResponse(yearMonth.getYear(), yearMonth.getMonthValue(),
             AttendanceSummaryResponse.of(confirmed), monthlyRate, days);
@@ -242,6 +242,13 @@ public class AttendanceService {
             rates.put(rate.getLessonId(), rate);
         }
         return rates;
+    }
+
+    // 반올림이다. 버림으로 바꾸지 마라 — 2개 중 1개가 100·99면 99.5가 99로 떨어진다.
+    // (double) 캐스트가 없으면 나눗셈이 정수 연산으로 먼저 끝나 Math.round가 이미 잘린
+    // 값을 받는다 — 같은 버그가 소리 없이 되돌아온다
+    private int average(long scoreSum, long targetCount) {
+        return (int) Math.round((double) scoreSum / targetCount);
     }
 
     private Map<Long, Attendance> indexByStudent(List<Attendance> attendances) {

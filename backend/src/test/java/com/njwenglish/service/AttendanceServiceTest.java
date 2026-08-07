@@ -298,6 +298,25 @@ class AttendanceServiceTest {
     }
 
     @Test
+    @DisplayName("숙제율은 버림이 아니라 반올림이다 - 200/3은 66이 아니라 67이다")
+    void 숙제율은_버림이_아니라_반올림이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(attendanceRepository.findCalendarRows(88L,
+            LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31)))
+            .willReturn(List.of(
+                row(501L, LocalDate.of(2026, 5, 6),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
+        // 200/3 = 66.67 - 정수 나눗셈(버림)이면 66, 반올림이면 67이다
+        given(submissionRepository.findHomeworkRates(88L, List.of(501L)))
+            .willReturn(List.of(rate(501L, 200, 3)));
+
+        AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
+
+        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(67);
+        assertThat(calendar.homeworkCompletionRate()).isEqualTo(67);
+    }
+
+    @Test
     @DisplayName("미채점만 있는 수업일의 숙제율은 0이 아니라 null이다")
     void 미채점만_있는_수업일의_숙제율은_null이다() {
         given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);

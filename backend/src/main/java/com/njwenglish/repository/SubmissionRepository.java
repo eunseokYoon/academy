@@ -149,16 +149,36 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     /**
      * T-6 목록과 T-7 상단의 집계. 목록 한 페이지의 숙제 id를 한 번에 넘겨 1쿼리로 끝낸다.
      * 숙제마다 세면 20행에 20쿼리다.
+     *
+     * <p><b>notSubmitted는 GRID에서 status만 보지 않는다.</b> ⭕를 받은 학생은 애초에
+     * 온라인으로 낼 필요가 없어 status가 영원히 NOT_SUBMITTED다. status만 세면 선생님이
+     * 그리드에서 전원을 채점해도 "미제출 N, 확인완료 0"이 그대로 남아 채점이 저장됐는지
+     * 믿을 수 없게 된다. GRID는 <b>재제출 대상인데 아직 안 낸 것</b>만 미제출로 센다 —
+     * {@link com.njwenglish.entity.Submission#isResubmitTarget()}과 같은 조건이다.
+     *
+     * <p>submitted·checked는 그대로 둔다. 둘 다 실제로 온라인 제출 절차를 탄 것만
+     * status가 그렇게 바뀌므로 — GRID든 ONLINE이든 — "제출/확인" 그대로가 맞는 뜻이다.
      */
     @Query("""
-        SELECT s.homework.id AS homeworkId,
+        SELECT h.id AS homeworkId,
                COUNT(s) AS total,
-               SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) AS notSubmitted,
-               SUM(CASE WHEN s.status = 'SUBMITTED' THEN 1 ELSE 0 END) AS submitted,
-               SUM(CASE WHEN s.status = 'CHECKED' THEN 1 ELSE 0 END) AS checked
-        FROM Submission s
-        WHERE s.homework.id IN :homeworkIds
-        GROUP BY s.homework.id
+               SUM(CASE
+                     WHEN h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID THEN
+                       CASE WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED
+                             AND h.dueAt IS NOT NULL
+                             AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                              com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
+                            THEN 1 ELSE 0 END
+                     WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED
+                          THEN 1
+                     ELSE 0 END) AS notSubmitted,
+               SUM(CASE WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED
+                        THEN 1 ELSE 0 END) AS submitted,
+               SUM(CASE WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.CHECKED
+                        THEN 1 ELSE 0 END) AS checked
+        FROM Submission s JOIN s.homework h
+        WHERE h.id IN :homeworkIds
+        GROUP BY h.id
         """)
     List<CountRow> countsByHomeworkIds(@Param("homeworkIds") Collection<Long> homeworkIds);
 
