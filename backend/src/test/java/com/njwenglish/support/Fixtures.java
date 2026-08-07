@@ -97,6 +97,15 @@ public final class Fixtures {
         return homework;
     }
 
+    /** 그리드의 열 하나. 마감이 없으므로 재제출은 닫힌 상태다. */
+    public static Homework gridColumn(Long id, ClassRoom classRoom, Lesson lesson,
+                                      String title, short sortOrder) {
+        Homework homework = Homework.gridColumn(
+            classRoom, lesson, teacherEntity(1L), title, sortOrder);
+        ReflectionTestUtils.setField(homework, "id", id);
+        return homework;
+    }
+
     public static Submission submission(Long id, Homework homework, Student student) {
         Submission submission = Submission.notSubmitted(homework, student);
         ReflectionTestUtils.setField(submission, "id", id);

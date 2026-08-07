@@ -21,6 +21,8 @@ public enum ErrorCode {
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),
     SUBMISSION_EXISTS(HttpStatus.CONFLICT, "제출한 학생이 있어 삭제할 수 없습니다."),
     SUBMISSION_ALREADY_CHECKED(HttpStatus.CONFLICT, "선생님이 확인을 마친 숙제는 수정할 수 없습니다."),
+    NO_RESUBMIT_TARGET(HttpStatus.CONFLICT, "다시 제출할 학생이 없습니다."),
+    RESUBMIT_NOT_REQUIRED(HttpStatus.CONFLICT, "다시 제출할 숙제가 아닙니다."),
     STUDENT_HAS_RECORDS(HttpStatus.CONFLICT, "운영 기록이 있어 삭제할 수 없습니다. 퇴원 처리를 사용해 주세요."),
     // 공개 후 정답을 고치면 이미 응시한 학생의 점수가 소급 변경된다. 삭제 후 재출제가 유일한 경로다
     TEST_ALREADY_PUBLISHED(HttpStatus.CONFLICT,

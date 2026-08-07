@@ -1,6 +1,7 @@
 package com.njwenglish.entity;
 
 import com.njwenglish.common.entity.BaseTimeEntity;
+import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -61,6 +62,21 @@ public class Submission extends BaseTimeEntity {
     @Column(name = "video_bytes")
     private Integer videoBytes;
 
+    /**
+     * 오프라인 채점 결과. null이 "아직 채점 안 함"이고 화면에 회색 "미채점"으로 뜬다.
+     * status(온라인 제출 축)와 독립된 축이다 — GRID에서 ⭕를 받은 학생은
+     * status가 영원히 NOT_SUBMITTED로 남는다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private HomeworkResult result;
+
+    @Column(name = "completion_rate")
+    private Short completionRate;
+
+    @Column(name = "resolved_by_resubmission", nullable = false)
+    private boolean resolvedByResubmission;
+
     /*
      * feedback_read_at 컬럼은 DB에 남아 있지만 매핑하지 않는다. 이 값을 읽던 곳은
      * S-1 홈의 미확인 피드백 수 하나뿐이었고 그 표시가 없어졌다. 컬럼을 지우려면
@@ -120,6 +136,37 @@ public class Submission extends BaseTimeEntity {
 
     public boolean isSubmitted() {
         return status == SubmissionStatus.SUBMITTED;
+    }
+
+    /**
+     * 채점. DONE이 아닌 값으로 바꾸면 재제출 표시를 자동으로 내린다 —
+     * 안 그러면 ck_submissions_resolved에 걸려 그리드 저장이 통째로 실패한다.
+     * 그리고 그 학생은 다시 재제출 대상으로 돌아온다.
+     *
+     * <p>퍼센트는 PARTIAL에만 붙는다. 다른 결과와 함께 들어온 값은 버린다.
+     */
+    public void grade(HomeworkResult result, Short completionRate) {
+        this.result = result;
+        this.completionRate = result == HomeworkResult.PARTIAL ? completionRate : null;
+        if (result != HomeworkResult.DONE) {
+            this.resolvedByResubmission = false;
+        }
+    }
+
+    /** 재제출을 선생님이 확인했다. 채점 결과가 ⭕로 올라가고 "재제출" 표시가 붙는다. */
+    public void resolveByResubmission() {
+        this.result = HomeworkResult.DONE;
+        this.completionRate = null;
+        this.resolvedByResubmission = true;
+    }
+
+    /**
+     * 이 학생이 온라인으로 다시 내야 하는가. <b>제출 경로를 여는 유일한 근거다.</b>
+     * 목록에서 버튼을 안 그리는 것만으로는 부족하다 — URL을 직접 치면 뚫린다.
+     */
+    public boolean isResubmitTarget() {
+        return homework.isResubmitOpen()
+            && (result == HomeworkResult.PARTIAL || result == HomeworkResult.NOT_DONE);
     }
 
 }
