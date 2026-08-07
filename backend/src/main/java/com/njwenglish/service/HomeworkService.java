@@ -9,6 +9,7 @@ import com.njwenglish.dto.homework.HomeworkCountsResponse;
 import com.njwenglish.dto.homework.HomeworkCreateRequest;
 import com.njwenglish.dto.homework.HomeworkCreateResponse;
 import com.njwenglish.dto.homework.HomeworkDetailResponse;
+import com.njwenglish.dto.homework.HomeworkGridResponse;
 import com.njwenglish.dto.homework.HomeworkListItemResponse;
 import com.njwenglish.dto.homework.HomeworkUpdateRequest;
 import com.njwenglish.dto.homework.PendingHomeworkResponse;
@@ -25,6 +26,7 @@ import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.HomeworkRepository;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
+import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.SubmissionRepository.CountRow;
 import com.njwenglish.repository.TeacherRepository;
@@ -177,6 +179,89 @@ public class HomeworkService {
                 row.getClassRoomName(), row.getDueAt(),
                 row.getNotSubmitted(), row.getAwaitingCheck()))
             .toList();
+    }
+
+    // ---------- T-6b 숙제 그리드 ----------
+
+    /**
+     * 그리드 한 장. 페이징하지 않는다 — 반 단위(최대 30명)라 한 화면에 다 보여주는 것이 맞다.
+     *
+     * <p>명단은 <b>그 수업일 기준</b> 재원생이다. 퇴원생이 남으면 채점할 수 없는 칸이 생긴다.
+     * 칸이 아직 없는 학생(열을 만든 뒤 들어온 학생)도 명단에는 남고 빈 칸으로 나간다.
+     */
+    @Transactional(readOnly = true)
+    public HomeworkGridResponse grid(Long lessonId) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        ClassRoom classRoom = lesson.getClassRoom();
+
+        List<Student> students = enrollmentRepository
+            .findActiveStudents(classRoom.getId(), lesson.getLessonDate());
+        List<Homework> columns = homeworkRepository.findGridColumns(lessonId);
+        List<Submission> cells = submissionRepository.findByLessonForGrid(lessonId);
+
+        Map<Long, Integer> photoCounts = photoCountsOf(
+            cells.stream().map(Submission::getId).toList());
+
+        // homeworkId → studentId → 칸
+        Map<Long, Map<Long, Submission>> byColumn = new HashMap<>();
+        for (Submission cell : cells) {
+            byColumn.computeIfAbsent(cell.getHomework().getId(), key -> new HashMap<>())
+                .put(cell.getStudent().getId(), cell);
+        }
+
+        List<HomeworkGridResponse.ColumnInfo> columnInfos = columns.stream()
+            .map(column -> toColumnInfo(column, students,
+                byColumn.getOrDefault(column.getId(), Map.of()), photoCounts))
+            .toList();
+
+        return new HomeworkGridResponse(
+            new HomeworkGridResponse.LessonInfo(lesson.getId(), lesson.getLessonDate(),
+                classRoom.getId(), classRoom.getName()),
+            students.stream()
+                .map(student -> new HomeworkGridResponse.StudentInfo(
+                    student.getId(), student.getName()))
+                .toList(),
+            columnInfos);
+    }
+
+    private HomeworkGridResponse.ColumnInfo toColumnInfo(
+            Homework column, List<Student> students,
+            Map<Long, Submission> cellsByStudent, Map<Long, Integer> photoCounts) {
+
+        List<HomeworkGridResponse.CellInfo> cellInfos = students.stream()
+            .map(student -> {
+                Submission cell = cellsByStudent.get(student.getId());
+                if (cell == null) {
+                    return new HomeworkGridResponse.CellInfo(student.getId(),
+                        null, null, false, SubmissionStatus.NOT_SUBMITTED, 0, false);
+                }
+                return new HomeworkGridResponse.CellInfo(student.getId(),
+                    cell.getResult(), cell.getCompletionRate(),
+                    cell.isResolvedByResubmission(), cell.getStatus(),
+                    photoCounts.getOrDefault(cell.getId(), 0), cell.hasVideo());
+            })
+            .toList();
+
+        int targets = (int) cellsByStudent.values().stream()
+            .filter(Submission::isResubmitTarget).count();
+        int awaiting = (int) cellsByStudent.values().stream()
+            .filter(Submission::isSubmitted).count();
+
+        return new HomeworkGridResponse.ColumnInfo(column.getId(), column.getTitle(),
+            column.getSortOrder(), column.getDueAt(), targets, awaiting, cellInfos);
+    }
+
+    /** 사진 수는 한 번에 가져온다. 칸마다 세면 100쿼리가 나간다. */
+    private Map<Long, Integer> photoCountsOf(List<Long> submissionIds) {
+        if (submissionIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> counts = new HashMap<>();
+        for (PhotoCountRow row : submissionPhotoRepository.countBySubmissionIds(submissionIds)) {
+            counts.put(row.getSubmissionId(), (int) row.getPhotoCount());
+        }
+        return counts;
     }
 
     // ---------- 내부 ----------

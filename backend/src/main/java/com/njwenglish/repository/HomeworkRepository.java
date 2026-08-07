@@ -90,4 +90,12 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
 
         long getAwaitingCheck();
     }
+
+    /** 그리드의 열 목록. sort_order 순이고 GRID만 나온다 — ONLINE 숙제는 그리드에 안 뜬다. */
+    @Query("""
+        SELECT h FROM Homework h
+        WHERE h.lesson.id = :lessonId AND h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+        ORDER BY h.sortOrder ASC, h.id ASC
+        """)
+    List<Homework> findGridColumns(@Param("lessonId") Long lessonId);
 }

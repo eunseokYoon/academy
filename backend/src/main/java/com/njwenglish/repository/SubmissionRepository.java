@@ -177,4 +177,17 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         """)
     List<Submission> findOpenByStudent(@Param("studentId") Long studentId);
 
+    /**
+     * 그리드 한 장의 칸 전부. 열마다 따로 조회하면 열 N개에 N쿼리다.
+     * 수업일 하나에 열이 3~4개, 학생이 30명이라 100행 남짓이다.
+     */
+    @Query("""
+        SELECT s FROM Submission s
+        JOIN FETCH s.homework h
+        JOIN FETCH s.student
+        WHERE h.lesson.id = :lessonId
+          AND h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+        """)
+    List<Submission> findByLessonForGrid(@Param("lessonId") Long lessonId);
+
 }

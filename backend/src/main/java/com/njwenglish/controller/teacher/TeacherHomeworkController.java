@@ -5,6 +5,7 @@ import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.dto.homework.HomeworkCreateRequest;
 import com.njwenglish.dto.homework.HomeworkCreateResponse;
 import com.njwenglish.dto.homework.HomeworkDetailResponse;
+import com.njwenglish.dto.homework.HomeworkGridResponse;
 import com.njwenglish.dto.homework.HomeworkListItemResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.HomeworkTemplateCreateRequest;
@@ -107,5 +108,13 @@ public class TeacherHomeworkController {
     @GetMapping("/homeworks/{homeworkId}/submissions")
     public ApiResponse<HomeworkSubmissionsResponse> submissions(@PathVariable Long homeworkId) {
         return ApiResponse.ok(submissionService.submissionsOf(homeworkId));
+    }
+
+    // ---------- T-6b 숙제 그리드 ----------
+
+    /** 반 × 수업일 그리드 한 장. 열마다 API를 나누지 마라 — 한 화면에서 다 채운다. */
+    @GetMapping("/homework-grid")
+    public ApiResponse<HomeworkGridResponse> grid(@RequestParam Long lessonId) {
+        return ApiResponse.ok(homeworkService.grid(lessonId));
     }
 }
