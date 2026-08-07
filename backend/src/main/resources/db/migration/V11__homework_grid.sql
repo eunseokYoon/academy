@@ -31,9 +31,12 @@ ALTER TABLE submissions ADD CONSTRAINT ck_submissions_result
     CHECK (result IN ('DONE','PARTIAL','NOT_DONE'));
 
 -- 퍼센트는 세모에만 붙는다. 0과 100은 X·O가 이미 표현하므로 1~99다.
--- CASE로 쓰는 이유: result가 null일 때 OR 체인은 UNKNOWN이 되어 CHECK를 그냥 통과한다
+-- CASE로 쓰는 이유: result가 null일 때 OR 체인은 UNKNOWN이 되어 CHECK를 그냥 통과한다.
+-- IS NOT NULL을 빼지 마라. NULL BETWEEN 1 AND 99는 FALSE가 아니라 NULL이고,
+-- CHECK는 NULL에서 통과한다 — 퍼센트 없는 PARTIAL이 그냥 들어온다
 ALTER TABLE submissions ADD CONSTRAINT ck_submissions_rate CHECK (
-    CASE WHEN result = 'PARTIAL' THEN completion_rate BETWEEN 1 AND 99
+    CASE WHEN result = 'PARTIAL'
+         THEN completion_rate IS NOT NULL AND completion_rate BETWEEN 1 AND 99
          ELSE completion_rate IS NULL END);
 
 -- "O (재제출)" 표시는 O에만 붙는다. coalesce가 없으면 result가 null일 때 통과해 버린다

@@ -83,6 +83,18 @@ class HomeworkGradingTest {
     }
 
     @Test
+    @DisplayName("세모인데 퍼센트가 없으면 DB 제약에 걸릴 값이 만들어진다 - 호출부가 채워야 한다")
+    void gradePartialWithoutRateIsCallerError() {
+        Submission cell = cellOf(gridColumn());
+
+        cell.grade(HomeworkResult.PARTIAL, null);
+
+        // 엔티티는 막지 않는다. ck_submissions_rate가 최종 방어선이라는 걸 여기 남긴다
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.PARTIAL);
+        assertThat(cell.getCompletionRate()).isNull();
+    }
+
+    @Test
     @DisplayName("재제출 확인은 동그라미로 올리고 재제출 표시를 붙인다")
     void resolveByResubmission() {
         Submission cell = cellOf(gridColumn());
