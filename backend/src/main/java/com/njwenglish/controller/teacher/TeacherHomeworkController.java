@@ -6,6 +6,7 @@ import com.njwenglish.dto.homework.HomeworkCreateRequest;
 import com.njwenglish.dto.homework.HomeworkCreateResponse;
 import com.njwenglish.dto.homework.HomeworkDetailResponse;
 import com.njwenglish.dto.homework.HomeworkGridResponse;
+import com.njwenglish.dto.homework.HomeworkGridSaveRequest;
 import com.njwenglish.dto.homework.HomeworkListItemResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.HomeworkTemplateCreateRequest;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -116,5 +118,16 @@ public class TeacherHomeworkController {
     @GetMapping("/homework-grid")
     public ApiResponse<HomeworkGridResponse> grid(@RequestParam Long lessonId) {
         return ApiResponse.ok(homeworkService.grid(lessonId));
+    }
+
+    /**
+     * 그리드 한 장 통째로 저장. 열 생성도 여기서 한다(homeworkId가 null인 열).
+     *
+     * <p>배열에서 빠진 열은 지워지지 않는다. 삭제는 DELETE /teacher/homeworks/{id}다.
+     */
+    @PutMapping("/homework-grid")
+    public ApiResponse<HomeworkGridResponse> saveGrid(
+            @Valid @RequestBody HomeworkGridSaveRequest request) {
+        return ApiResponse.ok(homeworkService.saveGrid(request));
     }
 }

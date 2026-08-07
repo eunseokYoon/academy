@@ -1,10 +1,18 @@
 package com.njwenglish.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.verify;
 
+import com.njwenglish.common.error.BusinessException;
+import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.dto.homework.HomeworkGridResponse;
+import com.njwenglish.dto.homework.HomeworkGridSaveRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
@@ -31,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -283,6 +292,133 @@ class HomeworkGridServiceTest {
         assertThat(response.columns().get(0).cells()).hasSize(1);
         assertThat(response.columns().get(0).resubmitTargetCount()).isEqualTo(0);
         assertThat(response.columns().get(0).awaitingCheckCount()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("새 열을 저장하면 수업일 재원생 전원의 칸이 미채점으로 깔린다")
+    void saveGridCreatesColumnAndCells() {
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun, kwonTaeHo));
+        given(homeworkRepository.save(any(Homework.class))).willAnswer(invocation -> {
+            Homework saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 720L);
+            return saved;
+        });
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of());
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of());
+
+        HomeworkGridSaveRequest request = new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(null, "독해 5-8", (short) 1, List.of())));
+
+        homeworkService.saveGrid(request);
+
+        ArgumentCaptor<List<Submission>> captor = ArgumentCaptor.forClass(List.class);
+        verify(submissionRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(2);
+        assertThat(captor.getValue()).allMatch(cell -> cell.getResult() == null);
+        assertThat(captor.getValue()).extracting(cell -> cell.getStudent().getName())
+            .containsExactly("고연준", "권태호");
+    }
+
+    @Test
+    @DisplayName("새 열과 그 채점을 한 요청에 같이 보내면 그 자리에서 반영된다")
+    void saveGridGradesNewColumnCellsInSameRequest() {
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun, kwonTaeHo));
+        given(homeworkRepository.save(any(Homework.class))).willAnswer(invocation -> {
+            Homework saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 720L);
+            return saved;
+        });
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of());
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of());
+
+        // 새 열(homeworkId=null)인데 고연준 칸에 바로 DONE을 채점해서 보낸다.
+        HomeworkGridSaveRequest request = new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(null, "독해 5-8", (short) 1, List.of(
+                new HomeworkGridSaveRequest.Cell(88L, HomeworkResult.DONE, null)))));
+
+        homeworkService.saveGrid(request);
+
+        ArgumentCaptor<List<Submission>> captor = ArgumentCaptor.forClass(List.class);
+        verify(submissionRepository).saveAll(captor.capture());
+        Submission goYeonJunCell = captor.getValue().stream()
+            .filter(cell -> cell.getStudent().getId().equals(88L))
+            .findFirst().orElseThrow();
+        Submission kwonTaeHoCell = captor.getValue().stream()
+            .filter(cell -> cell.getStudent().getId().equals(91L))
+            .findFirst().orElseThrow();
+
+        assertThat(goYeonJunCell.getResult()).isEqualTo(HomeworkResult.DONE);
+        assertThat(kwonTaeHoCell.getResult()).isNull();
+    }
+
+    @Test
+    @DisplayName("기존 열의 칸에 세모와 퍼센트를 저장한다")
+    void saveGridGradesCells() {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission cell = Fixtures.submission(1L, column, goYeonJun);
+
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun));
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of(column));
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of(cell));
+        given(submissionPhotoRepository.countBySubmissionIds(List.of(1L))).willReturn(List.of());
+
+        HomeworkGridSaveRequest request = new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(720L, "독해 5-8 (수정)", (short) 1, List.of(
+                new HomeworkGridSaveRequest.Cell(88L, HomeworkResult.PARTIAL, (short) 50)))));
+
+        homeworkService.saveGrid(request);
+
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.PARTIAL);
+        assertThat(cell.getCompletionRate()).isEqualTo((short) 50);
+        assertThat(column.getTitle()).isEqualTo("독해 5-8 (수정)");
+    }
+
+    @Test
+    @DisplayName("result를 null로 보내면 행은 남고 미채점으로 되돌아간다")
+    void saveGridClearsResult() {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission cell = Fixtures.submission(1L, column, goYeonJun);
+        cell.grade(HomeworkResult.NOT_DONE, null);
+
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun));
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of(column));
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of(cell));
+        given(submissionPhotoRepository.countBySubmissionIds(List.of(1L))).willReturn(List.of());
+
+        homeworkService.saveGrid(new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(720L, "독해 5-8", (short) 1, List.of(
+                new HomeworkGridSaveRequest.Cell(88L, null, null))))));
+
+        assertThat(cell.getResult()).isNull();
+    }
+
+    @Test
+    @DisplayName("다른 수업의 열을 저장하려 하면 400이다")
+    void saveGridRejectsForeignColumn() {
+        ClassRoom other = ClassRoom.create(teacher, "다른 반", "ZZ99ZZ", null);
+        ReflectionTestUtils.setField(other, "id", 9L);
+        Lesson otherLesson = Fixtures.lesson(999L, other, LESSON_DATE);
+        Homework foreign = Fixtures.gridColumn(888L, other, otherLesson, "남의 열", (short) 1);
+
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of(foreign));
+
+        HomeworkGridSaveRequest request = new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(888L, "남의 열", (short) 1, List.of())));
+
+        assertThatThrownBy(() -> homeworkService.saveGrid(request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
     private PhotoCountRow photoCountRow(Long submissionId, long photoCount) {

@@ -10,6 +10,7 @@ import com.njwenglish.dto.homework.HomeworkCreateRequest;
 import com.njwenglish.dto.homework.HomeworkCreateResponse;
 import com.njwenglish.dto.homework.HomeworkDetailResponse;
 import com.njwenglish.dto.homework.HomeworkGridResponse;
+import com.njwenglish.dto.homework.HomeworkGridSaveRequest;
 import com.njwenglish.dto.homework.HomeworkListItemResponse;
 import com.njwenglish.dto.homework.HomeworkUpdateRequest;
 import com.njwenglish.dto.homework.PendingHomeworkResponse;
@@ -38,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -274,6 +276,101 @@ public class HomeworkService {
             counts.put(row.getSubmissionId(), (int) row.getPhotoCount());
         }
         return counts;
+    }
+
+    /**
+     * 그리드 한 장 통째 저장. 열 생성과 채점이 한 트랜잭션에서 끝난다.
+     *
+     * <p><b>배열에서 빠진 열을 지우지 않는다.</b> 삭제는 delete()뿐이다 —
+     * PUT이 열을 지우면 통신이 끊긴 저장 한 번에 제출물이 날아간다.
+     *
+     * <p>요청에 없는 학생의 칸도 건드리지 않는다. 두 사람이 동시에 열어도
+     * 서로의 입력을 지우지 않는다.
+     */
+    @Transactional
+    public HomeworkGridResponse saveGrid(HomeworkGridSaveRequest request) {
+        Lesson lesson = lessonRepository.findById(request.lessonId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        Map<Long, Homework> existing = homeworkRepository.findGridColumns(lesson.getId())
+            .stream().collect(Collectors.toMap(Homework::getId, column -> column));
+        // 칸 키는 "homeworkId:studentId" 문자열이다 — 열 하나에 학생 하나가 물려야 유일하다.
+        Map<String, Submission> cells = submissionRepository
+            .findByLessonForGrid(lesson.getId()).stream()
+            .collect(Collectors.toMap(HomeworkService::cellKey, cell -> cell));
+
+        for (HomeworkGridSaveRequest.Column column : request.columns()) {
+            Homework homework = column.homeworkId() == null
+                ? createGridColumn(lesson, column, cells)
+                : renameGridColumn(lesson, existing, column);
+            applyCells(homework, column, cells);
+        }
+        return grid(lesson.getId());
+    }
+
+    /**
+     * 새 열. 열을 만드는 순간 대상 전원의 칸을 미리 깐다 — 그래야 미채점이 회색으로 보인다.
+     *
+     * <p>방금 깐 칸을 cells 맵에도 넣어 둔다. 새 열과 그 채점을 한 요청에 같이 보내도
+     * applyCells가 그 칸을 곧바로 찾을 수 있다 — saveAll의 반환값이 아니라 방금 만든
+     * rows를 그대로 쓴다. IDENTITY라 flush 전에도 homeworkId·studentId는 이미 채워져 있다.
+     */
+    private Homework createGridColumn(Lesson lesson, HomeworkGridSaveRequest.Column column,
+                                      Map<String, Submission> cells) {
+        Homework homework = homeworkRepository.save(Homework.gridColumn(
+            lesson.getClassRoom(), lesson, currentTeacher(),
+            column.title(), column.sortOrder()));
+
+        List<Student> students = enrollmentRepository
+            .findActiveStudents(lesson.getClassRoom().getId(), lesson.getLessonDate());
+        List<Submission> rows = students.stream()
+            .map(student -> Submission.notSubmitted(homework, student))
+            .toList();
+        submissionRepository.saveAll(rows);
+        rows.forEach(row -> cells.put(cellKey(row), row));
+        return homework;
+    }
+
+    /**
+     * 남의 수업 열을 밀어 넣으면 그 반 그리드가 오염된다. id가 이 수업 것인지 대조한다.
+     *
+     * <p>existing은 findGridColumns(lesson.getId())로 이미 이 수업으로 걸러서 가져오지만,
+     * 그 필터를 유일한 방어선으로 삼지 않는다 — lesson 소속을 여기서 한 번 더 확인한다.
+     */
+    private Homework renameGridColumn(Lesson lesson, Map<Long, Homework> existing,
+                                      HomeworkGridSaveRequest.Column column) {
+        Homework homework = existing.get(column.homeworkId());
+        if (homework == null || homework.getLesson() == null
+            || !homework.getLesson().getId().equals(lesson.getId())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        homework.renameColumn(column.title(), column.sortOrder());
+        return homework;
+    }
+
+    /**
+     * 칸 채점. 새로 만든 열의 칸도 createGridColumn이 cells 맵에 미리 넣어 두므로
+     * 같은 요청 안에서 바로 채점할 수 있다. 그래도 요청에 없는 studentId가 오면
+     * (예: 명단에 없는 학생) 조용히 건너뛴다 — 잘못된 값으로 500을 내는 것보다 낫다.
+     */
+    private void applyCells(Homework homework, HomeworkGridSaveRequest.Column column,
+                            Map<String, Submission> cells) {
+        for (HomeworkGridSaveRequest.Cell requested : column.cells()) {
+            Submission cell = cells.get(
+                cellKey(homework.getId(), requested.studentId()));
+            if (cell == null) {
+                continue;
+            }
+            cell.grade(requested.result(), requested.completionRate());
+        }
+    }
+
+    private static String cellKey(Submission cell) {
+        return cellKey(cell.getHomework().getId(), cell.getStudent().getId());
+    }
+
+    private static String cellKey(Long homeworkId, Long studentId) {
+        return homeworkId + ":" + studentId;
     }
 
     // ---------- 내부 ----------
