@@ -3,9 +3,8 @@ package com.njwenglish.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
@@ -400,6 +399,53 @@ class HomeworkGridServiceTest {
                 new HomeworkGridSaveRequest.Cell(88L, null, null))))));
 
         assertThat(cell.getResult()).isNull();
+    }
+
+    @Test
+    @DisplayName("명단에 있는데 칸이 없는 학생은 채점하면 칸이 만들어진다")
+    void saveGridCreatesMissingCellForRosterStudent() {
+        // 열을 만든 뒤 잘못된 퇴원이 정정되면 이 상태가 된다.
+        // grid()가 빈 칸을 내려주므로 화면에는 채점 칸이 뜬다 — 저장이 조용히 버리면 안 된다
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission onlyCell = Fixtures.submission(1L, column, goYeonJun);
+
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun, kwonTaeHo));
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of(column));
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of(onlyCell));
+        given(submissionRepository.save(any(Submission.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+        given(submissionPhotoRepository.countBySubmissionIds(List.of(1L))).willReturn(List.of());
+
+        homeworkService.saveGrid(new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(720L, "독해 5-8", (short) 1, List.of(
+                new HomeworkGridSaveRequest.Cell(91L, HomeworkResult.NOT_DONE, null))))));
+
+        ArgumentCaptor<Submission> captor = ArgumentCaptor.forClass(Submission.class);
+        verify(submissionRepository).save(captor.capture());
+        assertThat(captor.getValue().getStudent().getId()).isEqualTo(91L);
+        assertThat(captor.getValue().getResult()).isEqualTo(HomeworkResult.NOT_DONE);
+    }
+
+    @Test
+    @DisplayName("명단에도 없는 학생의 칸은 만들지 않고 건너뛴다")
+    void saveGridSkipsOffRosterStudent() {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission onlyCell = Fixtures.submission(1L, column, goYeonJun);
+
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun));
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of(column));
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of(onlyCell));
+        given(submissionPhotoRepository.countBySubmissionIds(List.of(1L))).willReturn(List.of());
+
+        homeworkService.saveGrid(new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(720L, "독해 5-8", (short) 1, List.of(
+                new HomeworkGridSaveRequest.Cell(91L, HomeworkResult.NOT_DONE, null))))));
+
+        verify(submissionRepository, never()).save(any(Submission.class));
     }
 
     @Test

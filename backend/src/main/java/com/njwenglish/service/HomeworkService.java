@@ -36,6 +36,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -298,12 +299,17 @@ public class HomeworkService {
         Map<String, Submission> cells = submissionRepository
             .findByLessonForGrid(lesson.getId()).stream()
             .collect(Collectors.toMap(HomeworkService::cellKey, cell -> cell));
+        // 명단은 한 번만 읽는다. 열마다 읽으면 새 열 3개에 같은 쿼리가 3번 나간다
+        Map<Long, Student> roster = enrollmentRepository
+            .findActiveStudents(lesson.getClassRoom().getId(), lesson.getLessonDate())
+            .stream().collect(Collectors.toMap(Student::getId, student -> student,
+                (first, duplicate) -> first, LinkedHashMap::new));
 
         for (HomeworkGridSaveRequest.Column column : request.columns()) {
             Homework homework = column.homeworkId() == null
-                ? createGridColumn(lesson, column, cells)
+                ? createGridColumn(lesson, column, cells, roster)
                 : renameGridColumn(lesson, existing, column);
-            applyCells(homework, column, cells);
+            applyCells(homework, column, cells, roster);
         }
         return grid(lesson.getId());
     }
@@ -316,14 +322,13 @@ public class HomeworkService {
      * rows를 그대로 쓴다. IDENTITY라 flush 전에도 homeworkId·studentId는 이미 채워져 있다.
      */
     private Homework createGridColumn(Lesson lesson, HomeworkGridSaveRequest.Column column,
-                                      Map<String, Submission> cells) {
+                                      Map<String, Submission> cells,
+                                      Map<Long, Student> roster) {
         Homework homework = homeworkRepository.save(Homework.gridColumn(
             lesson.getClassRoom(), lesson, currentTeacher(),
             column.title(), column.sortOrder()));
 
-        List<Student> students = enrollmentRepository
-            .findActiveStudents(lesson.getClassRoom().getId(), lesson.getLessonDate());
-        List<Submission> rows = students.stream()
+        List<Submission> rows = roster.values().stream()
             .map(student -> Submission.notSubmitted(homework, student))
             .toList();
         submissionRepository.saveAll(rows);
@@ -350,16 +355,28 @@ public class HomeworkService {
 
     /**
      * 칸 채점. 새로 만든 열의 칸도 createGridColumn이 cells 맵에 미리 넣어 두므로
-     * 같은 요청 안에서 바로 채점할 수 있다. 그래도 요청에 없는 studentId가 오면
-     * (예: 명단에 없는 학생) 조용히 건너뛴다 — 잘못된 값으로 500을 내는 것보다 낫다.
+     * 같은 요청 안에서 바로 채점할 수 있다.
+     *
+     * <p><b>명단에 있는데 칸이 없으면 그 자리에서 만든다.</b> grid()가 그런 학생에게도
+     * 빈 칸을 내려주기 때문에(칸 없는 학생도 명단에 남는다) 화면에는 채점 가능한 칸이 뜬다.
+     * 여기서 건너뛰면 선생님이 매긴 값이 200 OK와 함께 조용히 사라진다.
+     * 열을 만든 뒤 잘못된 퇴원이 정정되면 실제로 이 상태가 된다 —
+     * findActiveStudents가 보는 student.status는 그 시점의 값이 아니라 현재 값이다.
+     *
+     * <p>명단에도 없는 studentId는 조용히 건너뛴다. 잘못된 값으로 500을 내는 것보다 낫다.
      */
     private void applyCells(Homework homework, HomeworkGridSaveRequest.Column column,
-                            Map<String, Submission> cells) {
+                            Map<String, Submission> cells, Map<Long, Student> roster) {
         for (HomeworkGridSaveRequest.Cell requested : column.cells()) {
             Submission cell = cells.get(
                 cellKey(homework.getId(), requested.studentId()));
             if (cell == null) {
-                continue;
+                Student student = roster.get(requested.studentId());
+                if (student == null) {
+                    continue;
+                }
+                cell = submissionRepository.save(Submission.notSubmitted(homework, student));
+                cells.put(cellKey(cell), cell);
             }
             cell.grade(requested.result(), requested.completionRate());
         }
