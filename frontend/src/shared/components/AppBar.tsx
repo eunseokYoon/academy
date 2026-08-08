@@ -29,7 +29,7 @@ export function AppBar({ role, tabs, action, wide }: Props) {
   const width = wide ? "max-w-screen-sm md:max-w-screen-xl" : "max-w-screen-sm";
 
   return (
-    <header className="bg-brand-900 pb-8 text-white">
+    <header className="bg-banner pb-8 text-white">
       <div className={`mx-auto flex w-full ${width} items-center justify-between gap-3 px-4 py-3`}>
         <div className="flex min-w-0 items-center gap-2.5">
           <Mark />

@@ -41,7 +41,7 @@ export default function LoginPage() {
 
   return (
     // 처음 만나는 화면이라 앱바의 남색을 전면에 쓴다. 흰 카드 하나만 떠 있다
-    <div className="flex min-h-screen flex-col items-center justify-center bg-brand-900 p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-banner p-4">
       <div className="w-full max-w-sm">
         <div className="mb-5 flex items-center gap-2.5 px-1 text-white">
           <span
