@@ -59,7 +59,16 @@ export function GradeCell({ result, completionRate, resolvedByResubmission, onCh
           value={completionRate ?? ""}
           onChange={(e) => {
             const raw = e.target.value;
-            onChange("PARTIAL", raw === "" ? null : Number(raw));
+            // min/max는 스피너 버튼에만 강제되고 타이핑·삭제로는 그냥 통과한다.
+            // 빈 값은 "입력 중"으로 null을 유지하고(저장 시점 검사가 마저 잡는다),
+            // 숫자가 들어오면 1~99로 즉시 잘라 서버 CHECK가 걸릴 값 자체를 못 만들게 한다
+            if (raw === "") {
+              onChange("PARTIAL", null);
+              return;
+            }
+            const parsed = Number(raw);
+            if (Number.isNaN(parsed)) return;
+            onChange("PARTIAL", Math.min(99, Math.max(1, Math.trunc(parsed))));
           }}
           className="w-14 rounded border border-slate-300 px-1 py-0.5 text-center text-xs"
           aria-label="완료 퍼센트"

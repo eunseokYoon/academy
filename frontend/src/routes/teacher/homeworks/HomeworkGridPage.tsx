@@ -137,20 +137,52 @@ export default function HomeworkGridPage() {
     setColumns((prev) => [...prev, { homeworkId: null, title: "" }]);
   }
 
+  const students = grid.data?.students ?? [];
+
   /**
-   * 저장 전 제목을 검사한다. 새 열은 서버 @NotBlank에 걸려 400이 나는데,
-   * 그 전에 화면에서 막아야 "왜 실패했는지 모르는" 상태를 안 만든다.
+   * PARTIAL인데 퍼센트가 1~99를 벗어난(또는 비어 있는) 칸을 찾는다.
+   *
+   * <p>PUT은 그리드 한 장을 통째로 보낸다. 칸 하나가 서버 CHECK(ck_submissions_rate)에
+   * 걸리면 요청 전체가 400이 되고, 방금 20명 × 4열을 채점한 게 전부 날아간다.
+   * 그래서 어느 학생·어느 열인지까지 짚어서 저장 전에 막는다.
+   */
+  function findInvalidCompletionRate(): string | null {
+    for (let index = 0; index < columns.length; index++) {
+      const title = columns[index].title.trim() || `${index + 1}번째 열`;
+      for (const student of students) {
+        const draft = drafts[index]?.[student.studentId] ?? EMPTY_CELL;
+        if (draft.result !== "PARTIAL") continue;
+        const rate = draft.completionRate;
+        if (rate === null || rate < 1 || rate > 99) {
+          return `${title} · ${student.name}의 퍼센트를 1~99 사이로 입력하세요.`;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 저장 전 검사 두 가지(제목, 퍼센트)를 통과해야 실제로 보낸다.
+   *
+   * <p>검사에 걸려 막을 때는 반드시 save.reset()도 같이 부른다 — 안 그러면 "한 번 저장
+   * 성공 → 열 추가 → 제목 안 채우고 저장" 순서에서 새 에러와 옛 "저장되었습니다."가
+   * 동시에 떠서 뭐가 맞는 상태인지 알 수 없다.
    */
   function handleSave() {
     if (columns.some((column) => column.title.trim() === "")) {
       setError("모든 열에 제목을 입력하세요.");
+      save.reset();
+      return;
+    }
+    const rateError = findInvalidCompletionRate();
+    if (rateError) {
+      setError(rateError);
+      save.reset();
       return;
     }
     setError(null);
     save.mutate();
   }
-
-  const students = grid.data?.students ?? [];
 
   return (
     <div className="space-y-4">
@@ -188,8 +220,6 @@ export default function HomeworkGridPage() {
           ))}
         </select>
       </div>
-
-      <FormError message={error} />
 
       {lessonId === "" ? (
         <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
@@ -303,6 +333,10 @@ export default function HomeworkGridPage() {
             </table>
           </div>
 
+          {/* 에러·완료 메시지는 저장 버튼(하단 고정바) 바로 위에 둔다. 표가 길면
+              위쪽에 있던 메시지는 저장을 누른 뒤 스크롤을 올려야만 보인다 — 특히
+              퍼센트 오류는 어느 칸인지 안 보고 넘어가기 쉽다. ScorePage.tsx와 같은 위치다 */}
+          <FormError message={error} />
           {save.isSuccess && <p className="text-sm text-emerald-700">저장되었습니다.</p>}
 
           <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t
