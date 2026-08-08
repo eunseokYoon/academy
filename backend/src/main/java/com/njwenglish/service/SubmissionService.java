@@ -123,6 +123,7 @@ public class SubmissionService {
             new StudentSubmissionResponse(submission.getId(), submission.getStatus(),
                 submission.getSubmittedAt(), submission.isLate(),
                 photosOf(submission.getId()), videoOf(submission)),
+            submission.isResubmitTarget(),
             feedback == null ? null : FeedbackResponse.from(feedback));
     }
 

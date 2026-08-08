@@ -87,14 +87,28 @@ export default function HomeworkListPage() {
           {(homeworks.data?.items ?? []).map((homework) => (
             <li key={homework.homeworkId}>
               <Link
-                to={`/teacher/homeworks/${homework.homeworkId}`}
+                // GRID 열은 상세가 아니라 채점 화면으로 보낸다. 그리드 화면은 반·수업일을
+                // 자기 상태로 고르므로 여기서는 쿼리 파라미터 없이 화면만 열어 준다
+                to={
+                  homework.kind === "GRID"
+                    ? "/teacher/homework-grid"
+                    : `/teacher/homeworks/${homework.homeworkId}`
+                }
                 className="block rounded-xl bg-white p-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-slate-900">{homework.title}</span>
-                  <span className="shrink-0 text-xs text-slate-400">
-                    {formatDueAt(homework.dueAt)} 마감
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Badge tone={homework.kind === "GRID" ? "neutral" : "ok"}>
+                      {homework.kind === "GRID" ? "그리드" : "온라인"}
+                    </Badge>
+                    <span className="font-medium text-slate-900">{homework.title}</span>
+                  </div>
+                  {/* GRID는 재제출을 열기 전까지 마감이 없다 */}
+                  {homework.dueAt !== null && (
+                    <span className="shrink-0 text-xs text-slate-400">
+                      {formatDueAt(homework.dueAt)} 마감
+                    </span>
+                  )}
                 </div>
                 <p className="mt-0.5 text-sm text-slate-500">{homework.classRoomName}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-1">

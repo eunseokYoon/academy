@@ -194,9 +194,9 @@ function EditHomeworkModal({
     queryFn: () => getHomework(homeworkId),
   });
 
-  const [form, setForm] = useState<{ title: string; description: string; dueAt: string } | null>(
-    null,
-  );
+  const [form, setForm] = useState<
+    { title: string; description: string; dueAt: string | null } | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
 
   // 서버 값이 오면 한 번만 폼에 싣는다
@@ -205,8 +205,10 @@ function EditHomeworkModal({
     setForm({
       title: data.title,
       description: data.description ?? "",
+      // GRID 열은 재제출을 열기 전까지 마감이 없다. 이 경로로도 마감을 못 바꾼다 —
+      // 서버가 GRID의 dueAt을 무조건 거부한다(재제출 마감은 그리드 화면 전용 값이라서).
       // datetime-local은 오프셋을 못 받는다. 앞 16자만 쓰면 KST 그대로다
-      dueAt: data.dueAt.slice(0, 16),
+      dueAt: data.kind === "GRID" || data.dueAt === null ? null : data.dueAt.slice(0, 16),
     });
   }
 
@@ -216,7 +218,8 @@ function EditHomeworkModal({
         title: form!.title.trim(),
         description: form!.description.trim() || null,
         lessonId: data?.lessonId ?? null,
-        dueAt: `${form!.dueAt}:00+09:00`,
+        // GRID는 이 경로로 마감을 보내면 서버가 400을 낸다. 필드 자체를 생략한다
+        dueAt: form!.dueAt === null ? undefined : `${form!.dueAt}:00+09:00`,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["teacher", "homeworks"] });
@@ -250,14 +253,17 @@ function EditHomeworkModal({
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}
           />
-          <TextField
-            label="마감"
-            type="datetime-local"
-            value={form.dueAt}
-            onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
-            hint="늦추는 방향만 됩니다. 앞당기려면 삭제 후 다시 출제하세요."
-            required
-          />
+          {/* GRID는 여기서 마감을 바꾸지 않는다 — 재제출 마감은 채점 그리드에서만 연다 */}
+          {form.dueAt !== null && (
+            <TextField
+              label="마감"
+              type="datetime-local"
+              value={form.dueAt}
+              onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+              hint="늦추는 방향만 됩니다. 앞당기려면 삭제 후 다시 출제하세요."
+              required
+            />
+          )}
           <FormError message={error} />
           <SubmitButton pending={mutation.isPending}>저장</SubmitButton>
         </form>

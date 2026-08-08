@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
 import { Badge } from "../../shared/components/Badge";
+import { gradeLabel, gradeTone } from "../../shared/homework/grade";
 import { formatDueAt } from "../../shared/homework/types";
 import { getChildHomeworks } from "./api";
 
 /**
- * P-3. <b>제출 여부만</b> 본다.
+ * P-3. <b>제출 여부와 채점 결과만</b> 본다.
  *
  * <p>숙제 내용·사진·선생님 피드백은 여기 오지 않는다. 응답 DTO 자체가 다르다.
  * 학생 화면(S-4) 컴포넌트를 여기서 재사용하지 마라 — 그 순간 전부 새어 나간다.
@@ -52,15 +53,26 @@ export default function ParentHomeworkPage() {
             <li key={item.homeworkId} className="rounded-xl bg-white p-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <span className="font-medium text-slate-900">{item.title}</span>
-                {item.status === "NOT_SUBMITTED" ? (
+                {item.kind === "GRID" ? (
+                  <Badge tone={gradeTone(item.result)}>
+                    {gradeLabel(item.result, item.completionRate, item.resolvedByResubmission)}
+                  </Badge>
+                ) : item.status === "NOT_SUBMITTED" ? (
                   <Badge tone="danger">미제출</Badge>
                 ) : (
                   <Badge tone="ok">제출</Badge>
                 )}
               </div>
               <p className="mt-0.5 text-sm text-slate-500">
-                {item.classRoomName} · {formatDueAt(item.dueAt)} 마감
+                {item.classRoomName}
+                {item.lessonDate !== null && ` · ${item.lessonDate} 수업`}
               </p>
+              {/* GRID는 재제출을 열기 전까지 마감이 없다 */}
+              {item.dueAt !== null && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {item.kind === "GRID" ? "다시 제출 마감" : "마감"} {formatDueAt(item.dueAt)}
+                </p>
+              )}
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {item.isLate && <Badge tone="warn">늦게 냄</Badge>}
                 {item.checked && <Badge tone="neutral">선생님 확인 완료</Badge>}

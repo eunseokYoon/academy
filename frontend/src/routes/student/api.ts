@@ -139,6 +139,11 @@ export interface StudentHomeworkDetail {
     /** 최대 1개. 없으면 null이다. */
     video: { url: string; bytes: number | null } | null;
   };
+  /**
+   * 제출 화면(사진·영상 추가, 제출 버튼)을 여는 <b>유일한 근거</b>다.
+   * homework.kind·submission.status·homework.dueAt만으로는 판정할 수 없어 서버가 계산해 내려준다.
+   */
+  resubmitRequired: boolean;
   /** 선생님 피드백. 학생 화면에만 나온다. */
   feedback: { content: string; createdAt: string } | null;
 }
