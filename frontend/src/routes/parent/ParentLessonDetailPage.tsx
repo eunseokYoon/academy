@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
 import { Badge } from "../../shared/components/Badge";
 import { DAY_STATUS_STYLE } from "../../shared/attendance/types";
+import { gradeLabel, gradeTone } from "../../shared/homework/grade";
 import { SUBMISSION_LABELS, formatDueAt } from "../../shared/homework/types";
 import { getChildLesson } from "./api";
 
@@ -93,21 +94,38 @@ export default function ParentLessonDetailPage() {
           {/* description은 학부모 응답에서 항상 null이다. 제목·마감·제출 여부까지가 전부다 */}
           <p className="text-sm font-medium text-slate-900">{data.homework.title}</p>
           <div className="mt-2 flex items-center gap-2">
-            <Badge
-              tone={
-                data.homework.submissionStatus &&
-                data.homework.submissionStatus !== "NOT_SUBMITTED"
-                  ? "ok"
-                  : "warn"
-              }
-            >
-              {data.homework.submissionStatus
-                ? SUBMISSION_LABELS[data.homework.submissionStatus]
-                : "미제출"}
-            </Badge>
-            <span className="text-xs text-slate-500">
-              마감 {formatDueAt(data.homework.dueAt)}
-            </span>
+            {/*
+              GRID 숙제는 채점 결과로 그린다. submissionStatus로 그리면 ⭕를 받은 학생이
+              "미제출"로 뜬다 — ⭕는 온라인 제출을 안 하므로 status가 계속 NOT_SUBMITTED다.
+            */}
+            {data.homework.kind === "GRID" ? (
+              <Badge tone={gradeTone(data.homework.result)}>
+                {gradeLabel(
+                  data.homework.result,
+                  data.homework.completionRate,
+                  data.homework.resolvedByResubmission,
+                )}
+              </Badge>
+            ) : (
+              <Badge
+                tone={
+                  data.homework.submissionStatus &&
+                  data.homework.submissionStatus !== "NOT_SUBMITTED"
+                    ? "ok"
+                    : "warn"
+                }
+              >
+                {data.homework.submissionStatus
+                  ? SUBMISSION_LABELS[data.homework.submissionStatus]
+                  : "미제출"}
+              </Badge>
+            )}
+            {/* GRID는 재제출을 열기 전까지 마감이 없다. 없는 걸 그리면 1970년이 뜬다 */}
+            {data.homework.dueAt !== null && (
+              <span className="text-xs text-slate-500">
+                마감 {formatDueAt(data.homework.dueAt)}
+              </span>
+            )}
           </div>
         </Section>
       )}

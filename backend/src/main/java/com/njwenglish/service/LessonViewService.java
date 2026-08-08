@@ -244,8 +244,9 @@ public class LessonViewService {
             homework.getId(),
             homework.getTitle(),
             homework.getDescription(),
+            homework.getKind(),
             homework.getDueAt(),
-            submissionStatusOf(homework.getId(), studentId));
+            submissionOf(homework.getId(), studentId));
     }
 
     /** 학부모용. <b>description을 넘기지 않는다</b> — 팩토리가 인자로 받지도 않는다. */
@@ -253,13 +254,21 @@ public class LessonViewService {
         return LessonReportResponse.Homework.forParent(
             homework.getId(),
             homework.getTitle(),
+            homework.getKind(),
             homework.getDueAt(),
-            submissionStatusOf(homework.getId(), studentId));
+            submissionOf(homework.getId(), studentId));
     }
 
-    private SubmissionStatus submissionStatusOf(Long homeworkId, Long studentId) {
+    /**
+     * 제출물 자체를 넘긴다. <b>status만 뽑아 쓰면 안 된다</b> —
+     * 이제 수업에 걸리는 숙제는 대개 그리드 열이고, 거기서 ⭕를 받은 학생은
+     * 온라인 제출을 하지 않아 status가 영원히 NOT_SUBMITTED다.
+     * status만 보면 숙제를 다 해온 학생의 레포트에 "미제출"이 뜬다.
+     *
+     * <p>없을 수 있다 — 출제 뒤에 입반한 학생은 칸이 없다.
+     */
+    private Submission submissionOf(Long homeworkId, Long studentId) {
         return submissionRepository.findByHomeworkAndStudent(homeworkId, studentId)
-            .map(Submission::getStatus)
             .orElse(null);
     }
 }

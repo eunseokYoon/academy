@@ -95,7 +95,13 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
      * 물리 삭제 차단 조건. 하나라도 있으면 STUDENT_HAS_RECORDS다.
      *
      * <p>submissions는 출제 시 대상 전원의 행이 NOT_SUBMITTED로 미리 깔린다. "행이 있으면"으로
-     * 판단하면 아무도 지울 수 없으니 반드시 status로 걸러라.
+     * 판단하면 아무도 지울 수 없으니 반드시 걸러야 한다.
+     *
+     * <p><b>거르는 축이 둘이다.</b> status(온라인 제출)만 보면 그리드에서 ⭕를 받은 학생이
+     * 빠져나간다 — ⭕는 온라인 제출을 안 하므로 status가 영원히 NOT_SUBMITTED다.
+     * 한 학기 채점을 받았는데 그날들 출석이 아직 PENDING이면(확정 전에는 attendances 행이 없다)
+     * 다른 조건도 전부 비어서, 성적이 통째로 하드 삭제될 수 있다.
+     * SubmissionRepository.countGradedOrSubmitted와 같은 모양이어야 한다.
      *
      * <p>여섯 테이블은 아직 엔티티만 있고 리포지토리가 없다(Phase 4~6). 한 번의 EXISTS 질의로
      * 끝내는 편이 리포지토리 여섯 개를 미리 만드는 것보다 읽기 쉽다.
@@ -103,7 +109,8 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query(value = """
         SELECT EXISTS (SELECT 1 FROM attendances             WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM submissions             WHERE student_id = :studentId
-                                                               AND status <> 'NOT_SUBMITTED')
+                                                               AND (status <> 'NOT_SUBMITTED'
+                                                                    OR result IS NOT NULL))
             OR EXISTS (SELECT 1 FROM scores                  WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM online_test_submissions WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM clinic_reservations     WHERE student_id = :studentId)

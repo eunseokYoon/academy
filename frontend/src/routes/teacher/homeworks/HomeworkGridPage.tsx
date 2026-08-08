@@ -41,6 +41,13 @@ export default function HomeworkGridPage() {
   /** 열 인덱스 → { homeworkId, title } */
   const [columns, setColumns] = useState<{ homeworkId: number | null; title: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 저장하지 않은 입력이 있는가. 아래 동기화 effect가 이 값으로 자기 자신을 막는다.
+   *
+   * <p>재제출 요청·취소도 그리드 쿼리를 무효화한다. 그때 서버 값으로 초안을 덮으면
+   * 방금 찍은 채점이 <b>경고도 에러도 없이</b> 사라진다.
+   */
+  const [dirty, setDirty] = useState(false);
 
   const classRooms = useQuery({
     queryKey: ["teacher", "class-rooms"],
@@ -63,6 +70,9 @@ export default function HomeworkGridPage() {
   // grid.data가 새 lessonId로 교체될 때마다 이 effect가 다시 돌아 옛 초안을 덮어쓴다
   useEffect(() => {
     if (!grid.data) return;
+    // 저장 안 한 입력이 있으면 서버 값으로 덮지 않는다. 수업일을 바꿀 때는
+    // 선택 핸들러가 dirty를 먼저 내리므로 여기까지 내려와 정상적으로 초기화된다
+    if (dirty) return;
     const nextColumns = grid.data.columns.map((column) => ({
       homeworkId: column.homeworkId,
       title: column.title,
@@ -80,7 +90,7 @@ export default function HomeworkGridPage() {
     });
     setColumns(nextColumns);
     setDrafts(nextDrafts);
-  }, [grid.data]);
+  }, [grid.data, dirty]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -102,6 +112,9 @@ export default function HomeworkGridPage() {
       }),
     onSuccess: () => {
       setError(null);
+      // 저장했으니 서버가 정본이다. dirty를 먼저 내려야 아래 refetch가 초안에 반영된다 —
+      // 새 열의 id가 그 경로로만 들어온다
+      setDirty(false);
       // 입력칸을 비우지 않는다. 다시 불러와 채워진 상태(+ 새 열의 id)를 유지한다
       void queryClient.invalidateQueries({ queryKey: ["teacher", "homework-grid", lessonId] });
     },
@@ -127,6 +140,7 @@ export default function HomeworkGridPage() {
   });
 
   function updateCell(columnIndex: number, studentId: number, patch: CellDraft) {
+    setDirty(true);
     setDrafts((prev) => ({
       ...prev,
       [columnIndex]: { ...(prev[columnIndex] ?? {}), [studentId]: patch },
@@ -134,7 +148,13 @@ export default function HomeworkGridPage() {
   }
 
   function addColumn() {
+    setDirty(true);
     setColumns((prev) => [...prev, { homeworkId: null, title: "" }]);
+  }
+
+  function renameColumn(index: number, title: string) {
+    setDirty(true);
+    setColumns((prev) => prev.map((c, i) => (i === index ? { ...c, title } : c)));
   }
 
   const students = grid.data?.students ?? [];
@@ -193,8 +213,10 @@ export default function HomeworkGridPage() {
           value={classRoomId}
           onChange={(e) => {
             setClassRoomId(e.target.value === "" ? "" : Number(e.target.value));
-            // 반이 바뀌면 이전 반의 수업일 선택도 무의미하다 — 같이 비운다
+            // 반이 바뀌면 이전 반의 수업일 선택도 무의미하다 — 같이 비운다.
+            // dirty도 내린다. 안 내리면 앞 반의 초안이 다음 반 표에 그대로 남는다
             setLessonId("");
+            setDirty(false);
           }}
           className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm"
         >
@@ -208,7 +230,10 @@ export default function HomeworkGridPage() {
 
         <select
           value={lessonId}
-          onChange={(e) => setLessonId(e.target.value === "" ? "" : Number(e.target.value))}
+          onChange={(e) => {
+            setLessonId(e.target.value === "" ? "" : Number(e.target.value));
+            setDirty(false);
+          }}
           disabled={classRoomId === ""}
           className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm disabled:bg-slate-100"
         >
@@ -242,13 +267,7 @@ export default function HomeworkGridPage() {
                         <input
                           value={column.title}
                           placeholder="숙제 제목"
-                          onChange={(e) =>
-                            setColumns((prev) =>
-                              prev.map((c, i) =>
-                                i === index ? { ...c, title: e.target.value } : c,
-                              ),
-                            )
-                          }
+                          onChange={(e) => renameColumn(index, e.target.value)}
                           className="w-full rounded border border-slate-300 px-1 py-1 text-xs"
                         />
                         {/* 저장 전 새 열(homeworkId 없음)에는 재제출 버튼을 달지 않는다 —

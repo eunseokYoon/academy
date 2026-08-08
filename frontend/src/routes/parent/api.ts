@@ -93,7 +93,16 @@ export interface ParentLessonDetail {
     title: string;
     /** 학부모 응답에서는 항상 null이다. 숙제 지시문은 P-3과 마찬가지로 내려오지 않는다. */
     description: null;
-    dueAt: string;
+    kind: HomeworkKind;
+    /** GRID 열은 재제출을 열기 전까지 마감이 없다. */
+    dueAt: string | null;
+    /**
+     * 오프라인 채점 축. GRID면 이걸로 그려라 —
+     * submissionStatus는 ⭕를 받아도 NOT_SUBMITTED로 남아서 "미제출"이 뜬다.
+     */
+    result: HomeworkResult | null;
+    completionRate: number | null;
+    resolvedByResubmission: boolean;
     submissionStatus: SubmissionStatus | null;
   } | null;
   /** null이면 아직 출석 확정 전이다. 결석이 아니다. */

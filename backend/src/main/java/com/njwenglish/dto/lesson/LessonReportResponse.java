@@ -1,6 +1,9 @@
 package com.njwenglish.dto.lesson;
 
+import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.enums.AttendanceStatus;
+import com.njwenglish.entity.enums.HomeworkKind;
+import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -46,23 +49,50 @@ public record LessonReportResponse(
      *
      * <p>여기도 {@code new} 대신 팩토리를 쓴다. forParent는 description을 인자로 받지 않는다.
      */
+    /**
+     * 수업에 걸린 숙제 한 건.
+     *
+     * <p><b>축이 둘이다.</b> {@code result}가 오프라인 채점(⭕🔺❌·null=미채점)이고
+     * {@code submissionStatus}가 온라인 제출이다. GRID 숙제에서 ⭕를 받은 학생은
+     * 온라인 제출을 하지 않아 status가 영원히 NOT_SUBMITTED다 —
+     * <b>status만 보고 "미제출"을 그리면 다 해온 학생이 안 한 것으로 보인다.</b>
+     * 화면은 kind가 GRID면 result로, ONLINE이면 status로 분기해라.
+     *
+     * <p>dueAt은 GRID에서 null일 수 있다(재제출을 열기 전). 마감 줄을 조건부로 그려라.
+     */
     public record Homework(
         Long homeworkId,
         String title,
         String description,
+        HomeworkKind kind,
         OffsetDateTime dueAt,
+        HomeworkResult result,
+        Short completionRate,
+        boolean resolvedByResubmission,
         SubmissionStatus submissionStatus
     ) {
         public static Homework forStudent(Long homeworkId, String title, String description,
-                                          OffsetDateTime dueAt,
-                                          SubmissionStatus submissionStatus) {
-            return new Homework(homeworkId, title, description, dueAt, submissionStatus);
+                                          HomeworkKind kind, OffsetDateTime dueAt,
+                                          Submission submission) {
+            return of(homeworkId, title, description, kind, dueAt, submission);
         }
 
         /** P-5. description 자리는 여기서 null로 고정된다. */
-        public static Homework forParent(Long homeworkId, String title, OffsetDateTime dueAt,
-                                         SubmissionStatus submissionStatus) {
-            return new Homework(homeworkId, title, null, dueAt, submissionStatus);
+        public static Homework forParent(Long homeworkId, String title,
+                                         HomeworkKind kind, OffsetDateTime dueAt,
+                                         Submission submission) {
+            return of(homeworkId, title, null, kind, dueAt, submission);
+        }
+
+        /** submission이 null인 경우가 있다 — 출제 뒤에 입반한 학생은 칸이 없다. */
+        private static Homework of(Long homeworkId, String title, String description,
+                                   HomeworkKind kind, OffsetDateTime dueAt,
+                                   Submission submission) {
+            return new Homework(homeworkId, title, description, kind, dueAt,
+                submission == null ? null : submission.getResult(),
+                submission == null ? null : submission.getCompletionRate(),
+                submission != null && submission.isResolvedByResubmission(),
+                submission == null ? null : submission.getStatus());
         }
     }
 

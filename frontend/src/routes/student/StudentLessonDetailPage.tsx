@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { STATUS_LABEL } from "../../shared/attendance/types";
 import { Badge } from "../../shared/components/Badge";
+import { gradeLabel, gradeTone } from "../../shared/homework/grade";
 import { SUBMISSION_LABELS, formatDueAt } from "../../shared/homework/types";
 import { getMyLesson, recordLessonView } from "./api";
 
@@ -155,7 +156,19 @@ export default function StudentLessonDetailPage() {
               </p>
             )}
             <div className="flex items-center gap-2 pt-1">
-              {data.homework.submissionStatus ? (
+              {/*
+                GRID 숙제는 채점 결과로 그린다. submissionStatus로 그리면 ⭕를 받은 학생이
+                "미제출"로 뜬다 — ⭕는 온라인 제출을 안 하므로 status가 계속 NOT_SUBMITTED다.
+              */}
+              {data.homework.kind === "GRID" ? (
+                <Badge tone={gradeTone(data.homework.result)}>
+                  {gradeLabel(
+                    data.homework.result,
+                    data.homework.completionRate,
+                    data.homework.resolvedByResubmission,
+                  )}
+                </Badge>
+              ) : data.homework.submissionStatus ? (
                 <Badge
                   tone={data.homework.submissionStatus === "NOT_SUBMITTED" ? "warn" : "ok"}
                 >
@@ -164,9 +177,12 @@ export default function StudentLessonDetailPage() {
               ) : (
                 <Badge tone="warn">미제출</Badge>
               )}
-              <span className="text-xs text-slate-500">
-                마감 {formatDueAt(data.homework.dueAt)}
-              </span>
+              {/* GRID는 재제출을 열기 전까지 마감이 없다. 없는 걸 그리면 1970년이 뜬다 */}
+              {data.homework.dueAt !== null && (
+                <span className="text-xs text-slate-500">
+                  마감 {formatDueAt(data.homework.dueAt)}
+                </span>
+              )}
             </div>
           </Link>
         </Section>

@@ -518,7 +518,14 @@ export interface SubmissionListItem {
 }
 
 export interface HomeworkSubmissions {
-  homework: { id: number; title: string; classRoomName: string; dueAt: string };
+  /** GRID 열은 재제출을 열기 전까지 마감이 없다. */
+  homework: {
+    id: number;
+    title: string;
+    classRoomName: string;
+    kind: HomeworkKind;
+    dueAt: string | null;
+  };
   counts: HomeworkCounts;
   items: SubmissionListItem[];
 }

@@ -63,8 +63,10 @@ export default function HomeworkDetailPage() {
         <div className="mt-2 flex items-start justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{homework.title}</h2>
+            {/* GRID 열은 재제출을 열기 전까지 마감이 없다. 없는 걸 그리면 1970년이 뜬다 */}
             <p className="text-sm text-slate-500">
-              {homework.classRoomName} · {formatDueAt(homework.dueAt)} 마감
+              {homework.classRoomName}
+              {homework.dueAt !== null && ` · ${formatDueAt(homework.dueAt)} 마감`}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
