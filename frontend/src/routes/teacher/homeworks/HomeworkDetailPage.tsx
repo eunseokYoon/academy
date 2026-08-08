@@ -55,7 +55,7 @@ export default function HomeworkDetailPage() {
       <div>
         <button
           type="button"
-          onClick={() => navigate("/teacher/homeworks")}
+          onClick={() => navigate("/teacher/homeworks/list")}
           className="text-sm text-slate-500"
         >
           ← 숙제 목록
@@ -121,7 +121,7 @@ export default function HomeworkDetailPage() {
           onClose={() => setDeleting(false)}
           onDeleted={async () => {
             await queryClient.invalidateQueries({ queryKey: ["teacher", "homeworks"] });
-            navigate("/teacher/homeworks");
+            navigate("/teacher/homeworks/list");
           }}
         />
       )}

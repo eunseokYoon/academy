@@ -121,9 +121,11 @@ export const router = createBrowserRouter([
       { path: "lessons", element: <LessonListPage /> },
       { path: "lessons/:lessonId", element: <LessonDetailPage /> },
       { path: "attendance", element: <AttendancePage /> },
-      { path: "homeworks", element: <HomeworkListPage /> },
+      // 숙제 탭의 메인은 채점이다. 선생님이 매 수업 여는 화면이라 목록보다 앞에 온다.
+      // "list"는 정적 세그먼트라 :homeworkId보다 우선 매칭된다 — 순서에 기대지 않는다
+      { path: "homeworks", element: <HomeworkGridPage /> },
+      { path: "homeworks/list", element: <HomeworkListPage /> },
       { path: "homeworks/:homeworkId", element: <HomeworkDetailPage /> },
-      { path: "homework-grid", element: <HomeworkGridPage /> },
       { path: "clinics", element: <ClinicPage /> },
       { path: "scores", element: <ScorePage /> },
       { path: "regular-exams", element: <RegularExamPage /> },

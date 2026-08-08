@@ -43,11 +43,11 @@ export default function HomeworkListPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">숙제</h2>
+        <h2 className="text-lg font-semibold text-slate-900">숙제 목록</h2>
         <div className="flex gap-2">
-          {/* 반 × 수업일 채점 그리드(T-6b). 종이로 걷은 숙제는 여기서 채점한다 */}
+          {/* 반 × 수업일 채점 화면(T-6b)이 숙제 탭의 메인이다. 종이로 걷은 숙제는 거기서 채점한다 */}
           <Link
-            to="/teacher/homework-grid"
+            to="/teacher/homeworks"
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium
                        text-slate-700"
           >
@@ -87,19 +87,24 @@ export default function HomeworkListPage() {
           {(homeworks.data?.items ?? []).map((homework) => (
             <li key={homework.homeworkId}>
               <Link
-                // GRID 열은 상세가 아니라 채점 화면으로 보낸다. 그리드 화면은 반·수업일을
+                // GRID 열은 상세가 아니라 채점 화면으로 보낸다. 채점 화면은 반·수업일을
                 // 자기 상태로 고르므로 여기서는 쿼리 파라미터 없이 화면만 열어 준다
                 to={
                   homework.kind === "GRID"
-                    ? "/teacher/homework-grid"
+                    ? "/teacher/homeworks"
                     : `/teacher/homeworks/${homework.homeworkId}`
                 }
                 className="block rounded-xl bg-white p-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-1.5">
+                    {/*
+                      GRID를 "재제출"로 부른다. 이 목록은 h.dueAt BETWEEN으로 거르므로
+                      마감이 없는(=재제출을 안 연) GRID 열은 애초에 여기 안 나온다 —
+                      즉 여기 보이는 GRID는 전부 재제출이 열린 열이다.
+                    */}
                     <Badge tone={homework.kind === "GRID" ? "neutral" : "ok"}>
-                      {homework.kind === "GRID" ? "그리드" : "온라인"}
+                      {homework.kind === "GRID" ? "재제출" : "온라인"}
                     </Badge>
                     <span className="font-medium text-slate-900">{homework.title}</span>
                   </div>

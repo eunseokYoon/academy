@@ -13,7 +13,8 @@ const TODO_ITEMS: {
   unit: string;
 }[] = [
   { key: "pendingAttendanceCount", label: "출석 미확정", to: "/teacher/attendance", unit: "건" },
-  { key: "awaitingCheckCount", label: "확인 대기 숙제", to: "/teacher/homeworks", unit: "건" },
+  // 확인 대기는 제출물을 여는 일이라 목록으로 보낸다. /teacher/homeworks는 채점 화면이다
+  { key: "awaitingCheckCount", label: "확인 대기 숙제", to: "/teacher/homeworks/list", unit: "건" },
   { key: "unwrittenLessonCount", label: "내용 미작성 수업", to: "/teacher/lessons", unit: "건" },
   { key: "unsignedStudentCount", label: "학생 미가입", to: "/teacher/students", unit: "명" },
   { key: "unlinkedParentCount", label: "학부모 미가입", to: "/teacher/students", unit: "명" },

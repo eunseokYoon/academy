@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "../../../shared/api/errors";
 import { FormError } from "../../../shared/components/FormError";
@@ -206,7 +207,17 @@ export default function HomeworkGridPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">숙제 채점</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-slate-900">숙제 채점</h2>
+        {/* 출제·삭제와 재제출 현황은 목록에서 본다. 채점이 메인이라 목록이 여기 링크로 붙는다 */}
+        <Link
+          to="/teacher/homeworks/list"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium
+                     text-slate-700"
+        >
+          숙제 목록
+        </Link>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <select
