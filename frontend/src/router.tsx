@@ -43,6 +43,7 @@ import LessonListPage from "./routes/teacher/lessons/LessonListPage";
 import LessonDetailPage from "./routes/teacher/lessons/LessonDetailPage";
 import HomeworkListPage from "./routes/teacher/homeworks/HomeworkListPage";
 import HomeworkDetailPage from "./routes/teacher/homeworks/HomeworkDetailPage";
+import HomeworkGridPage from "./routes/teacher/homeworks/HomeworkGridPage";
 import RegularExamPage from "./routes/teacher/regular-exams/RegularExamPage";
 import ScorePage from "./routes/teacher/scores/ScorePage";
 import ExamSchedulePage from "./routes/teacher/exams/ExamSchedulePage";
@@ -122,6 +123,7 @@ export const router = createBrowserRouter([
       { path: "attendance", element: <AttendancePage /> },
       { path: "homeworks", element: <HomeworkListPage /> },
       { path: "homeworks/:homeworkId", element: <HomeworkDetailPage /> },
+      { path: "homework-grid", element: <HomeworkGridPage /> },
       { path: "clinics", element: <ClinicPage /> },
       { path: "scores", element: <ScorePage /> },
       { path: "regular-exams", element: <RegularExamPage /> },

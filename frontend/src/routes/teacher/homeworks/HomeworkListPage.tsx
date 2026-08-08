@@ -42,15 +42,25 @@ export default function HomeworkListPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-slate-900">숙제</h2>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-        >
-          숙제 출제
-        </button>
+        <div className="flex gap-2">
+          {/* 반 × 수업일 채점 그리드(T-6b). 종이로 걷은 숙제는 여기서 채점한다 */}
+          <Link
+            to="/teacher/homework-grid"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium
+                       text-slate-700"
+          >
+            숙제 채점
+          </Link>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+          >
+            숙제 출제
+          </button>
+        </div>
       </div>
 
       <select
