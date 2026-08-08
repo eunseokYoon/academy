@@ -42,6 +42,29 @@ Docker: 로컬은 **DB만** 컨테이너(`docker compose up -d`), 백엔드·프
 **4. 숙제 출제 시 대상 전원의 `submissions`를, 출석 확정 시 재원생 전원의 `attendances`를 미리 만든다.**
 제출할 때 만들면 될 것 같지만 그러면 미제출자를 매번 LEFT JOIN으로 역산해야 한다. 연 8천 행, 아무것도 아니다.
 
+**4-1. 숙제는 두 종류다. `homeworks.kind`가 `GRID`면 그리드의 열, `ONLINE`이면 기존 온라인 출제다.**
+GRID가 기본 경로다 — 학생은 종이로 해오고 선생님이 반 × 수업일 그리드에 ⭕🔺❌를 찍는다.
+ONLINE은 방학 과제처럼 처음부터 온라인으로 받을 때만 쓴다.
+
+**4-2. 그리드의 칸은 `submissions` 한 행이고 축이 둘이다.**
+`result`(⭕`DONE` / 🔺`PARTIAL`+`completion_rate` / ❌`NOT_DONE` / `null`=미채점)가 오프라인 채점이고,
+`status`가 온라인 제출이다. **GRID에서 ⭕를 받은 학생은 온라인 제출을 안 하므로 `status`가 영원히
+`NOT_SUBMITTED`다.** 숙제 집계를 `status`로 세면 숙제를 다 해온 학생이 전부 미제출로 잡혀
+학부모 캘린더가 새빨개진다. 집계는 `result` 기준이다 — ⭕=100, 🔺=`completion_rate`, ❌=0,
+미채점은 **집계에서 제외**(0이 아니다).
+
+**4-3. 재제출 대상 판정은 한 줄이고, 코드베이스에 네 벌 있다. 갈라지게 두지 마라.**
+```
+kind = 'GRID' AND due_at IS NOT NULL AND result IN ('PARTIAL','NOT_DONE')
+```
+`due_at IS NOT NULL`이 "선생님이 그 열에 재제출 요청을 눌렀다"는 뜻이다. GRID의 `due_at`은
+**재제출 마감**이고 열을 만들 때는 null이다. 자바 쪽 정본은 `Submission.isResubmitTarget()`이고,
+JPQL 사본이 `findByStudent`·`findByHomeworkForTeacher`·`countsByHomeworkIds`·`countPendingHomeworks`에 있다.
+
+**4-4. 학생의 제출 경로 차단은 `SubmissionService.findEditableSubmission` 한 곳이다.**
+업로드 URL 발급·사진 등록/삭제·영상 3종·제출 확정 7개가 전부 이 메서드를 지난다.
+목록에서 버튼을 안 그리는 건 안내일 뿐이다 — URL을 직접 치면 뚫린다. 차단을 흩뿌리지 마라.
+
 **5. `attendance_status = PENDING`인 날은 출석이 아니다.** 회색 "미확인"이다.
 기본값이 출석이라, 이 구분이 없으면 선생님이 깜빡한 날이 학부모에게 초록색으로 보인다.
 
@@ -94,6 +117,15 @@ Compose에 `logging` max-size 걸기(안 걸면 로그가 디스크를 채워 �
 - 운영 DB를 컨테이너로 띄우지 마라. 인스턴스가 죽으면 데이터가 같이 간다.
 - 이미지 태그에 `latest`를 쓰지 마라. 롤백할 게 없어진다. 날짜나 커밋 해시를 써라.
 - 참고 이미지에 KW-Study(공부시간·랭킹) 화면이 있다. 무시해라.
+- **채점에 4번째 상태를 만들지 마라.** `결석`·`책X`·`제출X`는 전부 ❌다. 셀 메모 칸도 없다.
+- **❌에 퍼센트를 붙이지 마라.** 퍼센트는 🔺에만이고 **1~99**다 — 0·100은 ❌·⭕가 이미 표현하고
+  `ck_submissions_rate`가 DB에서 막는다. 화면에서도 먼저 막아라. 그리드는 한 PUT으로 전부 보내서
+  칸 하나가 400이면 그 표 전체가 저장되지 않는다.
+- **`PUT /teacher/homework-grid`에서 열을 삭제하지 마라.** 배열에서 빠진 열은 그대로 둔다.
+  삭제는 `DELETE /teacher/homeworks/{id}` 하나뿐이고, 채점 결과나 제출물이 있으면 409다.
+- **재제출 확인용 새 엔드포인트를 만들지 마라.** 기존 `check`/`feedback`이 GRID면 ⭕로 올린다.
+- 그리드 전용 테이블을 새로 만들지 마라. `submissions`가 곧 칸이다.
+- 미채점 열을 T-1 대시보드에 띄우지 마라. 선생님은 그리드 화면에서 직접 확인한다(확정).
 
 ## 깃
 
