@@ -28,11 +28,6 @@ function addDays(date: string, days: number): string {
   return next.toISOString().slice(0, 10);
 }
 
-function formatClinicSlot(clinic: { clinicDate: string; startTime: string; endTime: string }): string {
-  const day = dayLabel(clinic.clinicDate);
-  return `${clinic.clinicDate.slice(5)} (${day}) ${clinic.startTime}~${clinic.endTime}`;
-}
-
 /**
  * S-9 클리닉 신청.
  *
