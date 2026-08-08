@@ -1,7 +1,11 @@
 import { get } from "../../shared/api/client";
 import type { PageResponse } from "../../shared/api/types";
 import type { AttendanceCalendar, AttendanceStatus, AttendanceSummary } from "../../shared/attendance/types";
-import type { SubmissionStatus } from "../../shared/homework/types";
+import type {
+  HomeworkKind,
+  HomeworkResult,
+  SubmissionStatus,
+} from "../../shared/homework/types";
 import type { NoticeSummary } from "../../shared/notice/api";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 
@@ -34,7 +38,14 @@ export interface ParentHomework {
   homeworkId: number;
   title: string;
   classRoomName: string;
-  dueAt: string;
+  kind: HomeworkKind;
+  lessonDate: string | null;
+  /** null이면 선생님이 아직 채점하지 않았다. 0%가 아니다 — 회색 "미채점"으로 보여라. */
+  result: HomeworkResult | null;
+  completionRate: number | null;
+  /** true면 "⭕ 재제출". 수업 때는 못 해왔지만 다시 냈다는 뜻이다. */
+  resolvedByResubmission: boolean;
+  dueAt: string | null;
   status: SubmissionStatus;
   isLate: boolean;
   checked: boolean;

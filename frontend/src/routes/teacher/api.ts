@@ -1,7 +1,12 @@
 import { del, get, patch, post, put } from "../../shared/api/client";
 import type { PageResponse } from "../../shared/api/types";
 import type { AttendanceStatus, AttendanceSummary } from "../../shared/attendance/types";
-import type { HomeworkCounts, SubmissionStatus } from "../../shared/homework/types";
+import type {
+  HomeworkCounts,
+  HomeworkKind,
+  HomeworkResult,
+  SubmissionStatus,
+} from "../../shared/homework/types";
 import type { MaterialCategory, MaterialVisibility } from "../../shared/material/types";
 import type { NoticeScope } from "../../shared/notice/api";
 import type { LessonChangeRequest } from "../../shared/lessonchange/types";
@@ -485,7 +490,9 @@ export interface HomeworkListItem {
   /** null이면 캘린더 숙제 완료율 계산에서 빠진다. 목록에서 눈에 띄게 표시한다. */
   lessonId: number | null;
   title: string;
-  dueAt: string;
+  kind: HomeworkKind;
+  /** GRID 열은 재제출을 열기 전까지 마감이 없다. */
+  dueAt: string | null;
   counts: HomeworkCounts;
 }
 
@@ -588,6 +595,87 @@ export const deleteHomework = (homeworkId: number) =>
 
 export const listPendingHomeworks = () =>
   get<PendingHomework[]>("/teacher/homeworks/pending");
+
+// ---------- T-6b 숙제 그리드 ----------
+
+/**
+ * 칸 하나. result가 null이면 회색 "미채점"이다.
+ *
+ * <p>status는 온라인 제출 축이라 ⭕를 받은 학생은 계속 NOT_SUBMITTED다 — 정상이다.
+ * 채점 결과를 status로 판단하지 마라.
+ */
+export interface GridCell {
+  studentId: number;
+  result: HomeworkResult | null;
+  completionRate: number | null;
+  resolvedByResubmission: boolean;
+  status: SubmissionStatus;
+  photoCount: number;
+  hasVideo: boolean;
+}
+
+export interface GridColumn {
+  homeworkId: number;
+  title: string;
+  sortOrder: number;
+  /** null이면 재제출을 아직 안 연 것이다. 그 상태에선 아무도 온라인으로 못 낸다. */
+  resubmitDueAt: string | null;
+  resubmitTargetCount: number;
+  awaitingCheckCount: number;
+  cells: GridCell[];
+}
+
+export interface HomeworkGrid {
+  lesson: {
+    id: number;
+    lessonDate: string;
+    classRoomId: number;
+    classRoomName: string;
+  };
+  /** 그 수업일 기준 재원생. 칸이 아직 없는 학생도 빈 칸으로 들어 있다. */
+  students: { studentId: number; name: string }[];
+  columns: GridColumn[];
+}
+
+export interface HomeworkGridSaveBody {
+  lessonId: number;
+  columns: {
+    /** null이면 새 열. 저장하면서 대상 전원의 칸이 미채점으로 깔린다. */
+    homeworkId: number | null;
+    title: string;
+    sortOrder: number;
+    cells: {
+      studentId: number;
+      /** null이면 "미채점으로 되돌린다". 행은 지워지지 않는다. */
+      result: HomeworkResult | null;
+      /** PARTIAL에만 붙고 1~99다. 0·100은 ❌·⭕가 이미 표현한다. */
+      completionRate: number | null;
+    }[];
+  }[];
+}
+
+export const getHomeworkGrid = (lessonId: number) =>
+  get<HomeworkGrid>("/teacher/homework-grid", { lessonId });
+
+/**
+ * 그리드 한 장 통째로 저장.
+ *
+ * <p>배열에서 열을 빼도 지워지지 않는다. 삭제는 deleteHomework뿐이다 —
+ * 통신이 끊긴 저장 한 번에 학생 제출물이 날아가면 안 된다.
+ */
+export const saveHomeworkGrid = (body: HomeworkGridSaveBody) =>
+  put<HomeworkGrid>("/teacher/homework-grid", body);
+
+/** 재제출 열기. dueAt을 생략하면 서버가 그 반의 다음 수업일 21:00으로 잡는다. */
+export const openResubmit = (homeworkId: number, dueAt: string | null) =>
+  post<{ targetCount: number; dueAt: string }>(
+    `/teacher/homeworks/${homeworkId}/resubmit-request`,
+    dueAt === null ? {} : { dueAt },
+  );
+
+/** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */
+export const closeResubmit = (homeworkId: number) =>
+  del<void>(`/teacher/homeworks/${homeworkId}/resubmit-request`);
 
 export const listSubmissions = (homeworkId: number) =>
   get<HomeworkSubmissions>(`/teacher/homeworks/${homeworkId}/submissions`);

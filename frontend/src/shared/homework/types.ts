@@ -1,3 +1,19 @@
+/**
+ * 숙제의 종류. GRID는 반 × 수업일 그리드의 열 하나로, 오프라인으로 채점하고
+ * 🔺❌를 받은 학생만 온라인으로 다시 낸다. ONLINE은 처음부터 반 전원이 내는 기존 방식이다.
+ */
+export type HomeworkKind = "GRID" | "ONLINE";
+
+/**
+ * 오프라인 채점 결과. <b>null이 "아직 채점 안 함"</b>이고 회색 "미채점"으로 보인다.
+ * 퍼센트는 PARTIAL에만 붙는다 — DONE은 100, NOT_DONE은 0이라 숫자가 필요 없다.
+ */
+export type HomeworkResult = "DONE" | "PARTIAL" | "NOT_DONE";
+
+/**
+ * 온라인 제출 축. 채점축(HomeworkResult)과 독립이다 —
+ * GRID에서 ⭕를 받은 학생은 온라인 제출을 하지 않으므로 여기는 계속 NOT_SUBMITTED다.
+ */
 export type SubmissionStatus = "NOT_SUBMITTED" | "SUBMITTED" | "CHECKED";
 
 export const SUBMISSION_LABELS: Record<SubmissionStatus, string> = {

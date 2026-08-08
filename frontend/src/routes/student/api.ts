@@ -1,7 +1,11 @@
 import { del, get, post, put } from "../../shared/api/client";
 import type { PageResponse } from "../../shared/api/types";
 import type { AttendanceCalendar, AttendanceStatus } from "../../shared/attendance/types";
-import type { SubmissionStatus } from "../../shared/homework/types";
+import type {
+  HomeworkKind,
+  HomeworkResult,
+  SubmissionStatus,
+} from "../../shared/homework/types";
 import type { MaterialCategory } from "../../shared/material/types";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
@@ -93,14 +97,27 @@ export interface StudentHomeworkListItem {
   homeworkId: number;
   title: string;
   classRoomName: string;
-  dueAt: string;
+  kind: HomeworkKind;
+  /** GRID 열은 어느 수업 숙제인지 보여준다. ONLINE은 수업이 없을 수 있다. */
+  lessonDate: string | null;
+  /** null이면 선생님이 아직 채점하지 않았다. 0%가 아니다. */
+  result: HomeworkResult | null;
+  completionRate: number | null;
+  resolvedByResubmission: boolean;
+  /**
+   * 제출 화면을 여는 <b>유일한 근거</b>다. 서버도 같은 기준으로 막으므로
+   * 화면에서 버튼을 그리지 않는 건 안내일 뿐이고, 뚫려도 서버가 409를 낸다.
+   */
+  resubmitRequired: boolean;
+  /** GRID 열은 재제출을 열기 전까지 마감이 없다. */
+  dueAt: string | null;
   status: SubmissionStatus;
   isLate: boolean;
   photoCount: number;
   hasVideo: boolean;
   hasFeedback: boolean;
-  /** 서버가 계산한다. 음수면 마감이 지난 것이다. */
-  remainingMinutes: number;
+  /** 서버가 계산한다. 음수면 마감이 지난 것이고, 마감이 없으면 null이다. */
+  remainingMinutes: number | null;
 }
 
 export interface StudentHomeworkDetail {
@@ -108,7 +125,9 @@ export interface StudentHomeworkDetail {
     id: number;
     title: string;
     description: string | null;
-    dueAt: string;
+    kind: HomeworkKind;
+    lessonDate: string | null;
+    dueAt: string | null;
     classRoomName: string;
   };
   submission: {
