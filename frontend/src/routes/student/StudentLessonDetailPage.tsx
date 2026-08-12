@@ -1,59 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { STATUS_LABEL } from "../../shared/attendance/types";
 import { Badge } from "../../shared/components/Badge";
+import { BackLink } from "../../shared/components/Section";
 import { gradeLabel, gradeTone } from "../../shared/homework/grade";
 import { SUBMISSION_LABELS, formatDueAt } from "../../shared/homework/types";
-import { getMyLesson, recordLessonView } from "./api";
-
-/** 30초 간격이면 충분하다. 매초 호출하면 200명 기준으로 불필요한 부하가 생긴다. */
-const FLUSH_INTERVAL_MS = 30_000;
-
-/**
- * 시청 시간을 서버에 누적 보고한다.
- *
- * <p>YouTube IFrame Player API로 정밀 구간을 추적하지 않는다 — 복잡도가 급증하고
- * 필요한 것은 "봤는지 여부와 대략적 누적 시간"뿐이다.
- *
- * <p>이탈은 visibilitychange로 잡는다. beforeunload는 모바일에서 신뢰할 수 없다.
- */
-function useViewTracker(lessonId: number, playing: boolean) {
-  const lastFlushRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!playing) return;
-
-    // 재생 시작 시 0을 보내 시청 기록 행을 먼저 만든다
-    lastFlushRef.current = Date.now();
-    void recordLessonView(lessonId, 0).catch(() => undefined);
-
-    // 경과한 실제 시간만 더한다. 고정값 30을 더하면 탭을 열어만 둔 시간이 부풀려진다
-    const flush = () => {
-      const previous = lastFlushRef.current;
-      if (previous == null) return;
-      const seconds = Math.round((Date.now() - previous) / 1000);
-      lastFlushRef.current = Date.now();
-      if (seconds > 0) void recordLessonView(lessonId, seconds).catch(() => undefined);
-    };
-
-    const timer = window.setInterval(flush, FLUSH_INTERVAL_MS);
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-      flush();
-    };
-  }, [lessonId, playing]);
-}
+import { getMyLesson } from "./api";
 
 /** S-5 상세. 학생 전용 화면이다. */
 export default function StudentLessonDetailPage() {
+  const navigate = useNavigate();
   const { lessonId } = useParams();
   const id = Number(lessonId);
   const [playing, setPlaying] = useState(false);
@@ -63,14 +21,12 @@ export default function StudentLessonDetailPage() {
     queryFn: () => getMyLesson(id),
   });
 
-  useViewTracker(id, playing);
-
   if (isPending) return <p className="text-sm text-slate-400">불러오는 중…</p>;
   if (isError || !data) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-slate-500">수업을 찾을 수 없습니다.</p>
-        <Link to="/student/lessons" className="text-sm text-slate-900 underline">
+        <Link to="/student/lessons" className="text-sm text-brand-900 underline">
           목록으로
         </Link>
       </div>
@@ -79,11 +35,9 @@ export default function StudentLessonDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/student/lessons" className="text-sm text-slate-500 underline">
-        ← 수업 목록
-      </Link>
+      <BackLink onClick={() => navigate("/student/lessons")}>수업 목록</BackLink>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm">
+      <div className="rounded-2xl bg-white p-4 shadow-card">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span>{data.lessonDate.replace(/-/g, ".")}</span>
           <span>·</span>
@@ -94,7 +48,7 @@ export default function StudentLessonDetailPage() {
             </Badge>
           )}
         </div>
-        <h2 className="mt-1 text-lg font-semibold text-slate-900">
+        <h2 className="mt-1 text-lg font-semibold text-brand-900">
           {data.title ?? "제목 없음"}
         </h2>
       </div>
@@ -117,7 +71,7 @@ export default function StudentLessonDetailPage() {
             <button
               type="button"
               onClick={() => setPlaying(true)}
-              className="w-full rounded-xl bg-slate-900 px-4 py-4 text-sm font-medium text-white"
+              className="w-full rounded-xl bg-brand-900 px-4 py-4 text-sm font-medium text-white"
             >
               ▶ 수업영상 시청하기
             </button>
@@ -149,7 +103,7 @@ export default function StudentLessonDetailPage() {
             to={`/student/homeworks/${data.homework.homeworkId}`}
             className="block space-y-1"
           >
-            <p className="text-sm font-medium text-slate-900">{data.homework.title}</p>
+            <p className="text-sm font-medium text-brand-900">{data.homework.title}</p>
             {data.homework.description && (
               <p className="whitespace-pre-wrap text-sm text-slate-600">
                 {data.homework.description}
@@ -193,8 +147,8 @@ export default function StudentLessonDetailPage() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
-      <h3 className="mb-2 text-sm font-semibold text-slate-900">{title}</h3>
+    <section className="rounded-2xl bg-white p-4 shadow-card">
+      <h3 className="mb-2 text-sm font-semibold text-brand-900">{title}</h3>
       {children}
     </section>
   );

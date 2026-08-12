@@ -15,16 +15,14 @@ import com.njwenglish.service.AttendanceService;
 import com.njwenglish.service.ClinicService;
 import com.njwenglish.service.ExamScheduleService;
 import com.njwenglish.service.HomeService;
-import com.njwenglish.service.LessonViewService;
+import com.njwenglish.service.LessonReportService;
 import com.njwenglish.service.ParentService;
 import com.njwenglish.service.StudentScoreQueryService;
 import com.njwenglish.service.SubmissionService;
-import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,7 +45,7 @@ public class ParentChildController {
     private final AttendanceService attendanceService;
     private final ClinicService clinicService;
     private final SubmissionService submissionService;
-    private final LessonViewService lessonViewService;
+    private final LessonReportService lessonReportService;
     private final StudentScoreQueryService studentScoreQueryService;
     private final ExamScheduleService examScheduleService;
 
@@ -75,13 +73,20 @@ public class ParentChildController {
         return ApiResponse.ok(attendanceService.calendar(studentId, year, month));
     }
 
-    /** P-2 클리닉. 일정과 출석만 내려간다. */
+    /**
+     * 클리닉. 일정·도착 시각·출석만 내려간다. 신청·변경 경로는 학부모에게 열지 않는다.
+     *
+     * <p>week를 빼면 그 달 전체(P-2 캘린더), 넣으면 그 주만(P-6 주간 레포트)이다.
+     * 출석 캘린더(/attendances)와 같은 year·month 모양이라 화면이 날짜 문자열을
+     * 만들 일이 없다.
+     */
     @GetMapping("/{studentId}/clinics")
     public ApiResponse<List<ParentClinicResponse>> clinics(
         @PathVariable Long studentId,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResponse.ok(clinicService.listForChild(studentId, from, to));
+        @RequestParam int year,
+        @RequestParam int month,
+        @RequestParam(required = false) Integer week) {
+        return ApiResponse.ok(clinicService.listForChild(studentId, year, month, week));
     }
 
     /**
@@ -99,7 +104,7 @@ public class ParentChildController {
     }
 
     /**
-     * P-5 수업 레포트. <b>videoId·embedUrl은 null로 나간다</b> —
+     * P-6 주간 레포트의 재료. <b>videoId·embedUrl은 null로 나간다</b> —
      * LessonReportResponse.forParent가 그 자리를 고정한다.
      * 시청 기록(POST /view)도 학부모 경로에는 없다. 보기만 한다.
      */
@@ -111,13 +116,13 @@ public class ParentChildController {
         @RequestParam(required = false) Short week,
         @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.ok(
-            lessonViewService.childLessons(studentId, year, month, week, pageable));
+            lessonReportService.childLessons(studentId, year, month, week, pageable));
     }
 
     @GetMapping("/{studentId}/lessons/{lessonId}")
     public ApiResponse<LessonReportResponse> lesson(@PathVariable Long studentId,
                                                     @PathVariable Long lessonId) {
-        return ApiResponse.ok(lessonViewService.childLesson(studentId, lessonId));
+        return ApiResponse.ok(lessonReportService.childLesson(studentId, lessonId));
     }
 
     /**

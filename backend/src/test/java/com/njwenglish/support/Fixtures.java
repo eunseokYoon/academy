@@ -85,7 +85,8 @@ public final class Fixtures {
 
     public static ClinicReservation reservation(Long id, Clinic clinic, Student student,
                                                 Teacher assignedBy) {
-        ClinicReservation reservation = ClinicReservation.reserve(clinic, student, assignedBy);
+        ClinicReservation reservation = ClinicReservation.reserve(clinic, student, assignedBy,
+            clinic.getStartTime());
         ReflectionTestUtils.setField(reservation, "id", id);
         return reservation;
     }

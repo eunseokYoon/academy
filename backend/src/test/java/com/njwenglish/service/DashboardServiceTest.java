@@ -7,17 +7,13 @@ import static org.mockito.BDDMockito.given;
 import com.njwenglish.dto.home.TeacherDashboardResponse;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Lesson;
-import com.njwenglish.entity.enums.ChangeRequestStatus;
 import com.njwenglish.entity.enums.ClassRoomStatus;
 import com.njwenglish.entity.enums.LessonAttendanceStatus;
 import com.njwenglish.entity.enums.StudentStatus;
-import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.ClassRoomRepository;
-import com.njwenglish.repository.ClinicChangeRequestRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.StudentRepository;
-import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -43,13 +39,9 @@ class DashboardServiceTest {
     @Mock
     private LessonRepository lessonRepository;
     @Mock
-    private SubmissionRepository submissionRepository;
-    @Mock
     private StudentRepository studentRepository;
     @Mock
     private ClassRoomRepository classRoomRepository;
-    @Mock
-    private ClinicChangeRequestRepository clinicChangeRequestRepository;
     @Mock
     private EnrollmentRepository enrollmentRepository;
 
@@ -59,22 +51,18 @@ class DashboardServiceTest {
 
     @BeforeEach
     void setUp() {
-        dashboardService = new DashboardService(lessonRepository, submissionRepository,
-            studentRepository, classRoomRepository, clinicChangeRequestRepository,
-            enrollmentRepository);
+        dashboardService = new DashboardService(lessonRepository, studentRepository,
+            classRoomRepository, enrollmentRepository);
         given(lessonRepository.findByDateWithClassRoom(any())).willReturn(List.of());
     }
 
     @Test
-    @DisplayName("todo 8개가 각자 자기 조건의 count와 이어져 있다")
+    @DisplayName("todo 6개가 각자 자기 조건의 count와 이어져 있다")
     void todo_항목이_실제_집계와_이어진다() {
         given(lessonRepository.countPendingUntil(any())).willReturn(3L);
-        given(submissionRepository.countByStatus(SubmissionStatus.SUBMITTED)).willReturn(12L);
         given(lessonRepository.countUnwrittenUntil(any())).willReturn(2L);
         given(studentRepository.countByStatusAndUserIsNull(StudentStatus.ENROLLED)).willReturn(12L);
         given(studentRepository.countByStatusAndParentIsNull(StudentStatus.ENROLLED)).willReturn(7L);
-        given(clinicChangeRequestRepository.countByStatus(ChangeRequestStatus.PENDING))
-            .willReturn(2L);
         given(studentRepository.countByCreatedAtGreaterThanEqual(any())).willReturn(4L);
         given(classRoomRepository.countByStatusAndJoinCodeActiveTrue(ClassRoomStatus.ACTIVE))
             .willReturn(2L);
@@ -84,11 +72,9 @@ class DashboardServiceTest {
         TeacherDashboardResponse.Todo todo = dashboardService.dashboard().todo();
 
         assertThat(todo.pendingAttendanceCount()).isEqualTo(3);
-        assertThat(todo.awaitingCheckCount()).isEqualTo(12);
         assertThat(todo.unwrittenLessonCount()).isEqualTo(2);
         assertThat(todo.unsignedStudentCount()).isEqualTo(12);
         assertThat(todo.unlinkedParentCount()).isEqualTo(7);
-        assertThat(todo.pendingClinicRequestCount()).isEqualTo(2);
         assertThat(todo.recentSignupCount()).isEqualTo(4);
         assertThat(todo.openJoinCodeCount()).isEqualTo(2);
 

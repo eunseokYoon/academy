@@ -29,13 +29,17 @@ public record HomeworkGridResponse(LessonInfo lesson,
     /**
      * 열 하나. resubmitDueAt이 null이면 재제출을 아직 안 연 것이다 —
      * 그 상태에서는 어떤 학생도 온라인으로 낼 수 없다.
+     *
+     * <p>resubmitTargetCount는 <b>아직 안 낸</b> 대상 수고, resubmittedCount는 이미 내서
+     * 자동으로 ⭕가 된 수다. 학생이 내는 순간 앞에서 빠져 뒤로 옮겨간다. 둘 다 재원생
+     * 명단 기준이다 — 퇴원생의 옛 칸이 섞이면 화면에 없는 사람이 숫자에 잡힌다.
      */
     public record ColumnInfo(Long homeworkId,
                              String title,
                              Short sortOrder,
                              OffsetDateTime resubmitDueAt,
                              int resubmitTargetCount,
-                             int awaitingCheckCount,
+                             int resubmittedCount,
                              List<CellInfo> cells) {
     }
 

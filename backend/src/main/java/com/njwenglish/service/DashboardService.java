@@ -2,16 +2,12 @@ package com.njwenglish.service;
 
 import com.njwenglish.dto.home.TeacherDashboardResponse;
 import com.njwenglish.entity.ClassRoomSchedule;
-import com.njwenglish.entity.enums.ChangeRequestStatus;
 import com.njwenglish.entity.enums.ClassRoomStatus;
 import com.njwenglish.entity.enums.StudentStatus;
-import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.ClassRoomRepository;
-import com.njwenglish.repository.ClinicChangeRequestRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.StudentRepository;
-import com.njwenglish.repository.SubmissionRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -38,10 +34,8 @@ public class DashboardService {
     private static final int RECENT_SIGNUP_DAYS = 7;
 
     private final LessonRepository lessonRepository;
-    private final SubmissionRepository submissionRepository;
     private final StudentRepository studentRepository;
     private final ClassRoomRepository classRoomRepository;
-    private final ClinicChangeRequestRepository clinicChangeRequestRepository;
     private final EnrollmentRepository enrollmentRepository;
 
     @Transactional(readOnly = true)
@@ -85,7 +79,7 @@ public class DashboardService {
     }
 
     /**
-     * 할 일 여섯 개 + 점검 두 개.
+     * 할 일 네 개 + 점검 두 개.
      *
      * <p>unsignedStudentCount와 unlinkedParentCount가 특히 중요하다. 가입하지 않으면
      * 선생님이 입력한 출석·숙제·성적이 아무에게도 전달되지 않는다.
@@ -95,11 +89,9 @@ public class DashboardService {
 
         return new TeacherDashboardResponse.Todo(
             lessonRepository.countPendingUntil(today),
-            submissionRepository.countByStatus(SubmissionStatus.SUBMITTED),
             lessonRepository.countUnwrittenUntil(today),
             studentRepository.countByStatusAndUserIsNull(StudentStatus.ENROLLED),
             studentRepository.countByStatusAndParentIsNull(StudentStatus.ENROLLED),
-            clinicChangeRequestRepository.countByStatus(ChangeRequestStatus.PENDING),
             studentRepository.countByCreatedAtGreaterThanEqual(signupFrom),
             classRoomRepository.countByStatusAndJoinCodeActiveTrue(ClassRoomStatus.ACTIVE));
     }

@@ -365,6 +365,11 @@ export interface Clinic {
   reservedCount: number;
   status: ClinicStatus;
   attendanceConfirmed: boolean;
+  /**
+   * "8월 2주". 목록을 주차별로 묶는 데 쓴다.
+   * <b>날짜로 여기서 다시 만들지 마라</b> — 학생 화면·수업·성적이 쓰는 주차 계산과 갈라진다.
+   */
+  weekLabel: string;
   memo: string | null;
 }
 
@@ -372,6 +377,13 @@ export interface ClinicReservationRow {
   reservationId: number;
   studentId: number;
   name: string;
+  /** 학생이 오기로 한 시각. 명단은 이 값으로 묶어 그린다. */
+  arrivalTime: string;
+  /**
+   * 시간대를 좁힌 뒤 범위 밖으로 남은 예약. 서버가 임의로 옮기지 않는다 —
+   * 이미 약속된 시각을 말없이 바꾸면 학생이 헛걸음한다. 선생님이 보고 직접 처리한다.
+   */
+  outOfRange: boolean;
   /** 학생 본인 신청인지 선생님 배정인지. "왜 여기 있냐"는 문의에 답하려면 필요하다. */
   assignedByTeacher: boolean;
   attendStatus: AttendanceStatus | null;
@@ -383,34 +395,20 @@ export interface ClinicReservations {
   clinicDate: string;
   startTime: string;
   endTime: string;
+  /** 고를 수 있는 도착 시각. 배정 화면이 쓴다. 학생 화면과 같은 계산이다 */
+  slots: string[];
   capacity: number | null;
   attendanceConfirmed: boolean;
+  /** 도착 시각 → 이름 순으로 서버가 정렬해 준다. */
   students: ClinicReservationRow[];
 }
 
-export interface ClinicSlot {
-  clinicId: number;
-  clinicDate: string;
-  startTime: string;
-  endTime: string;
-}
-
-export interface ClinicChangeRequest {
-  requestId: number;
-  studentId: number;
-  studentName: string;
-  from: ClinicSlot;
-  /** null이면 취소 요청이다. */
-  to: ClinicSlot | null;
-  reasonCode: string;
-  reasonNote: string | null;
-  status: ChangeRequestStatus;
-  requestedAt: string;
-  decidedAt: string | null;
-}
-
-export const listClinics = (from: string, to: string, status?: ClinicStatus) =>
-  get<Clinic[]>("/teacher/clinics", { from, to, status });
+/**
+ * 주차 단위 조회. <b>날짜 범위를 프론트에서 만들지 마라</b> —
+ * "달 안에서 1일부터 7일씩" 규칙은 서버(MonthWeeks)가 정본이다.
+ */
+export const listClinics = (year: number, month: number, week: number, status?: ClinicStatus) =>
+  get<Clinic[]>("/teacher/clinics", { year, month, week, status });
 
 export const createClinic = (body: {
   clinicDate: string;
@@ -441,8 +439,15 @@ export const deleteClinic = (clinicId: number) => del<void>(`/teacher/clinics/${
 export const listClinicReservations = (clinicId: number) =>
   get<ClinicReservations>(`/teacher/clinics/${clinicId}/reservations`);
 
-export const assignClinicStudents = (clinicId: number, studentIds: number[]) =>
-  post<ClinicReservations>(`/teacher/clinics/${clinicId}/students`, { studentIds });
+/** arrivalTime을 생략하면 클리닉 시작 시각으로 전원 배정된다. */
+export const assignClinicStudents = (
+  clinicId: number,
+  studentIds: number[],
+  arrivalTime: string | null,
+) => post<ClinicReservations>(`/teacher/clinics/${clinicId}/students`, {
+  studentIds,
+  arrivalTime,
+});
 
 export const unassignClinicStudent = (clinicId: number, studentId: number) =>
   del<void>(`/teacher/clinics/${clinicId}/students/${studentId}`);
@@ -452,15 +457,6 @@ export const confirmClinicAttendance = (clinicId: number, exceptions: Attendance
     `/teacher/clinics/${clinicId}/attendance/confirm`,
     { exceptions },
   );
-
-export const listClinicChangeRequests = (status: ChangeRequestStatus = "PENDING") =>
-  get<ClinicChangeRequest[]>("/teacher/clinic-change-requests", { status });
-
-export const decideClinicChangeRequest = (requestId: number, approve: boolean) =>
-  post<ClinicChangeRequest>(`/teacher/clinic-change-requests/${requestId}/decide`, {
-    approve,
-    note: null,
-  });
 
 // ---------- 수업일 변경 (T-13) ----------
 
@@ -510,7 +506,6 @@ export interface SubmissionListItem {
   submittedAt: string | null;
   isLate: boolean;
   photoCount: number;
-  hasFeedback: boolean;
   /** 첫 사진의 조회용 presigned URL. 미제출이면 null이다. */
   thumbnailUrl: string | null;
   /** 영상은 썸네일을 만들 수 없다(트랜스코딩 없음). 격자에서는 표시만 한다. */
@@ -546,9 +541,8 @@ export interface SubmissionDetail {
   photos: SubmissionPhoto[];
   /** 최대 1개. 없으면 null이다. */
   video: { url: string; bytes: number | null } | null;
-  feedback: { content: string; createdAt: string } | null;
   prevSubmissionId: number | null;
-  /** 아직 확인하지 않은 다음 제출물. "저장하고 다음"이 이 값을 쓴다. */
+  /** 다음으로 볼 제출물. 제출한 것 전부를 이름순으로 훑는다. */
   nextSubmissionId: number | null;
 }
 
@@ -558,7 +552,6 @@ export interface PendingHomework {
   classRoomName: string;
   dueAt: string;
   notSubmitted: number;
-  awaitingCheck: number;
 }
 
 export const listHomeworkTemplates = () =>
@@ -627,8 +620,10 @@ export interface GridColumn {
   sortOrder: number;
   /** null이면 재제출을 아직 안 연 것이다. 그 상태에선 아무도 온라인으로 못 낸다. */
   resubmitDueAt: string | null;
+  /** 아직 안 낸 재제출 대상 수. 학생이 내는 순간 여기서 빠져 resubmittedCount로 옮겨간다. */
   resubmitTargetCount: number;
-  awaitingCheckCount: number;
+  /** 이미 내서 자동으로 ⭕가 된 수. 곧 선생님이 T-7에서 볼 사진·영상이 있는 수다. */
+  resubmittedCount: number;
   cells: GridCell[];
 }
 
@@ -689,41 +684,6 @@ export const listSubmissions = (homeworkId: number) =>
 
 export const getSubmission = (submissionId: number) =>
   get<SubmissionDetail>(`/teacher/submissions/${submissionId}`);
-
-export const createFeedback = (submissionId: number, content: string) =>
-  post<{ content: string; createdAt: string }>(
-    `/teacher/submissions/${submissionId}/feedback`,
-    { content },
-  );
-
-export const updateFeedback = (submissionId: number, content: string) =>
-  patch<{ content: string; createdAt: string }>(
-    `/teacher/submissions/${submissionId}/feedback`,
-    { content },
-  );
-
-/** 피드백 없이 확인만. 200명 전원에게 글을 쓰는 건 불가능하다. */
-export const checkSubmission = (submissionId: number) =>
-  post<void>(`/teacher/submissions/${submissionId}/check`);
-
-// ---------- 시청 현황 (Phase 6) ----------
-
-/** 미시청 학생도 포함된다. 선생님이 보려는 건 안 본 학생이다. */
-export interface LessonViews {
-  lessonId: number;
-  totalStudents: number;
-  viewedCount: number;
-  items: {
-    studentId: number;
-    name: string;
-    viewed: boolean;
-    firstViewedAt: string | null;
-    watchSeconds: number;
-  }[];
-}
-
-export const getLessonViews = (lessonId: number) =>
-  get<LessonViews>(`/teacher/lessons/${lessonId}/views`);
 
 // ---------- 시험 일정 (T-11) ----------
 
@@ -818,6 +778,9 @@ export interface OnlineTestDetail extends Omit<OnlineTestListItem, "published"> 
   publishedAt: string | null;
 }
 
+/** 온라인 클리닉 테스트 결과가 성적 기입 탭으로 자동 반영되는지, 안 되면 왜 안 되는지. */
+export type ClinicReflection = "REFLECTED" | "NO_INTERNAL_SPLIT" | "TOTAL_MISMATCH";
+
 export interface OnlineTestResults {
   test: {
     testId: number;
@@ -825,6 +788,11 @@ export interface OnlineTestResults {
     questionCount: number;
     internalQuestionCount: number | null;
     classRoomName: string;
+    /**
+     * REFLECTED가 아니면 선생님이 성적 기입 탭에 직접 적어야 한다.
+     * 이유를 화면에 띄워야 "왜 어떤 건 자동으로 차고 어떤 건 안 차지"가 안 생긴다.
+     */
+    clinicReflection: ClinicReflection;
   };
   counts: { total: number; notStarted: number; inProgress: number; submitted: number };
   /** 제출자만으로 계산한다. 제출이 없으면 null. 선생님 화면에만 있는 값이다. */
@@ -949,11 +917,9 @@ export interface TeacherDashboard {
   };
   todo: {
     pendingAttendanceCount: number;
-    awaitingCheckCount: number;
     unwrittenLessonCount: number;
     unsignedStudentCount: number;
     unlinkedParentCount: number;
-    pendingClinicRequestCount: number;
     recentSignupCount: number;
     openJoinCodeCount: number;
   };

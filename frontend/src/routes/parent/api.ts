@@ -9,24 +9,31 @@ import type {
 import type { NoticeSummary } from "../../shared/notice/api";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 
-export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
-
 /** 학부모는 조회만 한다. 신청·취소·변경 경로는 없다. */
 export interface ParentClinic {
   clinicId: number;
   clinicDate: string;
   startTime: string;
   endTime: string;
+  /**
+   * 자녀가 몇 시에 가는지. <b>이게 핵심이다</b> — 시간대(17:00~22:00)만 보여 주면
+   * 다섯 시간짜리로 나와서 학부모가 알 수 없다.
+   */
+  arrivalTime: string;
   /** null이면 아직 출석 확정 전이다. */
   attendStatus: AttendanceStatus | null;
-  changeRequestStatus: ChangeRequestStatus | null;
 }
 
 export const getChildAttendances = (studentId: number, year: number, month: number) =>
   get<AttendanceCalendar>(`/parent/children/${studentId}/attendances`, { year, month });
 
-export const getChildClinics = (studentId: number, from: string, to: string) =>
-  get<ParentClinic[]>(`/parent/children/${studentId}/clinics`, { from, to });
+/**
+ * week를 빼면 그 달 전체(P-2 캘린더), 넣으면 그 주만(P-6 주간 레포트)이다.
+ * <b>주차 → 날짜 변환은 서버가 한다</b> — 여기서 from·to를 만들면 주차 규칙이
+ * 서버와 화면 두 곳으로 갈라진다.
+ */
+export const getChildClinics = (studentId: number, year: number, month: number, week?: number) =>
+  get<ParentClinic[]>(`/parent/children/${studentId}/clinics`, { year, month, week });
 
 // ---------- 숙제 (P-3) ----------
 
@@ -48,7 +55,6 @@ export interface ParentHomework {
   dueAt: string | null;
   status: SubmissionStatus;
   isLate: boolean;
-  checked: boolean;
 }
 
 export const getChildHomeworks = (
@@ -56,7 +62,7 @@ export const getChildHomeworks = (
   params: { status?: SubmissionStatus; page?: number },
 ) => get<PageResponse<ParentHomework>>(`/parent/children/${studentId}/homeworks`, params);
 
-// ---------- 수업 레포트 (P-5) ----------
+// ---------- 주간 레포트 (P-6) ----------
 
 /**
  * 학생 화면(S-5)과 <b>같은 응답</b>이다. 영상 값만 null로 내려온다.
@@ -73,7 +79,6 @@ export interface ParentLessonListItem {
   hasVideo: boolean | null;
   isNew: boolean;
   /** 학부모 응답에서는 항상 null이다. */
-  viewed: boolean | null;
   homeworkTitle: string | null;
 }
 
@@ -160,7 +165,8 @@ export interface ParentHome {
   nextLessonTime: string | null;
   notices: { totalCount: number; recent: NoticeSummary[] };
   pendingHomeworkCount: number;
-  nextClinic: { clinicId: number; clinicDate: string; startTime: string; dDay: number } | null;
+  /** 시각은 시간대 시작이 아니라 <b>자녀가 고른 도착 시각</b>이다. */
+  nextClinic: { clinicId: number; clinicDate: string; arrivalTime: string; dDay: number } | null;
   thisMonthAttendance: AttendanceSummary;
 }
 

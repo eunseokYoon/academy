@@ -5,8 +5,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * T-7 상세 뷰어. prev·next가 핵심이다 — 목록으로 돌아가지 않고 200명을 연속으로 넘긴다.
- * next는 아직 확인하지 않은(SUBMITTED) 것 중 다음을 가리킨다.
+ * T-7 상세 뷰어. <b>보기 전용이다</b> — 확인·피드백 단계가 없다.
+ * prev·next가 핵심이다 — 목록으로 돌아가지 않고 연속으로 넘긴다.
+ * 둘 다 <b>제출한(SUBMITTED)</b> 것 중 앞뒤를 가리킨다.
  */
 public record SubmissionDetailResponse(Long submissionId,
                                        Long studentId,
@@ -16,7 +17,6 @@ public record SubmissionDetailResponse(Long submissionId,
                                        boolean isLate,
                                        List<SubmissionPhotoResponse> photos,
                                        SubmissionVideoResponse video,
-                                       FeedbackResponse feedback,
                                        Long prevSubmissionId,
                                        Long nextSubmissionId) {
 }

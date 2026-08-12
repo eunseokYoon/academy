@@ -1,8 +1,12 @@
 /**
- * 앱바 워드마크에 들어가는 이름.
+ * 앱바 워드마크에 들어가는 이름. 2026-08-11 확정.
  *
- * <p>상호는 아직 학원장이 확정하지 않았다. 약관·개인정보처리방침이 상호를 빈칸으로 두고
- * "학원에서 확정한 뒤 반영합니다"라고 표시해 둔 것과 같은 상태다.
- * 그럴듯한 이름을 지어 넣지 마라 — 확정되면 이 상수 한 줄만 고치면 된다.
+ * <p>로고와 같은 잠금이라 두 조각으로 나눠 둔다 — 한글은 흰색, LAB만 주황이다.
+ * 화면에 그릴 때는 {@link Wordmark}가 조립하고, 읽어 주는 기계에는
+ * ACADEMY_NAME 하나로 나간다(sr-only). 붙여 쓰는 이유는 상호가 "남지원영어LAB"이라
+ * 사이에 공백이 없기 때문이다.
  */
-export const ACADEMY_NAME = "학원명(미정)";
+export const ACADEMY_NAME_HEAD = "남지원영어";
+export const ACADEMY_NAME_TAIL = "LAB";
+
+export const ACADEMY_NAME = `${ACADEMY_NAME_HEAD}${ACADEMY_NAME_TAIL}`;

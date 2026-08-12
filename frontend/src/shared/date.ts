@@ -23,3 +23,16 @@ export const DAY_LABELS: Record<number, string> = {
 export function dayLabel(date: string): string {
   return DAY_LABELS[new Date(date).getDay() || 7];
 }
+
+/**
+ * 오늘 한 줄. "2026년 8월 12일 수요일".
+ *
+ * <p>홈 지면에서 인사말 위에 얹는다. 장식이 아니라 <b>기준점</b>이다 —
+ * 그 아래 D-3·마감 8일 지남이 전부 오늘을 기준으로 센 값이라, 오늘이 안 적혀 있으면
+ * 기기 시계가 틀어졌을 때 학생이 알아챌 방법이 없다.
+ */
+export function todayLabel(now: Date = new Date()): string {
+  return `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${
+    DAY_LABELS[now.getDay() || 7]
+  }요일`;
+}

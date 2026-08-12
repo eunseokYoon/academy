@@ -4,6 +4,7 @@ import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.dto.attendance.PendingClinicResponse;
 import com.njwenglish.dto.clinic.ClinicCreateRequest;
 import com.njwenglish.dto.clinic.ClinicCreateResponse;
@@ -16,10 +17,8 @@ import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
-import com.njwenglish.entity.enums.ChangeRequestStatus;
 import com.njwenglish.entity.enums.ClinicStatus;
 import com.njwenglish.entity.enums.ReservationStatus;
-import com.njwenglish.repository.ClinicChangeRequestRepository;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.ClinicReservationRepository.ClinicCount;
@@ -49,7 +48,6 @@ public class ClinicService {
 
     private final ClinicRepository clinicRepository;
     private final ClinicReservationRepository reservationRepository;
-    private final ClinicChangeRequestRepository changeRequestRepository;
     private final TeacherRepository teacherRepository;
     private final StudentAccessGuard studentAccessGuard;
 
@@ -132,11 +130,17 @@ public class ClinicService {
             .toList();
     }
 
-    /** T-13 목록. 기간 조회라 페이징이 없다. */
+    /**
+     * T-13 목록. 주차 하나라 페이징이 없다 — 한 주에 클리닉이 많아야 대여섯 개다.
+     *
+     * <p>주차 → 날짜 범위 변환은 {@link MonthWeeks}가 한다. 프론트에서 계산해 from·to로
+     * 보내게 두면 "달 안에서 1일부터 7일씩" 규칙이 두 곳으로 갈라진다.
+     */
     @Transactional(readOnly = true)
-    public List<ClinicListItemResponse> listForTeacher(LocalDate from, LocalDate to,
+    public List<ClinicListItemResponse> listForTeacher(int year, int month, int week,
                                                        ClinicStatus status) {
-        List<Clinic> clinics = clinicRepository.findInRange(from, to, status);
+        List<Clinic> clinics = clinicRepository.findInRange(
+            MonthWeeks.startOf(year, month, week), MonthWeeks.endOf(year, month, week), status);
         Map<Long, Long> counts = reservedCounts(clinics);
         Set<Long> confirmed = isAttendanceConfirmed(ids(clinics));
 
@@ -166,7 +170,6 @@ public class ClinicService {
         for (ClinicReservation reservation : reservations) {
             mine.put(reservation.getClinic().getId(), reservation);
         }
-        Set<Long> pendingChanges = pendingChangeReservationIds(reservations);
 
         List<StudentClinicResponse> result = new ArrayList<>();
         for (Clinic clinic : clinics) {
@@ -176,36 +179,47 @@ public class ClinicService {
             }
             long reservedCount = counts.getOrDefault(clinic.getId(), 0L);
             result.add(new StudentClinicResponse(clinic.getId(), clinic.getClinicDate(),
-                clinic.getStartTime(), clinic.getEndTime(), clinic.getCapacity(),
-                reservedCount, clinic.isFull(reservedCount),
+                clinic.getStartTime(), clinic.getEndTime(), clinic.slots(),
+                clinic.getCapacity(), reservedCount, clinic.isFull(reservedCount),
+                MonthWeeks.label(clinic.getClinicDate()),
                 reservation == null ? null : new MyReservationResponse(
                     reservation.getId(), reservation.getStatus(),
+                    reservation.getArrivalTime(),
                     // null이면 결석이 아니라 아직 확정 전이다. S-6이 이 값으로 출결을 그린다
-                    reservation.getAttendStatus(),
-                    pendingChanges.contains(reservation.getId())
-                        ? ChangeRequestStatus.PENDING : null)));
+                    reservation.getAttendStatus())));
         }
         return result;
     }
 
-    /** P-2. 자녀의 클리닉 일정과 출석만. 신청·변경 경로는 학부모에게 열지 않는다. */
+    /**
+     * P-2 캘린더(한 달) · P-6 주간 레포트(한 주). 신청·변경 경로는 학부모에게 열지 않는다.
+     *
+     * <p>week가 null이면 그 달 전체다. <b>주차 → 날짜 변환은 여기서만 한다</b> —
+     * 프론트에서 계산해 from·to로 보내게 두면 "달 안에서 1일부터 7일씩" 규칙이
+     * 서버와 화면 두 곳으로 갈라진다. 수업은 서버가 묶고 클리닉은 화면이 묶으면
+     * 같은 주 레포트에 다른 날이 섞인다.
+     */
     @Transactional(readOnly = true)
-    public List<ParentClinicResponse> listForChild(Long studentId, LocalDate from, LocalDate to) {
+    public List<ParentClinicResponse> listForChild(Long studentId, int year, int month,
+                                                   Integer week) {
         Student student = studentAccessGuard.requireAccessible(studentId);
 
-        List<ClinicReservation> reservations =
-            reservationRepository.findReservedByStudentInRange(student.getId(), from, to);
-        Set<Long> pendingChanges = pendingChangeReservationIds(reservations);
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        LocalDate from = week != null ? MonthWeeks.startOf(year, month, week) : monthStart;
+        LocalDate to = week != null
+            ? MonthWeeks.endOf(year, month, week)
+            : monthStart.withDayOfMonth(monthStart.lengthOfMonth());
 
-        return reservations.stream()
+        return reservationRepository.findReservedByStudentInRange(student.getId(), from, to)
+            .stream()
             .map(reservation -> new ParentClinicResponse(
                 reservation.getClinic().getId(),
                 reservation.getClinic().getClinicDate(),
                 reservation.getClinic().getStartTime(),
                 reservation.getClinic().getEndTime(),
-                reservation.getAttendStatus(),
-                pendingChanges.contains(reservation.getId())
-                    ? ChangeRequestStatus.PENDING : null))
+                // 도착 시각이 없으면 5시간짜리 시간대만 보여서 몇 시에 가는지 알 수 없다
+                reservation.getArrivalTime(),
+                reservation.getAttendStatus()))
             .toList();
     }
 
@@ -232,14 +246,6 @@ public class ClinicService {
             return Set.of();
         }
         return new HashSet<>(reservationRepository.findAttendanceConfirmedClinicIds(clinicIds));
-    }
-
-    private Set<Long> pendingChangeReservationIds(List<ClinicReservation> reservations) {
-        if (reservations.isEmpty()) {
-            return Set.of();
-        }
-        List<Long> reservationIds = reservations.stream().map(ClinicReservation::getId).toList();
-        return new HashSet<>(changeRequestRepository.findPendingReservationIds(reservationIds));
     }
 
     private List<Long> ids(List<Clinic> clinics) {

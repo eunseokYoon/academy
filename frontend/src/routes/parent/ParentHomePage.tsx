@@ -1,23 +1,40 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { useAuth } from "../../shared/auth/AuthContext";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
-import { Badge } from "../../shared/components/Badge";
-import { DdayPill } from "../../shared/components/DdayPill";
-import { MenuTile } from "../../shared/components/MenuTile";
+import { HeroField } from "../../shared/components/HeroField";
+import type { HeroStat } from "../../shared/components/HeroField";
+import { NoticeCard } from "../../shared/components/NoticeCard";
+import { SectionHead, TintBlock } from "../../shared/components/Section";
+import { QuickRail } from "../../shared/components/QuickRail";
 import { EXAM_TYPE_LABELS } from "../../shared/score/types";
+import { todayLabel } from "../../shared/date";
 import { getChildHome } from "./api";
 
 /**
  * P-1 포털 홈. <b>호출은 하나</b>다 — 자녀를 바꾸면 이 쿼리만 다시 돈다.
  *
- * <p>메뉴는 네 개다. 수업영상·레포트, 수업 자료실, 수강 후기는 학부모 화면에서 제외됐다.
+ * <p>메뉴는 여섯이다. 수업영상, 수업 자료실, 수강 후기는 학부모 화면에서 제외됐다.
  * KW-Study(공부 시간·랭킹) 메뉴도 없다. 참고 디자인에 있더라도 넣지 마라.
  *
- * <p>값이 없는 카드는 숨긴다. 0을 표시하면 "시험이 오늘"이나 "출석 0회"로 읽힌다.
+ * <p>값이 없는 칸은 <b>칸째로 숨긴다</b>. 0을 표시하면 "시험이 오늘"이나 "출석 0회"로 읽힌다.
+ * 학생 홈(S-1)과 같은 언어를 쓴다 — 지면 + 숫자 칸 + 색 구획. 두 화면이 어긋나면
+ * "아이 폰에는 다르게 나온다"는 문의가 된다.
  */
+/** 홈을 뺀 학부모 화면 전부. 하단 탭 바에 있는 것도 빼지 않는다 — 레일은 전체 목록이다. */
+const QUICK_ITEMS = (pendingHomework: number, noticeCount: number) => [
+  {
+    to: "/parent/schedule",
+    icon: "calendar" as const,
+    label: "일정 · 출석",
+    primary: true,
+  },
+  { to: "/parent/homeworks", icon: "homework" as const, label: "숙제", count: pendingHomework },
+  { to: "/parent/scores", icon: "chart" as const, label: "성적" },
+  { to: "/parent/lessons", icon: "book" as const, label: "주간 레포트" },
+  { to: "/parent/notices", icon: "megaphone" as const, label: "공지", count: noticeCount },
+  { to: "/parent/me", icon: "user" as const, label: "내 정보" },
+];
+
 export default function ParentHomePage() {
-  const { user } = useAuth();
   const { children, selectedStudentId, setSelectedStudentId } = useSelectedChild();
 
   const home = useQuery({
@@ -41,178 +58,161 @@ export default function ParentHomePage() {
     thisMonthAttendance,
   } = home.data;
 
+  /*
+    지면의 숫자 칸. 학생 홈과 달리 <b>다음 수업에 D-day가 없다</b> — 응답이 날짜만
+    내려준다. 없는 값을 여기서 세지 마라. 기기 시계로 계산하면 학생 화면과 하루 어긋난다.
+  */
+  const stats: HeroStat[] = [];
+  if (nextLessonDate) {
+    stats.push({
+      label: "다음 수업",
+      value: nextLessonDate.slice(5).replace("-", "/"),
+      sub: nextLessonTime ?? "시각 미정",
+    });
+  }
+  stats.push({
+    label: "안 낸 숙제",
+    value: `${pendingHomeworkCount}`,
+    sub: pendingHomeworkCount > 0 ? "확인 필요" : "다 냈어요",
+    hot: pendingHomeworkCount > 0,
+  });
+  if (nextExam) {
+    stats.push({
+      label: EXAM_TYPE_LABELS[nextExam.examType],
+      value: `D-${nextExam.dDay}`,
+      sub: `${nextExam.startDate.slice(5).replace("-", ".")} 시작`,
+    });
+  }
+
   return (
-    <div className="space-y-5">
-      {/* 남색 띠에 걸쳐 앉는 카드. hero-lift가 이 디자인의 시그니처다 */}
-      <section className="hero-lift card p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-lg font-bold tracking-[-0.01em] text-brand-900">
-              {student.name} 학생 학부모님, 환영합니다
-            </p>
-            <p className="mt-0.5 truncate text-sm text-slate-500">
-              {student.classRooms.length > 0 ? student.classRooms.join(" · ") : "반 배정 전"}
-            </p>
-            {/*
-              번호가 둘이라 라벨이 없으면 어느 쪽이 누구 것인지 알 수 없다.
-              학부모 번호는 /auth/me(본인), 자녀 번호는 홈 응답에서 온다.
-              둘 다 보호자 본인 가족 번호라 원본으로 내려온다.
-
-              자녀 번호는 미가입이면 null이라 그때는 학부모 번호만 뜬다.
-            */}
-            <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-400">
-              {user?.phone && (
-                <span>
-                  학부모 <span className="tnum">{user.phone}</span>
-                </span>
-              )}
-              {student.phone && (
-                <span>
-                  자녀 <span className="tnum">{student.phone}</span>
-                </span>
-              )}
-            </p>
-          </div>
-          {nextExam && (
-            <DdayPill label={EXAM_TYPE_LABELS[nextExam.examType]} dDay={nextExam.dDay} />
-          )}
-        </div>
-
-        {/* 자녀가 1명이면 드롭다운을 숨긴다 */}
+    <div>
+      <HeroField
+        eyebrow={todayLabel()}
+        title={
+          <>
+            <span className="text-accent-300">{student.name}</span> 학생
+            <br />
+            학부모님, 환영합니다
+          </>
+        }
+        stats={stats}
+      >
+        {/*
+          자녀가 1명이면 드롭다운을 숨긴다. 지면 안에 두는 이유는, 이걸 바꾸면 아래
+          화면 전체가 다른 아이 것으로 바뀌기 때문이다 — 카드 하나의 설정이 아니다.
+        */}
         {children.length > 1 && (
-          <div className="mt-4 border-t border-slate-100 pt-3">
-            <span className="eyebrow">자녀 선택</span>
+          <div className="mt-4 border-t border-white/10 pt-3.5">
+            <label
+              htmlFor="parent-child-select"
+              className="text-[11px] font-semibold tracking-[0.1em] text-brand-200/70"
+            >
+              자녀 선택
+            </label>
             <select
+              id="parent-child-select"
               value={selectedStudentId ?? ""}
               onChange={(e) => setSelectedStudentId(Number(e.target.value))}
-              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5
-                         text-base text-slate-900 outline-none transition-colors
-                         focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15"
-              aria-label="자녀 선택"
+              className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5
+                         text-base text-white outline-none transition-colors
+                         focus:border-white/40 focus:bg-white/15"
             >
               {children.map((child) => (
-                <option key={child.studentId} value={child.studentId}>
+                /* 남색 위 select라 옵션 목록은 OS가 그린다 — 글자색을 되돌려 놔야 안 보인다 */
+                <option key={child.studentId} value={child.studentId} className="text-brand-900">
                   {child.name}
                 </option>
               ))}
             </select>
           </div>
         )}
+      </HeroField>
+
+      <section className="hero-lift card p-4">
+        <QuickRail items={QUICK_ITEMS(pendingHomeworkCount, notices.totalCount)} />
       </section>
 
       {/*
-        공지만 따뜻한 색이다. 남색 화면에서 이 카드 하나가 튀어서
-        "새로 읽을 게 있다"는 신호가 된다. 참고 디자인의 노란 공지 띠 자리다.
+        학부모 화면의 본론. 학생 홈과 달리 목록이 아니라 개수 하나라, 블록 한 줄로 끝난다.
+        안 낸 게 없으면 회색으로 내려앉는다 — 주황은 처리할 게 있을 때만이다.
       */}
-      <section className="rounded-2xl bg-amber-50 p-4 ring-1 ring-inset ring-amber-200">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-amber-900">
-            학원 공지 · 안내 <span className="tnum">({notices.totalCount})</span>
-          </h3>
-          <Link to="/parent/notices" className="text-xs font-medium text-amber-800 underline">
-            전체 보기
-          </Link>
-        </div>
-        {notices.recent.length === 0 ? (
-          <p className="mt-2 text-sm text-amber-800/70">등록된 공지가 없습니다.</p>
-        ) : (
-          <ul className="mt-2.5 space-y-1.5">
-            {notices.recent.map((notice) => (
-              <li key={notice.noticeId} className="flex items-center gap-1.5">
-                {notice.pinned && <Badge tone="warn">고정</Badge>}
-                <span className="min-w-0 flex-1 truncate text-sm text-amber-950">
-                  {notice.title}
-                </span>
-                <span className="tnum shrink-0 text-xs text-amber-700/70">
-                  {notice.publishedAt.slice(5, 10).replace("-", "/")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="mt-5">
+        <SectionHead
+          tone={pendingHomeworkCount > 0 ? "accent" : "neutral"}
+          title="숙제"
+          count={pendingHomeworkCount}
+          to="/parent/homeworks"
+        />
+        <TintBlock tone={pendingHomeworkCount > 0 ? "accent" : "neutral"}>
+          <div className="flex items-center gap-3 px-3.5 py-3.5">
+            <p className="min-w-0 flex-1 text-[14px] font-bold text-brand-900">
+              {pendingHomeworkCount > 0
+                ? `안 낸 숙제가 ${pendingHomeworkCount}건 있습니다`
+                : "안 낸 숙제가 없습니다"}
+            </p>
+            {nextClinic && (
+              <span className="tnum shrink-0 rounded-lg border border-brand-200 bg-white px-2 py-1
+                               text-[10.5px] font-bold text-brand-700">
+                클리닉 {nextClinic.clinicDate.slice(5).replace("-", "/")} {nextClinic.arrivalTime}
+              </span>
+            )}
+          </div>
+        </TintBlock>
       </section>
 
-      <div className="grid grid-cols-2 gap-2.5">
-        {/*
-          시각은 반의 요일 슬롯에서 오는데 그 슬롯이 없으면 null이다.
-          그때는 날짜만 그린다 — 없는 시각을 지어내면 학부모가 그 시각에 맞춰 보낸다.
-        */}
-        <InfoCard
-          label="다음 수업"
-          value={
-            nextLessonDate
-              ? `${nextLessonDate.slice(5).replace("-", "/")}${
-                  nextLessonTime ? ` ${nextLessonTime}` : ""
-                }`
-              : null
-          }
-        />
-        <InfoCard
-          label="다음 클리닉"
-          value={
-            nextClinic
-              ? `${nextClinic.clinicDate.slice(5).replace("-", "/")} ${nextClinic.startTime}`
-              : null
-          }
-        />
-        <InfoCard
-          label="안 낸 숙제"
-          value={pendingHomeworkCount > 0 ? `${pendingHomeworkCount}건` : "없음"}
-          tone={pendingHomeworkCount > 0 ? "warn" : "ok"}
-        />
-        <InfoCard
-          label="이번 달 출석"
-          value={`출석 ${thisMonthAttendance.present} · 지각 ${thisMonthAttendance.late} · 결석 ${thisMonthAttendance.absent}`}
-        />
+      {/* 시험 범위는 D-day와 같은 시험 이야기라 떨어뜨리지 않는다. S-1과 같은 블록이다 */}
+      {nextExam && (
+        <section className="mt-5">
+          <SectionHead tone="brand" title="시험 일정" />
+          <TintBlock tone="brand">
+            <div className="px-3.5 py-3.5">
+              <p className="text-[14px] font-bold text-brand-900">
+                {EXAM_TYPE_LABELS[nextExam.examType]}
+                <span className="tnum ml-2 text-[11.5px] font-medium text-brand-600/80">
+                  {nextExam.startDate.replace(/-/g, ".")} 시작
+                </span>
+              </p>
+              <p
+                className={`mt-1.5 whitespace-pre-wrap text-[12.5px] leading-relaxed ${
+                  nextExam.scopeNote ? "text-brand-950/80" : "text-brand-600/50"
+                }`}
+              >
+                {nextExam.scopeNote ?? "시험 범위 미등록"}
+              </p>
+            </div>
+          </TintBlock>
+        </section>
+      )}
+
+      <section className="mt-5">
+        <SectionHead tone="brand" title="이번 달 출석" to="/parent/schedule" />
+        <TintBlock tone="brand">
+          <div className="grid grid-cols-3 divide-x divide-brand-100">
+            <AttendanceCell label="출석" value={thisMonthAttendance.present} />
+            <AttendanceCell label="지각" value={thisMonthAttendance.late} />
+            <AttendanceCell label="결석" value={thisMonthAttendance.absent} />
+          </div>
+        </TintBlock>
+      </section>
+
+      <div className="mt-5">
+        <NoticeCard totalCount={notices.totalCount} recent={notices.recent} to="/parent/notices" />
       </div>
-
-      {/*
-        메뉴 4개. 수업영상·자료실·후기는 학부모 화면에 없다.
-        수업 레포트는 영상 없이 내용·중점·다음 예고·숙제까지만 본다.
-
-        숙제 타일은 위 "안 낸 숙제" 카드와 상단 탭이 이미 가리키고 있어서 여기서 뺐다.
-      */}
-      <nav className="grid grid-cols-2 gap-2.5">
-        <MenuTile
-          to="/parent/schedule"
-          icon="calendar"
-          label="수업 · 클리닉 일정"
-          sub="월별 출석 캘린더"
-        />
-        <MenuTile to="/parent/scores" icon="chart" label="테스트 결과" sub="시험별 점수 확인" />
-        <MenuTile
-          to="/parent/lessons"
-          icon="homework"
-          label="수업 레포트"
-          sub="수업 내용 · 중점 사항"
-        />
-        <MenuTile to="/parent/me" icon="user" label="내 정보" sub="연락처·비밀번호 변경" />
-      </nav>
     </div>
   );
 }
 
-/** 값이 null이면 "미정"으로 둔다. 0으로 채우면 다른 뜻이 된다. */
-function InfoCard({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string | null;
-  tone?: "neutral" | "warn" | "ok";
-}) {
-  const color =
-    tone === "warn" ? "text-amber-700" : tone === "ok" ? "text-emerald-700" : "text-brand-900";
+/**
+ * 출석·지각·결석 한 칸. <b>0을 숨기지 않는다</b> — 여기서 0은 "값이 없다"가 아니라
+ * "결석이 없다"는 좋은 소식이고, 칸이 사라지면 셋이 나란히 서던 격자가 무너진다.
+ * 홈 지면의 숫자 칸이 값 없는 항목을 빼는 것과는 반대 방향이다.
+ */
+function AttendanceCell({ label, value }: { label: string; value: number }) {
   return (
-    <div className="card p-3.5">
-      <p className="eyebrow">{label}</p>
-      <p
-        className={`tnum mt-1.5 text-sm font-semibold ${
-          value === null ? "text-slate-400" : color
-        }`}
-      >
-        {value ?? "예정 없음"}
+    <div className="px-3 py-3 text-center">
+      <p className="text-[11px] font-semibold text-brand-600/70">{label}</p>
+      <p className="tnum mt-1 text-[20px] font-extrabold tracking-[-0.03em] text-brand-900">
+        {value}
       </p>
     </div>
   );

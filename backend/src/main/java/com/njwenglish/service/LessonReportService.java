@@ -7,11 +7,8 @@ import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.dto.lesson.LessonReportListItemResponse;
 import com.njwenglish.dto.lesson.LessonReportResponse;
-import com.njwenglish.dto.lesson.LessonViewRequest;
-import com.njwenglish.dto.lesson.LessonViewsResponse;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
-import com.njwenglish.entity.LessonView;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.enums.SubmissionStatus;
@@ -19,7 +16,6 @@ import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.HomeworkRepository;
 import com.njwenglish.repository.LessonRepository;
-import com.njwenglish.repository.LessonViewRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -35,7 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * S-5 수업 레포트와 영상, P-5 학부모 조회.
+ * S-5 수업 레포트와 영상, P-6 학부모 주간 레포트 조회.
  *
  * <p><b>영상은 학생만 본다.</b> 학부모는 같은 수업의 레포트(내용·중점·다음 예고·숙제)를
  * 보되 영상은 못 본다. 응답 DTO는 하나를 같이 쓰고 학부모 쪽 영상 값이 null이다.
@@ -50,13 +46,12 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class LessonViewService {
+public class LessonReportService {
 
     /** 최근 7일 안에 공개된 수업에 NEW를 붙인다. */
     private static final int NEW_DAYS = 7;
 
     private final LessonRepository lessonRepository;
-    private final LessonViewRepository lessonViewRepository;
     private final HomeworkRepository homeworkRepository;
     private final SubmissionRepository submissionRepository;
     private final AttendanceRepository attendanceRepository;
@@ -71,8 +66,6 @@ public class LessonViewService {
             pageable);
 
         List<Long> lessonIds = lessons.getContent().stream().map(Lesson::getId).toList();
-        Set<Long> viewed = lessonIds.isEmpty() ? Set.of()
-            : Set.copyOf(lessonViewRepository.findViewedLessonIds(me.getId(), lessonIds));
         Map<Long, Homework> homeworks = firstHomeworkByLesson(lessonIds);
         OffsetDateTime newSince = OffsetDateTime.now().minusDays(NEW_DAYS);
 
@@ -85,7 +78,6 @@ public class LessonViewService {
                 lesson.getClassRoom().getName(),
                 YoutubeUrls.videoId(lesson.getVideoUrl()) != null,
                 lesson.getPublishedAt().isAfter(newSince),
-                viewed.contains(lesson.getId()),
                 homework == null ? null : homework.getTitle());
         }));
     }
@@ -115,7 +107,7 @@ public class LessonViewService {
     }
 
     /**
-     * P-5 목록. <b>첫 줄이 requireAccessible이다</b> — 학부모 A가 학부모 B의 자녀
+     * P-6 목록. <b>첫 줄이 requireAccessible이다</b> — 학부모 A가 학부모 B의 자녀
      * studentId를 넣으면 여기서 403이다.
      *
      * <p>조회 조건은 학생 목록과 같은 findForStudent를 그대로 쓴다. 재원 기간 밖 수업과
@@ -135,7 +127,7 @@ public class LessonViewService {
 
         return PageResponse.from(lessons.map(lesson -> {
             Homework homework = homeworks.get(lesson.getId());
-            // hasVideo·viewed는 팩토리가 null로 채운다. 여기서 넘길 방법 자체가 없다
+            // hasVideo는 팩토리가 null로 채운다. 여기서 넘길 방법 자체가 없다
             return LessonReportListItemResponse.forParent(
                 lesson.getId(),
                 lesson.getLessonDate(),
@@ -147,7 +139,7 @@ public class LessonViewService {
     }
 
     /**
-     * P-5 상세. <b>첫 줄이 requireAccessible이다.</b>
+     * P-6 상세. <b>첫 줄이 requireAccessible이다.</b>
      *
      * <p>영상은 내려주지 않는다. videoUrl을 파싱하지도 않는다 —
      * forParent 팩토리가 videoId·embedUrl을 인자로 받지 않아서 넘길 방법이 없다.
@@ -172,48 +164,6 @@ public class LessonViewService {
                 .orElse(null));
     }
 
-    /**
-     * 시청 기록. upsert라 행이 중복되지 않고 watchSeconds는 누적된다.
-     * first_viewed_at은 최초 1회만 기록되고 이후 호출에서 갱신되지 않는다.
-     */
-    @Transactional
-    public void recordView(Long lessonId, LessonViewRequest request) {
-        Student me = studentAccessGuard.requireSelf();
-        findAccessible(lessonId, me.getId());
-        lessonViewRepository.upsert(lessonId, me.getId(), request.watchSeconds());
-    }
-
-    /**
-     * T-4 시청 현황. <b>미시청 학생도 포함한다.</b> 선생님이 확인하려는 건 안 본 학생이다.
-     *
-     * <p>명단은 수업일 기준 재원생이다. 오늘 기준으로 뽑으면 그 뒤 퇴원한 학생이 빠지고,
-     * 그 뒤 입반한 학생이 "안 봤다"로 잡힌다.
-     */
-    @Transactional(readOnly = true)
-    public LessonViewsResponse views(Long lessonId) {
-        Lesson lesson = lessonRepository.findWithClassRoom(lessonId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-
-        List<Student> students = enrollmentRepository.findActiveStudents(
-            lesson.getClassRoom().getId(), lesson.getLessonDate());
-        Map<Long, LessonView> views = lessonViewRepository.findByLessonId(lessonId).stream()
-            .collect(Collectors.toMap(v -> v.getStudent().getId(), Function.identity()));
-
-        List<LessonViewsResponse.Item> items = students.stream()
-            .map(student -> {
-                LessonView view = views.get(student.getId());
-                return new LessonViewsResponse.Item(
-                    student.getId(),
-                    student.getName(),
-                    view != null,
-                    view == null ? null : view.getFirstViewedAt(),
-                    view == null ? 0 : view.getWatchSeconds());
-            })
-            .toList();
-
-        int viewedCount = (int) items.stream().filter(LessonViewsResponse.Item::viewed).count();
-        return new LessonViewsResponse(lessonId, items.size(), viewedCount, items);
-    }
 
     // ---------- 내부 ----------
 

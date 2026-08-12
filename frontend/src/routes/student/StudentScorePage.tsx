@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { ExamDdayList } from "../../shared/components/ExamDdayList";
 import { ScoreSectionList } from "../../shared/components/ScoreSectionList";
+import { PageTitle, SectionHead, TintBlock } from "../../shared/components/Section";
 import { getMe, getMyScores, listMyExamSchedules } from "./api";
 
 /**
@@ -21,25 +22,34 @@ export default function StudentScorePage() {
   });
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">내 정보 · 성적</h2>
+    <div className="space-y-5">
+      <PageTitle>내 정보 · 성적</PageTitle>
 
       {me.data && (
-        <section className="space-y-1 rounded-xl bg-white p-4 shadow-sm">
-          <p className="text-base font-semibold text-slate-900">{me.data.name}</p>
-          <p className="text-sm text-slate-600">
-            {me.data.classRooms.length === 0
-              ? "배정된 반이 없습니다"
-              : me.data.classRooms.map((room) => room.name).join(" · ")}
-          </p>
-          {me.data.phone && <p className="text-xs text-slate-500">{me.data.phone}</p>}
+        <section>
+          <SectionHead tone="neutral" title="내 정보" />
+          <TintBlock tone="neutral">
+            <div className="px-3.5 py-3.5">
+              <p className="text-[16px] font-extrabold tracking-[-0.02em] text-brand-900">
+                {me.data.name}
+              </p>
+              <p className="mt-1 text-[13px] text-slate-600">
+                {me.data.classRooms.length === 0
+                  ? "배정된 반이 없습니다"
+                  : me.data.classRooms.map((room) => room.name).join(" · ")}
+              </p>
+              {me.data.phone && (
+                <p className="tnum mt-0.5 text-[12px] text-slate-400">{me.data.phone}</p>
+              )}
+            </div>
 
-          {/* 학생이 알아야 선생님께 문의해 조치가 된다 */}
-          {!me.data.parentLinked && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              보호자 계정이 아직 연결되지 않았습니다. 선생님께 문의해 주세요.
-            </p>
-          )}
+            {/* 학생이 알아야 선생님께 문의해 조치가 된다 */}
+            {!me.data.parentLinked && (
+              <p className="bg-amber-50 px-3.5 py-2.5 text-[12px] text-amber-800">
+                보호자 계정이 아직 연결되지 않았습니다. 선생님께 문의해 주세요.
+              </p>
+            )}
+          </TintBlock>
         </section>
       )}
 

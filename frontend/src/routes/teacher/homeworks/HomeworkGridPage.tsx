@@ -298,9 +298,20 @@ export default function HomeworkGridPage() {
                             ) : (
                               <div className="flex flex-col items-start gap-0.5">
                                 <span className="text-[11px] text-slate-500">
-                                  재제출 {server.resubmitTargetCount}명 ·{" "}
+                                  미제출 {server.resubmitTargetCount}명 ·{" "}
                                   {formatDueAt(server.resubmitDueAt)} 마감
                                 </span>
+                                {/* 낸 학생은 자동으로 ⭕가 되어 선생님이 누를 것이 없다.
+                                    사진·영상을 보고 싶을 때 들어가는 입구가 이 링크뿐이라
+                                    없애면 재제출물을 볼 방법이 사라진다 */}
+                                {server.resubmittedCount > 0 && (
+                                  <Link
+                                    to={`/teacher/homeworks/${server.homeworkId}`}
+                                    className="text-[11px] font-medium text-emerald-700 underline"
+                                  >
+                                    {server.resubmittedCount}명 제출 · 보기
+                                  </Link>
+                                )}
                                 <button
                                   type="button"
                                   disabled={cancelResubmit.isPending}

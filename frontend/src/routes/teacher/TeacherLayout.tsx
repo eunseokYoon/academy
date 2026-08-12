@@ -10,8 +10,9 @@ const TABS: AppBarTab[] = [
   { to: "/teacher/lessons", label: "수업" },
   { to: "/teacher/attendance", label: "출석" },
   { to: "/teacher/homeworks", label: "숙제" },
-  // 클리닉 수업 시간을 정하는 기능이다. 성적 종류인 "클리닉"과 이름이 겹쳐 라벨만 바꿨다
-  { to: "/teacher/clinics", label: "스케줄 변경" },
+  // 클리닉 시간대를 열고 명단을 보는 화면이다. 성적 종류인 "클리닉"과 이름이 겹쳐
+  // 라벨을 "스케줄"로 둔다 — 화면 제목은 "스케줄 관리"이고, 학생 홈의 같은 자리도 "스케줄"이다
+  { to: "/teacher/clinics", label: "스케줄" },
   { to: "/teacher/scores", label: "성적" },
   { to: "/teacher/regular-exams", label: "정기고사" },
   { to: "/teacher/exam-schedules", label: "시험일정" },

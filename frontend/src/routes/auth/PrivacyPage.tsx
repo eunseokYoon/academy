@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { ACADEMY_NAME } from "../../shared/branding";
 import { LegalDraftNotice, LegalSection, Pending } from "./LegalLayout";
 
 /**
@@ -44,8 +45,9 @@ export default function PrivacyPage() {
         분리합니다. 보호자는 본인에게 연결된 자녀의 정보만 열람할 수 있습니다.
       </LegalSection>
 
+      {/* 상호는 2026-08-11에 확정됐다. 담당자·연락처는 아직이라 지어내지 않는다 */}
       <LegalSection title="7. 문의처">
-        <Pending label="상호·담당자·연락처 확정 예정" />
+        {ACADEMY_NAME} · <Pending label="담당자·연락처 확정 예정" />
       </LegalSection>
 
       <Link to="/login" className="mt-8 inline-block text-sm text-slate-500 underline">

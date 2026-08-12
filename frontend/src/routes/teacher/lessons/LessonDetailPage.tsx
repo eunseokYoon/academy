@@ -12,7 +12,6 @@ import { TextField } from "../../../shared/components/TextField";
 import {
   deleteLesson,
   getLesson,
-  getLessonViews,
   publishLesson,
   updateLesson,
 } from "../api";
@@ -50,8 +49,6 @@ export default function LessonDetailPage() {
 
       <ContentForm lesson={data} onDone={refresh} />
       <PublishSection lesson={data} onDone={refresh} />
-      {/* 공개 전에는 학생이 볼 수 없으니 시청 기록도 생기지 않는다 */}
-      {data.publishedAt && data.videoUrl && <ViewSection lessonId={lessonId} />}
       <DeleteSection lesson={data} />
 
       <Link to="/teacher/lessons" className="block py-2 text-sm text-slate-500 underline">
@@ -236,7 +233,7 @@ function DeleteSection({ lesson }: { lesson: LessonDetail }) {
         이 수업일 삭제
       </button>
       <p className="mt-1 text-xs text-slate-500">
-        출석·숙제·시청 기록이 있으면 삭제되지 않습니다.
+        출석·숙제 기록이 있으면 삭제되지 않습니다.
       </p>
       <FormError message={error} />
 
@@ -275,44 +272,3 @@ function DeleteSection({ lesson }: { lesson: LessonDetail }) {
   );
 }
 
-/**
- * 시청 현황. <b>미시청 학생도 나온다</b> — 선생님이 확인하려는 건 안 본 학생이다.
- *
- * <p>명단은 수업일 기준 재원생이다. 그 뒤 입반한 학생이 "안 봤다"로 잡히지 않는다.
- */
-function ViewSection({ lessonId }: { lessonId: number }) {
-  const { data, isPending } = useQuery({
-    queryKey: ["teacher", "lesson-views", lessonId],
-    queryFn: () => getLessonViews(lessonId),
-  });
-
-  if (isPending || !data) return null;
-
-  return (
-    <section className="space-y-2 rounded-xl bg-white p-4 shadow-sm">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">영상 시청 현황</h3>
-        <span className="text-xs text-slate-500">
-          {data.viewedCount} / {data.totalStudents}명 시청
-        </span>
-      </div>
-
-      <ul className="divide-y divide-slate-100 text-sm">
-        {data.items.map((item) => (
-          <li key={item.studentId} className="flex items-center justify-between py-1.5">
-            <span className={item.viewed ? "text-slate-900" : "text-amber-700"}>
-              {item.name}
-            </span>
-            <span className="text-xs text-slate-500">
-              {item.viewed
-                ? `${Math.round(item.watchSeconds / 60)}분 · ${item.firstViewedAt
-                    ?.slice(5, 16)
-                    .replace("T", " ")}`
-                : "미시청"}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}

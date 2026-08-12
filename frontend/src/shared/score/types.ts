@@ -71,6 +71,12 @@ export interface WeeklyTestGrid {
   year: number;
   month: number;
   week: number;
+  /**
+   * 이 응답을 만든 서버 시각. <b>저장할 때 그대로 돌려보내야 한다</b> —
+   * 화면을 연 뒤에 온라인 클리닉 테스트로 채워진 칸을 서버가 알아보고 지우지 않는다.
+   * 빼먹으면 방금 반영된 성적이 저장 한 번에 조용히 사라진다.
+   */
+  loadedAt: string;
   students: WeeklyTestStudentRow[];
   tests: WeeklyTestColumn[];
 }
@@ -80,6 +86,8 @@ export interface WeeklyTestSaveBody {
   year: number;
   month: number;
   week: number;
+  /** 그리드 응답의 loadedAt을 그대로 돌려보낸다. */
+  loadedAt: string | null;
   tests: {
     testType: WeeklyTestType;
     totalCount: number | null;

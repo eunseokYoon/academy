@@ -58,7 +58,11 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
     List<Homework> findByLessonIds(@Param("lessonIds") Collection<Long> lessonIds);
 
     /**
-     * T-1 대시보드의 미확인 요약. 아직 손댈 것이 남은 숙제만 나온다.
+     * T-1 대시보드의 미제출 요약. <b>아직 안 낸 학생이 남은 숙제만</b> 나온다.
+     *
+     * <p>확인 단계가 없어져(2026-08-09) "손댈 것"은 미제출 하나뿐이다. 낸 것은 그 순간
+     * ⭕가 되어 선생님이 할 일이 없다. 그래서 GRID는 재제출 대상 칸만 남기고
+     * HAVING으로 미제출이 0인 숙제를 떨군다 — 이게 없으면 전원이 낸 열도 계속 뜬다.
      *
      * <p><b>재제출을 안 연 GRID 열은 통째로 빠진다.</b> ⭕를 받은 학생까지 미제출로 잡혀
      * T-1이 처리할 일 없는 항목으로 가득 찬다. 미채점 열은 여기 띄우지 않는다 —
@@ -72,16 +76,14 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
                h.title AS title,
                h.classRoom.name AS classRoomName,
                h.dueAt AS dueAt,
-               SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) AS notSubmitted,
-               SUM(CASE WHEN s.status = 'SUBMITTED' THEN 1 ELSE 0 END) AS awaitingCheck
+               SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) AS notSubmitted
         FROM Homework h JOIN Submission s ON s.homework = h
         WHERE h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
            OR (h.dueAt IS NOT NULL
-               AND (s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
-                                 com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
-                    OR s.status = com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED))
+               AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
+                                com.njwenglish.entity.enums.HomeworkResult.NOT_DONE))
         GROUP BY h.id, h.title, h.classRoom.name, h.dueAt
-        HAVING SUM(CASE WHEN s.status <> 'CHECKED' THEN 1 ELSE 0 END) > 0
+        HAVING SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) > 0
         ORDER BY h.dueAt DESC
         """)
     List<PendingRow> findPendingSummaries();
@@ -96,8 +98,6 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
         OffsetDateTime getDueAt();
 
         long getNotSubmitted();
-
-        long getAwaitingCheck();
     }
 
     /** 그리드의 열 목록. sort_order 순이고 GRID만 나온다 — ONLINE 숙제는 그리드에 안 뜬다. */

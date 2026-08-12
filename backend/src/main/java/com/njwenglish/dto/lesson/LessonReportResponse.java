@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
- * S-5(학생) · P-5(학부모) 공용 수업 상세.
+ * S-5(학생) · P-6(학부모) 공용 수업 상세.
  *
  * <p>선생님용 {@link LessonDetailResponse}와 다른 레코드다. 그쪽은 videoUrl 원본·미공개 여부
  * 같은 관리용 값을 담는다. 이름을 겹치게 하지 마라 — 한쪽을 다른 쪽으로 덮어쓰기 쉽다.
@@ -77,7 +77,7 @@ public record LessonReportResponse(
             return of(homeworkId, title, description, kind, dueAt, submission);
         }
 
-        /** P-5. description 자리는 여기서 null로 고정된다. */
+        /** P-6. description 자리는 여기서 null로 고정된다. */
         public static Homework forParent(Long homeworkId, String title,
                                          HomeworkKind kind, OffsetDateTime dueAt,
                                          Submission submission) {
@@ -108,7 +108,7 @@ public record LessonReportResponse(
     }
 
     /**
-     * P-5. <b>영상 자리는 여기서 null로 고정된다.</b> 인자로도 받지 않는다 —
+     * P-6. <b>영상 자리는 여기서 null로 고정된다.</b> 인자로도 받지 않는다 —
      * 받으면 언젠가 누가 채워 넣는다.
      */
     public static LessonReportResponse forParent(Long lessonId, LocalDate lessonDate,

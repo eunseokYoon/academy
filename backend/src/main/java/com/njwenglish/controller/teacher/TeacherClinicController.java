@@ -4,16 +4,12 @@ import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
-import com.njwenglish.dto.clinic.ClinicChangeRequestResponse;
 import com.njwenglish.dto.clinic.ClinicCreateRequest;
 import com.njwenglish.dto.clinic.ClinicCreateResponse;
-import com.njwenglish.dto.clinic.ClinicDecideRequest;
 import com.njwenglish.dto.clinic.ClinicListItemResponse;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
 import com.njwenglish.dto.clinic.ClinicUpdateRequest;
-import com.njwenglish.entity.enums.ChangeRequestStatus;
 import com.njwenglish.entity.enums.ClinicStatus;
-import com.njwenglish.service.ClinicChangeRequestService;
 import com.njwenglish.service.ClinicReservationService;
 import com.njwenglish.service.ClinicService;
 import jakarta.validation.Valid;
@@ -31,7 +27,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** T-13. /clinics와 /clinic-change-requests 두 접두사를 함께 다룬다. */
+/**
+ * T-13 클리닉 시간대 관리.
+ *
+ * <p><b>변경 승인도, 변경 목록도 없다</b>(2026-08-10 · 08-11 확정). 학생이 바꾸면 즉시
+ * 반영되고 학생·학부모에게 공지가 나간다. 선생님은 명단에서 결과만 본다 —
+ * 승인·거절이나 변경 이력 화면을 다시 만들지 마라.
+ */
 @RestController
 @RequestMapping("/api/teacher")
 @RequiredArgsConstructor
@@ -39,14 +41,18 @@ public class TeacherClinicController {
 
     private final ClinicService clinicService;
     private final ClinicReservationService clinicReservationService;
-    private final ClinicChangeRequestService clinicChangeRequestService;
 
+    /**
+     * T-13 목록. <b>주차 단위다</b>(2026-08-11 확정) — 날짜 범위를 손으로 넣던 것을 바꿨다.
+     * 성적·온라인 테스트 화면과 같은 년·월·주차 선택을 쓴다.
+     */
     @GetMapping("/clinics")
     public ApiResponse<List<ClinicListItemResponse>> list(
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam int year,
+        @RequestParam int month,
+        @RequestParam int week,
         @RequestParam(required = false) ClinicStatus status) {
-        return ApiResponse.ok(clinicService.listForTeacher(from, to, status));
+        return ApiResponse.ok(clinicService.listForTeacher(year, month, week, status));
     }
 
     @PostMapping("/clinics")
@@ -92,18 +98,5 @@ public class TeacherClinicController {
         @PathVariable Long clinicId,
         @Valid @RequestBody AttendanceConfirmRequest request) {
         return ApiResponse.ok(clinicReservationService.confirmAttendance(clinicId, request));
-    }
-
-    @GetMapping("/clinic-change-requests")
-    public ApiResponse<List<ClinicChangeRequestResponse>> changeRequests(
-        @RequestParam(required = false, defaultValue = "PENDING") ChangeRequestStatus status) {
-        return ApiResponse.ok(clinicChangeRequestService.list(status));
-    }
-
-    @PostMapping("/clinic-change-requests/{requestId}/decide")
-    public ApiResponse<ClinicChangeRequestResponse> decide(
-        @PathVariable Long requestId,
-        @Valid @RequestBody ClinicDecideRequest request) {
-        return ApiResponse.ok(clinicChangeRequestService.decide(requestId, request));
     }
 }

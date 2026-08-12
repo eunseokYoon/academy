@@ -12,6 +12,48 @@ import {
   getOnlineTestStudentDetail,
   publishOnlineTest,
 } from "../api";
+import type { ClinicReflection } from "../api";
+
+/**
+ * 자동 반영 안내. <b>안 될 때 이유를 반드시 보여준다</b> — 조용히 넘어가면
+ * "왜 어떤 건 성적에 자동으로 차고 어떤 건 안 차지"가 미스터리가 된다.
+ */
+function ClinicReflectionNotice({
+  reflection,
+  year,
+  month,
+  week,
+}: {
+  reflection: ClinicReflection;
+  year?: number;
+  month?: number;
+  week?: number;
+}) {
+  const slot = year && month && week ? `${year}년 ${month}월 ${week}주차 ` : "";
+
+  if (reflection === "REFLECTED") {
+    return (
+      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+        학생이 제출하면 {slot}클리닉 성적에 자동으로 들어갑니다.
+        선생님이 이미 적어 둔 칸은 덮지 않습니다.
+      </p>
+    );
+  }
+  if (reflection === "NO_INTERNAL_SPLIT") {
+    return (
+      <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        내부지문 문항 수가 없어 성적에 자동으로 들어가지 않습니다. 아래 숫자를 성적 기입
+        탭에 직접 적어 주세요. (공개 전이면 출제 수정에서 내부지문 문항 수를 넣을 수 있습니다)
+      </p>
+    );
+  }
+  return (
+    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      {slot}클리닉에 이미 다른 문항 수가 잡혀 있어 성적에 자동으로 들어가지 않습니다.
+      반 전체가 쓰는 값이라 이 시험 하나로 덮을 수 없습니다 — 아래 숫자를 직접 적어 주세요.
+    </p>
+  );
+}
 
 /**
  * T-14 상세·결과. 선생님 화면이라 정답이 보인다.
@@ -178,6 +220,13 @@ export default function OnlineTestDetailPage() {
               {results.data.average != null && ` · 평균 ${results.data.average}점`}
             </span>
           </div>
+
+          <ClinicReflectionNotice
+            reflection={results.data.test.clinicReflection}
+            year={test.data?.year}
+            month={test.data?.month}
+            week={test.data?.week}
+          />
 
           <div className="overflow-x-auto">
             <table className="min-w-max text-sm">

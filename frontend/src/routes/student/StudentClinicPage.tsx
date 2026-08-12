@@ -3,15 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode, errorMessage } from "../../shared/api/errors";
 import { Badge } from "../../shared/components/Badge";
 import { Modal } from "../../shared/components/Modal";
+import { PageTitle, SectionHead, TintBlock } from "../../shared/components/Section";
 import { TextAreaField } from "../../shared/components/TextAreaField";
 import { formatClinicSlot } from "../../shared/clinic/types";
 import {
-  cancelClinicReservation,
+  changeClinicReservation,
   listLessonChangeCandidates,
   listMyChangeableLessons,
   listMyClinics,
   listMyLessonChanges,
-  requestClinicChange,
   requestLessonChange,
   reserveClinic,
 } from "./api";
@@ -34,6 +34,16 @@ function addDays(date: string, days: number): string {
  * <p>화면에 다른 학생 이름이 없다. 서버도 인원 수만 내려준다.
  * 마감 여부(full)는 서버가 계산한 값을 그대로 쓴다 — capacity가 null일 수 있어서
  * 프론트에서 reservedCount >= capacity를 계산하면 깨진다.
+ *
+ * <p><b>도착 시각 목록(slots)도 서버가 준다.</b> 시작·종료로 여기서 다시 만들지 마라 —
+ * "마지막 슬롯은 종료 1시간 전" 규칙이 두 곳으로 갈라지면 학생이 고른 시각을 서버가 거절한다.
+ *
+ * <p>변경에 선생님 승인이 없다(2026-08-10 확정). 대신 사유가 필수고, 변경하면
+ * <b>공지가 한 건 발행되어</b> 본인과 학부모의 공지 탭에 뜬다(수업일 변경과 같은 경로).
+ * 이 화면에 변경 이력을 따로 그리지 마라 — 같은 내용이 두 곳에 있으면 어느 쪽이 최신인지 헷갈린다.
+ *
+ * <p><b>취소 버튼을 만들지 마라</b>(2026-08-10 확정). 못 가면 다른 시각으로 옮기고,
+ * 아예 빠져야 하면 선생님이 T-13에서 배정을 해제한다.
  */
 export default function StudentClinicPage() {
   const from = todayString();
@@ -41,6 +51,8 @@ export default function StudentClinicPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [changing, setChanging] = useState<StudentClinic | null>(null);
+  // 클리닉별로 고른 도착 시각. 안 고르면 첫 슬롯이다
+  const [picked, setPicked] = useState<Record<number, string>>({});
 
   const clinics = useQuery({
     queryKey: ["student", "clinics", from, to],
@@ -49,10 +61,13 @@ export default function StudentClinicPage() {
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["student", "clinics"] });
+    // 변경하면 공지가 한 건 발행된다. 공지 탭이 최신이 되도록 같이 비운다
+    await queryClient.invalidateQueries({ queryKey: ["notices"] });
   }
 
   const reserve = useMutation({
-    mutationFn: (clinicId: number) => reserveClinic(clinicId),
+    mutationFn: (clinic: StudentClinic) =>
+      reserveClinic(clinic.clinicId, picked[clinic.clinicId] ?? clinic.slots[0]),
     onSuccess: async () => {
       setError(null);
       await refresh();
@@ -68,64 +83,51 @@ export default function StudentClinicPage() {
       ),
   });
 
-  const cancel = useMutation({
-    mutationFn: (clinicId: number) => cancelClinicReservation(clinicId),
-    onSuccess: async () => {
-      setError(null);
-      await refresh();
-    },
-    onError: (e) => setError(errorMessage(e, "취소하지 못했습니다.")),
-  });
+
 
   const mine = (clinics.data ?? []).filter((clinic) => clinic.myReservation !== null);
+  const openClinics = clinics.data ?? [];
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">스케줄 변경</h2>
+    <div className="space-y-5">
+      <PageTitle>스케줄 관리</PageTitle>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <LessonChangeSection />
 
-      <h3 className="pt-2 text-base font-semibold text-slate-900">클리닉 신청</h3>
-
       <section>
-        <h3 className="text-sm font-semibold text-slate-700">내 클리닉</h3>
+        <SectionHead tone="brand" title="내 클리닉" count={mine.length} />
         {mine.length === 0 ? (
-          <p className="mt-2 rounded-xl bg-white p-4 text-sm text-slate-500 shadow-sm">
-            신청한 클리닉이 없습니다.
-          </p>
+          <TintBlock tone="neutral">
+            <p className="px-4 py-5 text-center text-sm text-slate-500">
+              신청한 클리닉이 없습니다.
+            </p>
+          </TintBlock>
         ) : (
-          <ul className="mt-2 space-y-2">
+          <ul className="space-y-2">
             {mine.map((clinic) => (
-              <li key={clinic.clinicId} className="rounded-xl bg-white p-3 shadow-sm">
+              <li key={clinic.clinicId} className="rounded-2xl bg-white p-3.5 shadow-card">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-900">{formatClinicSlot(clinic)}</span>
-                  {clinic.myReservation?.changeRequestStatus === "PENDING" ? (
-                    <Badge tone="warn">변경 요청 중</Badge>
-                  ) : (
-                    <Badge tone="ok">신청 완료</Badge>
-                  )}
-                </div>
-                {clinic.myReservation?.changeRequestStatus !== "PENDING" && (
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => cancel.mutate(clinic.clinicId)}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm
-                                 text-slate-700"
-                    >
-                      취소
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChanging(clinic)}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm
-                                 text-slate-700"
-                    >
-                      시간 변경 요청
-                    </button>
+                  <div className="min-w-0">
+                    {/* 도착 시각이 주인공이다. 시간대(17:00~22:00)는 그 아래 작게 둔다 —
+                        학생이 기억해야 하는 건 "몇 시에 가는가"다 */}
+                    <p className="text-base font-semibold text-brand-900">
+                      {clinic.clinicDate.slice(5)} {clinic.myReservation!.arrivalTime} 도착
+                    </p>
+                    <p className="text-xs text-slate-500">{formatClinicSlot(clinic)}</p>
                   </div>
-                )}
+                  <Badge tone="ok">신청 완료</Badge>
+                </div>
+                {/* 취소 버튼은 없다(2026-08-10 확정). 못 가면 다른 시각으로 옮긴다 —
+                    학생이 스스로 명단에서 사라지면 선생님이 그날 인원을 신뢰할 수 없다 */}
+                <button
+                  type="button"
+                  onClick={() => setChanging(clinic)}
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
+                             text-slate-700"
+                >
+                  시간 변경
+                </button>
               </li>
             ))}
           </ul>
@@ -133,47 +135,78 @@ export default function StudentClinicPage() {
       </section>
 
       <section>
-        <h3 className="text-sm font-semibold text-slate-700">신청 가능한 시간</h3>
+        <SectionHead tone="neutral" title="신청 가능한 시간" />
         {clinics.isPending ? (
           <p className="mt-2 text-sm text-slate-400">불러오는 중…</p>
+        ) : openClinics.length === 0 ? (
+          <TintBlock tone="neutral">
+            <p className="px-4 py-5 text-center text-sm text-slate-500">
+              지금 신청할 수 있는 시간이 없습니다.
+            </p>
+          </TintBlock>
         ) : (
-          <ul className="mt-2 space-y-2">
-            {(clinics.data ?? []).map((clinic) => (
-              <li
-                key={clinic.clinicId}
-                className="flex items-center justify-between gap-2 rounded-xl bg-white p-3
-                           shadow-sm"
-              >
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{formatClinicSlot(clinic)}</p>
-                  <p className="text-xs text-slate-500">
-                    {clinic.reservedCount}
-                    {clinic.capacity === null ? "" : `/${clinic.capacity}`}명
-                  </p>
-                </div>
-                {clinic.myReservation ? (
-                  <span className="text-xs text-slate-400">신청함</span>
-                ) : clinic.full ? (
-                  <span className="text-xs text-slate-400">마감</span>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={reserve.isPending}
-                    onClick={() => reserve.mutate(clinic.clinicId)}
-                    className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white
-                               disabled:opacity-50"
-                  >
-                    신청
-                  </button>
-                )}
-              </li>
+          /*
+            주차로 묶는다. 3주치가 한 줄로 늘어서면 "이번 주에 갈 수 있는 게 뭔지"를
+            날짜를 읽어 가며 세야 한다. 라벨은 서버가 준 weekLabel 그대로다 —
+            여기서 날짜로 만들면 수업·성적이 쓰는 주차 계산과 갈라진다.
+          */
+          <div className="mt-2 space-y-4">
+            {groupByWeek(openClinics).map(([weekLabel, weekClinics]) => (
+              <div key={weekLabel}>
+                <p className="eyebrow px-1">{weekLabel}</p>
+                <ul className="mt-1.5 space-y-2">
+                  {weekClinics.map((clinic) => (
+                    <li key={clinic.clinicId} className="rounded-2xl bg-white p-3 shadow-card">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-brand-900">
+                            {formatClinicSlot(clinic)}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {clinic.reservedCount}
+                            {clinic.capacity === null ? "" : `/${clinic.capacity}`}명
+                          </p>
+                        </div>
+                        {clinic.myReservation ? (
+                          <span className="text-xs text-slate-400">
+                            {clinic.myReservation.arrivalTime} 신청함
+                          </span>
+                        ) : clinic.full ? (
+                          <span className="text-xs text-slate-400">마감</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={reserve.isPending || clinic.slots.length === 0}
+                            onClick={() => reserve.mutate(clinic)}
+                            className="rounded-lg bg-brand-900 px-3 py-2 text-sm font-medium
+                                       text-white disabled:opacity-50"
+                          >
+                            신청
+                          </button>
+                        )}
+                      </div>
+
+                      {/* 몇 시에 올지 먼저 고르고 신청한다. 안 고르면 첫 슬롯이다 */}
+                      {!clinic.myReservation && !clinic.full && (
+                        <SlotPicker
+                          slots={clinic.slots}
+                          value={picked[clinic.clinicId] ?? clinic.slots[0]}
+                          onChange={(slot) =>
+                            setPicked((prev) => ({ ...prev, [clinic.clinicId]: slot }))
+                          }
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 
       {changing && (
-        <ChangeRequestModal
+        <ChangeModal
           clinic={changing}
           candidates={(clinics.data ?? []).filter(
             (candidate) =>
@@ -185,6 +218,55 @@ export default function StudentClinicPage() {
           onDone={refresh}
         />
       )}
+
+    </div>
+  );
+}
+
+/**
+ * 주차별 묶음. 서버가 날짜 오름차순으로 주므로 순서만 유지하면 된다 —
+ * 정렬을 다시 하면 서버가 정한 순서와 어긋난다.
+ */
+function groupByWeek(clinics: StudentClinic[]): [string, StudentClinic[]][] {
+  const groups = new Map<string, StudentClinic[]>();
+  for (const clinic of clinics) {
+    const bucket = groups.get(clinic.weekLabel);
+    if (bucket) bucket.push(clinic);
+    else groups.set(clinic.weekLabel, [clinic]);
+  }
+  return [...groups.entries()];
+}
+
+/** 도착 시각 고르기. 슬롯 수가 대여섯 개라 드롭다운보다 버튼이 빠르다. */
+function SlotPicker({
+  slots,
+  value,
+  onChange,
+}: {
+  slots: string[];
+  value: string | undefined;
+  onChange: (slot: string) => void;
+}) {
+  if (slots.length === 0) {
+    return <p className="mt-2 text-xs text-slate-400">고를 수 있는 시간이 없습니다.</p>;
+  }
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {slots.map((slot) => (
+        <button
+          key={slot}
+          type="button"
+          onClick={() => onChange(slot)}
+          aria-pressed={value === slot}
+          className={`rounded-lg px-2.5 py-1.5 text-sm ${
+            value === slot
+              ? "bg-brand-900 font-medium text-white"
+              : "border border-slate-300 text-slate-700"
+          }`}
+        >
+          {slot}
+        </button>
+      ))}
     </div>
   );
 }
@@ -218,11 +300,11 @@ function LessonChangeSection() {
   return (
     <section>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-700">수업일 변경</h3>
+        <SectionHead tone="neutral" title="수업일 변경" />
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+          className="rounded-lg bg-brand-900 px-3 py-2 text-sm font-medium text-white"
         >
           수업 변경
         </button>
@@ -231,11 +313,11 @@ function LessonChangeSection() {
       {requests.data && requests.data.length > 0 ? (
         <ul className="mt-2 space-y-2">
           {requests.data.map((request) => (
-            <li key={request.requestId} className="rounded-xl bg-white p-3 shadow-sm">
+            <li key={request.requestId} className="rounded-2xl bg-white p-3 shadow-card">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 text-sm">
                   <p className="text-slate-500">{formatLessonSlot(request.from)}</p>
-                  <p className="font-medium text-slate-900">→ {formatLessonSlot(request.to)}</p>
+                  <p className="font-medium text-brand-900">→ {formatLessonSlot(request.to)}</p>
                 </div>
                 <Badge
                   tone={
@@ -254,7 +336,7 @@ function LessonChangeSection() {
           ))}
         </ul>
       ) : (
-        <p className="mt-2 rounded-xl bg-white p-4 text-sm text-slate-500 shadow-sm">
+        <p className="mt-2 rounded-2xl bg-white p-4 text-sm text-slate-500 shadow-card">
           변경 요청한 수업이 없습니다.
         </p>
       )}
@@ -380,7 +462,7 @@ function LessonChangeModal({
           fromLessonId === "" || toLessonId === "" || reason.trim() === "" || mutation.isPending
         }
         onClick={() => mutation.mutate()}
-        className="mt-4 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white
+        className="mt-4 w-full rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-medium text-white
                    disabled:opacity-50"
       >
         요청 보내기
@@ -394,10 +476,13 @@ function LessonChangeModal({
 }
 
 /**
- * 시간 변경은 요청만 하고 선생님이 승인한다. 학생이 직접 옮기지 못한다.
- * 사유 선택은 필수라 버튼을 누르면 이 다이얼로그가 먼저 뜬다.
+ * 시간 변경 · 다른 클리닉으로 이동. <b>선생님 승인이 없다</b>(2026-08-10 확정) —
+ * 저장하면 즉시 바뀐다.
+ *
+ * <p>사유가 필수인 이유가 있다. 승인 단계가 없어서 <b>이 문장이 선생님에게 남는 유일한
+ * 설명</b>이다. 선택 입력으로 바꾸지 마라.
  */
-function ChangeRequestModal({
+function ChangeModal({
   clinic,
   candidates,
   onClose,
@@ -409,37 +494,45 @@ function ChangeRequestModal({
   onDone: () => Promise<void>;
 }) {
   const [targetClinicId, setTargetClinicId] = useState<string>("");
-  const [reasonCode, setReasonCode] = useState("");
-  const [reasonNote, setReasonNote] = useState("");
+  const [arrivalTime, setArrivalTime] = useState(clinic.myReservation!.arrivalTime);
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // 옮길 클리닉이 바뀌면 슬롯 목록도 바뀐다. 이전 선택이 새 목록에 없으면 첫 슬롯으로 되돌린다
+  const target =
+    targetClinicId === ""
+      ? clinic
+      : (candidates.find((c) => c.clinicId === Number(targetClinicId)) ?? clinic);
+  const slots = target.slots;
 
   const mutation = useMutation({
     mutationFn: () =>
-      requestClinicChange({
-        reservationId: clinic.myReservation!.reservationId,
+      changeClinicReservation(clinic.clinicId, {
         targetClinicId: targetClinicId === "" ? null : Number(targetClinicId),
-        reasonCode: reasonCode.trim(),
-        reasonNote: reasonNote.trim() || null,
+        arrivalTime: slots.includes(arrivalTime) ? arrivalTime : slots[0],
+        reason: reason.trim(),
       }),
     onSuccess: async () => {
       await onDone();
       onClose();
     },
-    onError: (e) => setError(errorMessage(e, "요청을 보내지 못했습니다.")),
+    onError: (e) => setError(errorMessage(e, "변경하지 못했습니다.")),
   });
 
   return (
-    <Modal title="시간 변경 요청" onClose={onClose}>
-      <p className="text-sm text-slate-600">현재 {formatClinicSlot(clinic)}</p>
+    <Modal title="시간 변경" onClose={onClose}>
+      <p className="text-sm text-slate-600">
+        현재 {formatClinicSlot(clinic)} · {clinic.myReservation!.arrivalTime} 도착
+      </p>
 
       <label className="mt-3 block">
-        <span className="block text-sm font-medium text-slate-700">옮길 시간</span>
+        <span className="block text-sm font-medium text-slate-700">클리닉</span>
         <select
           value={targetClinicId}
           onChange={(e) => setTargetClinicId(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base"
         >
-          <option value="">취소 요청 (다른 시간 없이 취소)</option>
+          <option value="">그대로 (시간만 변경)</option>
           {candidates.map((candidate) => (
             <option key={candidate.clinicId} value={candidate.clinicId}>
               {formatClinicSlot(candidate)}
@@ -448,27 +541,21 @@ function ChangeRequestModal({
         </select>
       </label>
 
-      {/*
-        사유 옵션 목록이 아직 확정되지 않았다. 임의로 만들어 두면 나중에 값이
-        어긋나므로 지금은 자유 입력으로 받고, 확정되면 select로 바꾼다.
-      */}
-      <label className="mt-3 block">
-        <span className="block text-sm font-medium text-slate-700">사유 (필수)</span>
-        <input
-          value={reasonCode}
-          onChange={(e) => setReasonCode(e.target.value)}
-          required
-          placeholder="예: 학교 일정"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base"
+      <div className="mt-3">
+        <span className="block text-sm font-medium text-slate-700">도착 시간</span>
+        <SlotPicker
+          slots={slots}
+          value={slots.includes(arrivalTime) ? arrivalTime : slots[0]}
+          onChange={setArrivalTime}
         />
-      </label>
+      </div>
 
       <div className="mt-3">
         <TextAreaField
-          label="자세한 사정"
+          label="사유 (필수)"
           rows={3}
-          value={reasonNote}
-          onChange={(e) => setReasonNote(e.target.value)}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
         />
       </div>
 
@@ -476,16 +563,17 @@ function ChangeRequestModal({
 
       <button
         type="button"
-        disabled={reasonCode.trim() === "" || mutation.isPending}
+        disabled={reason.trim() === "" || slots.length === 0 || mutation.isPending}
         onClick={() => mutation.mutate()}
-        className="mt-4 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white
+        className="mt-4 w-full rounded-lg bg-brand-900 px-4 py-2.5 text-sm font-medium text-white
                    disabled:opacity-50"
       >
-        요청 보내기
+        변경하기
       </button>
       <p className="mt-2 text-xs text-slate-500">
-        선생님이 승인해야 시간이 바뀝니다. 승인 전까지는 원래 시간에 오세요.
+        바로 반영됩니다. 적으신 사유는 선생님과 학부모님께 그대로 전달됩니다.
       </p>
     </Modal>
   );
 }
+

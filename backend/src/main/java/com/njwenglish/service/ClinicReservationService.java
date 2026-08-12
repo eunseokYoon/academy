@@ -9,42 +9,64 @@ import com.njwenglish.dto.attendance.AttendanceExceptionRequest;
 import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
+import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
+import com.njwenglish.dto.clinic.ClinicReservationCreateRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
 import com.njwenglish.dto.clinic.ClinicReservationStudentResponse;
 import com.njwenglish.entity.Clinic;
+import com.njwenglish.entity.ClinicChangeLog;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.AttendanceStatus;
 import com.njwenglish.entity.enums.ReservationStatus;
+import com.njwenglish.repository.ClinicChangeLogRepository;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.TeacherRepository;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 클리닉 신청·배정·취소·출석. 신청 경로가 두 가지다 —
+ * 클리닉 신청·배정·변경·출석. 신청 경로가 두 가지다 —
  * 학생 본인 신청(S-9)은 assigned_by = NULL, 선생님 배정(T-13)은 배정자 id가 들어간다.
  *
  * <p>정원 체크는 언제나 {@link #reserveLocked}를 거친다. 학생 신청, 선생님 일괄 배정,
- * 변경 요청 승인 세 곳이 같은 경합에 노출되므로 같은 메서드를 써야 한다.
+ * 클리닉 이동 세 곳이 같은 경합에 노출되므로 같은 메서드를 써야 한다.
+ *
+ * <p><b>변경에 선생님 승인이 없다</b>(2026-08-10 확정). 학생이 하면 즉시 반영된다.
+ * 대신 사유를 받아 {@link ClinicChangeLog}를 남기고 공지를 한 건 발행한다 —
+ * 승인이 없어서 그 둘이 유일한 대응책이다. 예약을 바꾸는 경로에서 빼먹지 마라.
+ *
+ * <p><b>학생에게 취소 경로는 없다</b>(2026-08-10 확정). 못 가면 다른 시각으로 옮긴다.
+ * 아예 빠져야 하면 선생님이 T-13에서 배정 해제({@link #unassign})한다 —
+ * 학생이 스스로 명단에서 사라지면 선생님이 그날 인원을 신뢰할 수 없다.
  */
 @Service
 @RequiredArgsConstructor
 public class ClinicReservationService {
 
+    /** 공지 본문의 날짜. "8월 13일(목)" — 수업일 변경 공지와 같은 형식이다. */
+    private static final DateTimeFormatter NOTICE_DATE =
+        DateTimeFormatter.ofPattern("M월 d일(E)", Locale.KOREAN);
+
     private final ClinicRepository clinicRepository;
     private final ClinicReservationRepository reservationRepository;
+    private final ClinicChangeLogRepository changeLogRepository;
+    private final NoticeService noticeService;
     private final StudentRepository studentRepository;
     private final TeacherRepository teacherRepository;
     private final StudentAccessGuard studentAccessGuard;
@@ -59,12 +81,17 @@ public class ClinicReservationService {
      *
      * <p>failOnDuplicate는 경로마다 다르다. 학생 신청은 "이미 신청하셨습니다"를 보여줘야 해서
      * 409지만, 선생님 일괄 배정은 멱등이라 이미 있는 학생을 건너뛴다.
+     *
+     * <p>arrivalTime이 null이면 클리닉 시작 시각이다(선생님 배정의 기본값).
+     * <b>정원은 클리닉 전체 기준이다</b> — 슬롯별 정원은 만들지 않기로 확정했다.
      */
     @Transactional
     public List<ClinicReservation> reserveLocked(Long clinicId, List<Student> students,
-                                                 Teacher assignedBy, boolean failOnDuplicate) {
+                                                 Teacher assignedBy, LocalTime arrivalTime,
+                                                 boolean failOnDuplicate) {
         Clinic clinic = clinicRepository.findByIdForUpdate(clinicId)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        LocalTime slot = requireSlot(clinic, arrivalTime);
 
         List<Student> toAdd = new ArrayList<>(students.size());
         for (Student student : students) {
@@ -92,57 +119,99 @@ public class ClinicReservationService {
 
         return toAdd.stream()
             .map(student -> reservationRepository.save(
-                ClinicReservation.reserve(clinic, student, assignedBy)))
+                ClinicReservation.reserve(clinic, student, assignedBy, slot)))
             .toList();
     }
 
     /** S-9 학생 본인 신청. assigned_by는 null이다. */
     @Transactional
-    public ClinicReservationCreateResponse reserve(Long clinicId) {
+    public ClinicReservationCreateResponse reserve(Long clinicId,
+                                                   ClinicReservationCreateRequest request) {
         Student student = studentAccessGuard.requireSelf();
-        Clinic clinic = findClinic(clinicId);
+        requireOpenForStudent(findClinic(clinicId));
 
-        // 닫힌 시간대와 지난 날짜는 애초에 신청 대상이 아니다
-        if (!clinic.isOpen()) {
-            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE);
-        }
-        if (clinic.getClinicDate().isBefore(LocalDate.now())) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
-        }
-
-        List<ClinicReservation> created =
-            reserveLocked(clinicId, List.of(student), null, true);
+        List<ClinicReservation> created = reserveLocked(
+            clinicId, List.of(student), null, request.arrivalTime(), true);
         return ClinicReservationCreateResponse.from(created.get(0));
     }
 
     /**
-     * S-9 신청 취소. 행을 지우지 않고 CANCELED로 바꾼다 —
-     * 부분 유니크 인덱스가 RESERVED만 보므로 나중에 다시 신청할 수 있다.
+     * S-9 도착 시각 변경 · 다른 클리닉으로 이동. <b>선생님 승인이 없다</b>(확정) —
+     * 대신 사유를 받아 기록을 남긴다.
+     *
+     * <p>targetClinicId가 없거나 지금 클리닉과 같으면 arrival_time만 UPDATE한다.
+     * 다르면 기존 예약을 MOVED로 비우고 목표 클리닉에 새 RESERVED를 만든다 —
+     * <b>먼저 비워야</b> 같은 학생이 두 시간대에 RESERVED로 남지 않는다.
+     * 정원 재확인은 학생 신청과 같은 reserveLocked를 탄다.
      */
     @Transactional
-    public void cancel(Long clinicId) {
+    public ClinicReservationCreateResponse change(Long clinicId,
+                                                  ClinicReservationChangeRequest request) {
         Student student = studentAccessGuard.requireSelf();
-        ClinicReservation reservation = reservationRepository
-            .findByClinicIdAndStudentIdAndStatus(clinicId, student.getId(),
-                ReservationStatus.RESERVED)
-            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        reservation.cancel();
+        ClinicReservation reservation = findMyReservation(clinicId, student);
+        Clinic fromClinic = reservation.getClinic();
+        LocalTime fromArrivalTime = reservation.getArrivalTime();
+
+        boolean sameClinic = request.targetClinicId() == null
+            || request.targetClinicId().equals(clinicId);
+        Clinic targetClinic = sameClinic ? fromClinic : findClinic(request.targetClinicId());
+        requireOpenForStudent(targetClinic);
+
+        ClinicReservation result;
+        if (sameClinic) {
+            result = reservation;
+            result.changeArrivalTime(requireSlot(targetClinic, request.arrivalTime()));
+        } else {
+            reservation.moveOut();
+            result = reserveLocked(targetClinic.getId(), List.of(student), null,
+                request.arrivalTime(), true).get(0);
+        }
+
+        String reason = request.reason().trim();
+        changeLogRepository.save(ClinicChangeLog.moved(student, fromClinic, fromArrivalTime,
+            result.getClinic(), result.getArrivalTime(), reason));
+        publishNotice(student, fromClinic, "클리닉 시간 변경 안내", """
+            %s 학생이 클리닉 시간을 변경했습니다.
+
+            변경 전 · %s
+            변경 후 · %s
+
+            사유 · %s"""
+            .formatted(student.getName(),
+                slotText(fromClinic, fromArrivalTime),
+                slotText(result.getClinic(), result.getArrivalTime()),
+                reason));
+        return ClinicReservationCreateResponse.from(result);
     }
 
-    /** T-13 명단. 선생님 화면 전용이라 이름이 나간다. */
+    /**
+     * T-13 명단. 선생님 화면 전용이라 이름이 나간다.
+     *
+     * <p>정렬은 <b>도착 시각 → 이름</b>이다. 화면이 시각별로 묶어 그리므로 서버가 순서를
+     * 맞춰 준다. 이름은 students.name이다 — user.name을 쓰면 미가입 학생이 사라진다.
+     */
     @Transactional(readOnly = true)
     public ClinicReservationListResponse reservations(Long clinicId) {
         Clinic clinic = findClinic(clinicId);
         List<ClinicReservation> reservations =
             reservationRepository.findReservedWithStudent(clinicId);
 
+        List<ClinicReservationStudentResponse> students = reservations.stream()
+            .map(ClinicReservationStudentResponse::from)
+            .sorted(Comparator.comparing(ClinicReservationStudentResponse::arrivalTime)
+                .thenComparing(ClinicReservationStudentResponse::name))
+            .toList();
+
         return new ClinicReservationListResponse(clinic.getId(), clinic.getClinicDate(),
-            clinic.getStartTime(), clinic.getEndTime(), clinic.getCapacity(),
+            clinic.getStartTime(), clinic.getEndTime(), clinic.slots(), clinic.getCapacity(),
             reservations.stream().anyMatch(r -> r.getAttendStatus() != null),
-            reservations.stream().map(ClinicReservationStudentResponse::from).toList());
+            students);
     }
 
-    /** T-13 선생님 배정(복수). 이미 신청한 학생은 건너뛰고 나머지만 넣는다. */
+    /**
+     * T-13 선생님 배정(복수). 이미 신청한 학생은 건너뛰고 나머지만 넣는다.
+     * arrivalTime을 생략하면 클리닉 시작 시각이다.
+     */
     @Transactional
     public ClinicReservationListResponse assign(Long clinicId, ClinicAssignRequest request) {
         List<Student> students = request.studentIds().stream().distinct()
@@ -150,7 +219,7 @@ public class ClinicReservationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)))
             .toList();
 
-        reserveLocked(clinicId, students, currentTeacher(), false);
+        reserveLocked(clinicId, students, currentTeacher(), request.arrivalTime(), false);
         return reservations(clinicId);
     }
 
@@ -211,6 +280,61 @@ public class ClinicReservationService {
     private Clinic findClinic(Long clinicId) {
         return clinicRepository.findById(clinicId)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    /**
+     * 학생·학부모에게 갈 공지. <b>사유가 본문에 들어간다</b> — 그게 이 알림의 핵심이다.
+     *
+     * <p>승인 절차가 없어서 선생님이 변경을 사후에만 안다. T-13 목록만으로는 학부모가
+     * 알 길이 없으므로 수업일 변경과 같은 경로로 공지를 발행한다 —
+     * 그래야 학생·학부모의 <b>공지 탭</b>에 뜬다.
+     *
+     * <p>scope는 STUDENT다. CLASS로 보내면 같은 반 20명이 이 학생의 사유를 읽는다.
+     * 작성자는 그 클리닉의 선생님이다 — notices.created_by가 NOT NULL이고,
+     * 바꾼 사람(학생)을 넣을 자리가 없다. 본문 첫 줄이 누가 바꿨는지 말해 준다.
+     */
+    private void publishNotice(Student student, Clinic clinic, String title, String body) {
+        noticeService.publishForStudent(title, body, student, clinic.getTeacher());
+    }
+
+    /** "8월 13일(목) 17:00 도착". 공지 본문에서 두 번 쓴다. */
+    private String slotText(Clinic clinic, LocalTime arrivalTime) {
+        return "%s %s 도착".formatted(
+            clinic.getClinicDate().format(NOTICE_DATE), arrivalTime);
+    }
+
+    /** 남의 예약은 건드릴 수 없다. 학생 본인의 RESERVED 행만 찾는다. */
+    private ClinicReservation findMyReservation(Long clinicId, Student student) {
+        return reservationRepository
+            .findByClinicIdAndStudentIdAndStatus(clinicId, student.getId(),
+                ReservationStatus.RESERVED)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    /** 닫힌 시간대와 지난 날짜는 애초에 신청·이동 대상이 아니다. */
+    private void requireOpenForStudent(Clinic clinic) {
+        if (!clinic.isOpen()) {
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE);
+        }
+        if (clinic.getClinicDate().isBefore(LocalDate.now())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    /**
+     * 도착 시각 검증. null이면 클리닉 시작 시각으로 채운다(선생님 배정의 기본값).
+     *
+     * <p><b>서버가 반드시 검사한다.</b> 화면이 슬롯 목록을 그려 주는 건 안내일 뿐이고,
+     * arrivalTime은 클라이언트가 보내는 값이라 21:37 같은 임의 시각이 그대로 올라온다.
+     */
+    private LocalTime requireSlot(Clinic clinic, LocalTime arrivalTime) {
+        if (arrivalTime == null) {
+            return clinic.getStartTime();
+        }
+        if (!clinic.hasSlot(arrivalTime)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return arrivalTime;
     }
 
     private Teacher currentTeacher() {

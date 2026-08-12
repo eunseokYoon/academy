@@ -26,6 +26,5 @@ public record ParentHomeworkResponse(Long homeworkId,
                                      boolean resolvedByResubmission,
                                      OffsetDateTime dueAt,
                                      SubmissionStatus status,
-                                     boolean isLate,
-                                     boolean checked) {
+                                     boolean isLate) {
 }

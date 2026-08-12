@@ -3,6 +3,8 @@ package com.njwenglish.service;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.home.HomeHomeworkResponse;
+import com.njwenglish.dto.home.HomeLessonResponse;
+import com.njwenglish.dto.home.HomeNoticesResponse;
 import com.njwenglish.dto.home.NextClinicResponse;
 import com.njwenglish.dto.home.NextLessonResponse;
 import com.njwenglish.dto.home.ParentHomeResponse;
@@ -76,7 +78,12 @@ public class HomeService {
                 .orElse(null),
             examScheduleService.findNextExam(me.getId()).orElse(null),
             homeworks,
-            noticeService.countFor(me.getId()));
+            lessonRepository.findLastForStudent(me.getId(), today)
+                .map(HomeLessonResponse::from)
+                .orElse(null),
+            new HomeNoticesResponse(
+                noticeService.countFor(me.getId()),
+                noticeService.recentFor(me.getId())));
     }
 
     /**
@@ -108,12 +115,12 @@ public class HomeService {
                 .flatMap(lesson -> lesson.getClassRoom().scheduleOn(lesson.getLessonDate()))
                 .map(ClassRoomSchedule::getStartTime)
                 .orElse(null),
-            new ParentHomeResponse.NoticesBlock(
+            new HomeNoticesResponse(
                 noticeService.countFor(child.getId()),
                 noticeService.recentFor(child.getId())),
             submissionRepository.countPendingHomeworks(child.getId()),
             clinicReservationRepository.findNextReserved(child.getId(), today)
-                .map(reservation -> NextClinicResponse.from(reservation.getClinic(), today))
+                .map(reservation -> NextClinicResponse.from(reservation, today))
                 .orElse(null),
             attendance);
     }

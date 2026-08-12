@@ -14,7 +14,7 @@ import java.util.List;
  * <p><b>홈은 요약이다.</b> 수업 제목·내용, 숙제 사진·피드백, 자료실을 이 응답에 넣지 마라.
  * latestLesson 같은 필드를 추가하지 마라 — 홈이 화면 전체를 대신하기 시작한다.
  *
- * <p>수업 레포트 자체는 학부모도 본다(P-5, /parent/children/{id}/lessons). 영상만 빠진다.
+ * <p>수업 레포트 자체는 학부모도 본다(P-6, /parent/children/{id}/lessons). 영상만 빠진다.
  * 숙제 사진·선생님 피드백과 자료실은 여전히 학생 전용이다.
  *
  * <p>다음 수업이 날짜·시각뿐인 이유가 그것이다. 홈에서는 "언제인지"까지가 전부다.
@@ -29,7 +29,7 @@ public record ParentHomeResponse(
     NextExamResponse nextExam,
     LocalDate nextLessonDate,
     @JsonFormat(pattern = "HH:mm") LocalTime nextLessonTime,
-    NoticesBlock notices,
+    HomeNoticesResponse notices,
     long pendingHomeworkCount,
     NextClinicResponse nextClinic,
     AttendanceSummaryResponse thisMonthAttendance
@@ -39,9 +39,5 @@ public record ParentHomeResponse(
      * 보는 것이라 가리지 않는다. 미가입 자녀는 users 행이 없어 phone이 null이다.
      */
     public record ChildRef(Long id, String name, String phone, List<String> classRooms) {
-    }
-
-    /** totalCount는 목록 전체 건수다. recent는 홈 배너에 펼쳐 보여주는 상단 몇 건이다. */
-    public record NoticesBlock(long totalCount, List<NoticeSummaryResponse> recent) {
     }
 }

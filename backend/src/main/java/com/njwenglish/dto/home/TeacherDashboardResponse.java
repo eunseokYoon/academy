@@ -31,21 +31,24 @@ public record TeacherDashboardResponse(Today today, Todo todo, Stats stats) {
     }
 
     /**
-     * 앞의 여섯 개는 할 일이고, <b>뒤의 두 개는 점검 항목</b>이다.
+     * 앞의 네 개는 할 일이고, <b>뒤의 두 개는 점검 항목</b>이다.
+     *
+     * <p>"확인 대기 숙제"는 없앴다(2026-08-09). 재제출은 학생이 내는 순간 ⭕가 되어
+     * 선생님이 눌러야 할 것이 없다 — 남겨 두면 영영 줄지 않는 숫자가 된다.
      *
      * <p>반 코드에는 전화번호 대조가 없어서 코드를 아는 사람은 누구나 가입한다.
      * 막을 수단이 없으므로 가입 후 발견해서 지운다. recentSignupCount가 그 탐지 입구고,
      * openJoinCodeCount는 등록 기간이 끝났는데 코드가 열려 있는지 알려준다.
      *
      * <p><b>이 두 개는 0이어도 화면에서 숨기지 마라.</b> "확인했다"는 것 자체가 정보다.
+     *
+     * <p>클리닉 변경 수는 2026-08-11에 뺐다 — 선생님이 학생의 변경 이력을 보지 않기로 했다.
      */
     public record Todo(
         long pendingAttendanceCount,
-        long awaitingCheckCount,
         long unwrittenLessonCount,
         long unsignedStudentCount,
         long unlinkedParentCount,
-        long pendingClinicRequestCount,
         long recentSignupCount,
         long openJoinCodeCount
     ) {

@@ -32,7 +32,6 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
-import com.njwenglish.repository.FeedbackRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
@@ -64,8 +63,6 @@ class SubmissionServiceTest {
     @Mock
     private SubmissionPhotoRepository photoRepository;
     @Mock
-    private FeedbackRepository feedbackRepository;
-    @Mock
     private HomeworkService homeworkService;
     @Mock
     private StudentAccessGuard studentAccessGuard;
@@ -89,7 +86,7 @@ class SubmissionServiceTest {
         ReflectionTestUtils.setField(classRoom, "id", 3L);
 
         submissionService = new SubmissionService(submissionRepository, photoRepository,
-            feedbackRepository, homeworkService, studentAccessGuard, presignedUrlProvider,
+            homeworkService, studentAccessGuard, presignedUrlProvider,
             new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"));
         Fixtures.login(Fixtures.studentUser(10L));
     }
@@ -247,24 +244,91 @@ class SubmissionServiceTest {
     }
 
     @Test
-    @DisplayName("CHECKED 상태에서는 사진을 수정할 수 없다")
-    void CHECKED_상태에서는_사진을_수정할_수_없다() {
-        Submission submission = givenMySubmission(FUTURE_DUE);
-        submission.submit(OffsetDateTime.now(), false);
-        submission.check();
+    @DisplayName("GRID 재제출을 내면 자동으로 ⭕가 되고 재제출 표시가 붙는다")
+    void gridResubmissionResolvesItselfOnSubmit() {
+        Submission cell = givenResubmitTarget(HomeworkResult.NOT_DONE, null);
+        given(photoRepository.countBySubmissionId(1L)).willReturn(2L);
+
+        submissionService.submit(720L);
+
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.DONE);
+        assertThat(cell.getCompletionRate()).isNull();
+        assertThat(cell.isResolvedByResubmission()).isTrue();
+        // 채점축만 올라간다. 제출축은 SUBMITTED 그대로여야 선생님이 T-7에서 사진을 볼 수 있다
+        assertThat(cell.getStatus()).isEqualTo(SubmissionStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("세모(PARTIAL)로 남은 퍼센트도 재제출하면 지워진다")
+    void gridResubmissionClearsCompletionRate() {
+        Submission cell = givenResubmitTarget(HomeworkResult.PARTIAL, (short) 60);
+        given(photoRepository.countBySubmissionId(1L)).willReturn(1L);
+
+        submissionService.submit(720L);
+
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.DONE);
+        assertThat(cell.getCompletionRate()).isNull();
+    }
+
+    @Test
+    @DisplayName("마감이 지나 낸 재제출도 ⭕가 되고 지각으로 남는다")
+    void lateGridResubmissionStillResolves() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(PAST_DUE);
+        Submission cell = Fixtures.submission(1L, column, seo);
+        cell.grade(HomeworkResult.NOT_DONE, null);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
+            .willReturn(Optional.of(cell));
+        given(photoRepository.countBySubmissionId(1L)).willReturn(1L);
+
+        submissionService.submit(720L);
+
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.DONE);
+        assertThat(cell.isLate()).isTrue();
+    }
+
+    @Test
+    @DisplayName("한 번 낸 GRID 재제출은 학생이 다시 손댈 수 없다")
+    void gridResubmissionLocksAfterSubmit() {
+        // 자동 ⭕가 붙으면 재제출 대상에서 빠지고, findEditableSubmission이 그것만으로 막는다.
+        // 목록에서 버튼을 안 그리는 것과 별개로 URL을 직접 쳐도 뚫리지 않아야 한다
+        givenResubmitTarget(HomeworkResult.NOT_DONE, null);
+        given(photoRepository.countBySubmissionId(1L)).willReturn(1L);
+
+        submissionService.submit(720L);
 
         assertThatThrownBy(() -> submissionService.issueUploadUrl(720L,
             new PhotoUploadUrlRequest("image/webp", 1024)))
             .isInstanceOf(BusinessException.class)
-            .extracting("errorCode").isEqualTo(ErrorCode.SUBMISSION_ALREADY_CHECKED);
+            .extracting("errorCode").isEqualTo(ErrorCode.RESUBMIT_NOT_REQUIRED);
 
         assertThatThrownBy(() -> submissionService.deletePhoto(720L, 8812L))
             .isInstanceOf(BusinessException.class)
-            .extracting("errorCode").isEqualTo(ErrorCode.SUBMISSION_ALREADY_CHECKED);
+            .extracting("errorCode").isEqualTo(ErrorCode.RESUBMIT_NOT_REQUIRED);
+
+        assertThatThrownBy(() -> submissionService.deleteVideo(720L))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.RESUBMIT_NOT_REQUIRED);
 
         assertThatThrownBy(() -> submissionService.submit(720L))
             .isInstanceOf(BusinessException.class)
-            .extracting("errorCode").isEqualTo(ErrorCode.SUBMISSION_ALREADY_CHECKED);
+            .extracting("errorCode").isEqualTo(ErrorCode.RESUBMIT_NOT_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("ONLINE 숙제의 제출은 채점 결과를 건드리지 않는다")
+    void onlineSubmitLeavesResultUntouched() {
+        Submission submission = givenMySubmission(FUTURE_DUE);
+        given(photoRepository.countBySubmissionId(4412L)).willReturn(1L);
+
+        submissionService.submit(720L);
+
+        assertThat(submission.getStatus()).isEqualTo(SubmissionStatus.SUBMITTED);
+        assertThat(submission.getResult()).isNull();
+        assertThat(submission.isResolvedByResubmission()).isFalse();
     }
 
     @Test
@@ -381,15 +445,14 @@ class SubmissionServiceTest {
         Submission notSubmitted = Fixtures.submission(11L, online, Fixtures.student(1L, "가나다"));
         Submission submitted = Fixtures.submission(12L, online, Fixtures.student(2L, "나다라"));
         submitted.submit(OffsetDateTime.now(), false);
-        Submission checked = Fixtures.submission(13L, online, Fixtures.student(3L, "다라마"));
-        checked.submit(OffsetDateTime.now(), false);
-        checked.check();
+        Submission lateSubmitted = Fixtures.submission(13L, online, Fixtures.student(3L, "다라마"));
+        lateSubmitted.submit(OffsetDateTime.now(), true);
 
         given(homeworkService.findHomework(700L)).willReturn(online);
         given(submissionRepository.findByHomeworkForTeacher(700L))
-            .willReturn(List.of(notSubmitted, submitted, checked));
+            .willReturn(List.of(notSubmitted, submitted, lateSubmitted));
         given(homeworkService.countsOf(List.of(700L)))
-            .willReturn(Map.of(700L, new HomeworkCountsResponse(3, 1, 1, 1)));
+            .willReturn(Map.of(700L, new HomeworkCountsResponse(3, 1, 2)));
 
         HomeworkSubmissionsResponse response = submissionService.submissionsOf(700L);
 
@@ -401,7 +464,7 @@ class SubmissionServiceTest {
     }
 
     @Test
-    @DisplayName("확인이 끝나 재제출로 해결된 GRID 제출물도 명단에 남는다")
+    @DisplayName("재제출로 자동 해결된 GRID 제출물도 명단에 남는다")
     void submissionsOfKeepsResubmissionResolvedGridSubmission() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
@@ -409,21 +472,21 @@ class SubmissionServiceTest {
         Submission resolved = Fixtures.submission(9L, column, Fixtures.student(88L, "고연준"));
         resolved.grade(HomeworkResult.NOT_DONE, null);
         resolved.submit(OffsetDateTime.now(), false);
-        resolved.check();
         resolved.resolveByResubmission();
 
         given(homeworkService.findHomework(720L)).willReturn(column);
         given(submissionRepository.findByHomeworkForTeacher(720L)).willReturn(List.of(resolved));
         given(homeworkService.countsOf(List.of(720L)))
-            .willReturn(Map.of(720L, new HomeworkCountsResponse(1, 0, 0, 1)));
+            .willReturn(Map.of(720L, new HomeworkCountsResponse(1, 0, 1)));
 
         HomeworkSubmissionsResponse response = submissionService.submissionsOf(720L);
 
-        // s.status <> NOT_SUBMITTED 절이 지키는 대상이다. 없었다면 이 학생은 목록에서 빠진다
+        // s.status <> NOT_SUBMITTED 절이 지키는 대상이다. 없었다면 이 학생은 목록에서 빠진다 —
+        // ⭕가 붙는 순간 재제출 대상 절에서도 빠지므로 사진을 볼 길이 사라진다
         assertThat(response.items()).hasSize(1);
         SubmissionListItemResponse item = response.items().get(0);
         assertThat(item.studentId()).isEqualTo(88L);
-        assertThat(item.status()).isEqualTo(SubmissionStatus.CHECKED);
+        assertThat(item.status()).isEqualTo(SubmissionStatus.SUBMITTED);
     }
 
     // ---------- 학부모 (P-3) ----------
@@ -450,7 +513,7 @@ class SubmissionServiceTest {
             .map(RecordComponent::getName))
             .containsExactly("homeworkId", "title", "classRoomName", "kind", "lessonDate",
                 "result", "completionRate", "resolvedByResubmission", "dueAt",
-                "status", "isLate", "checked");
+                "status", "isLate");
     }
 
     @Test
@@ -490,6 +553,20 @@ class SubmissionServiceTest {
         return submissionService
             .issueVideoUploadUrl(720L, new VideoUploadUrlRequest("video/mp4", 10_000_000))
             .s3Key();
+    }
+
+    /** 재제출이 열린 GRID 열에서 🔺·❌를 받은 칸. 자동 ⭕ 관련 테스트의 공통 출발점이다. */
+    private Submission givenResubmitTarget(HomeworkResult result, Short completionRate) {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        column.openResubmit(FUTURE_DUE);
+        Submission cell = Fixtures.submission(1L, column, seo);
+        cell.grade(result, completionRate);
+
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
+            .willReturn(Optional.of(cell));
+        return cell;
     }
 
     private Submission givenMySubmission(OffsetDateTime dueAt) {

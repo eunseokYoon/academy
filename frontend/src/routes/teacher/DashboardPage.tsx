@@ -5,7 +5,13 @@ import { DAY_LABELS } from "../../shared/date";
 import { getDashboard } from "./api";
 import type { TeacherDashboard } from "./api";
 
-/** 할 일 여섯 개. 0이면 흐리게 처리한다. */
+/**
+ * 할 일 네 개. 0이면 흐리게 처리한다.
+ *
+ * <p>"확인 대기 숙제"는 없앴다(2026-08-09). 재제출은 학생이 내는 순간 ⭕가 되어
+ * 선생님이 눌러야 할 것이 없다 — 남겨 두면 영영 줄지 않는 숫자가 된다.
+ * 낸 사진·영상은 그리드 열 머리의 "N명 제출 · 보기"로 들어간다.
+ */
 const TODO_ITEMS: {
   key: keyof TeacherDashboard["todo"];
   label: string;
@@ -13,12 +19,9 @@ const TODO_ITEMS: {
   unit: string;
 }[] = [
   { key: "pendingAttendanceCount", label: "출석 미확정", to: "/teacher/attendance", unit: "건" },
-  // 확인 대기는 제출물을 여는 일이라 목록으로 보낸다. /teacher/homeworks는 채점 화면이다
-  { key: "awaitingCheckCount", label: "확인 대기 숙제", to: "/teacher/homeworks/list", unit: "건" },
   { key: "unwrittenLessonCount", label: "내용 미작성 수업", to: "/teacher/lessons", unit: "건" },
   { key: "unsignedStudentCount", label: "학생 미가입", to: "/teacher/students", unit: "명" },
   { key: "unlinkedParentCount", label: "학부모 미가입", to: "/teacher/students", unit: "명" },
-  { key: "pendingClinicRequestCount", label: "클리닉 변경 요청", to: "/teacher/clinics", unit: "건" },
 ];
 
 /**

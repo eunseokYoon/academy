@@ -13,20 +13,21 @@ export type HomeworkResult = "DONE" | "PARTIAL" | "NOT_DONE";
 /**
  * 온라인 제출 축. 채점축(HomeworkResult)과 독립이다 —
  * GRID에서 ⭕를 받은 학생은 온라인 제출을 하지 않으므로 여기는 계속 NOT_SUBMITTED다.
+ *
+ * <p>"확인 완료"(CHECKED)는 없앴다. 선생님이 확인해서 올리는 단계가 사라졌고,
+ * GRID 재제출은 내는 순간 ⭕가 된다.
  */
-export type SubmissionStatus = "NOT_SUBMITTED" | "SUBMITTED" | "CHECKED";
+export type SubmissionStatus = "NOT_SUBMITTED" | "SUBMITTED";
 
 export const SUBMISSION_LABELS: Record<SubmissionStatus, string> = {
   NOT_SUBMITTED: "미제출",
-  SUBMITTED: "확인 대기",
-  CHECKED: "확인 완료",
+  SUBMITTED: "제출 완료",
 };
 
 export interface HomeworkCounts {
   total: number;
   notSubmitted: number;
   submitted: number;
-  checked: number;
 }
 
 /**

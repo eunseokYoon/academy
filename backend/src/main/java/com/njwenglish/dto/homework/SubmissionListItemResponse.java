@@ -15,7 +15,6 @@ public record SubmissionListItemResponse(Long submissionId,
                                          OffsetDateTime submittedAt,
                                          boolean isLate,
                                          int photoCount,
-                                         boolean hasFeedback,
                                          String thumbnailUrl,
                                          /**
                                           * 영상은 썸네일을 만들 수 없다(트랜스코딩 없음).

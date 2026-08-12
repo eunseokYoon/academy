@@ -6,7 +6,6 @@ import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
-import com.njwenglish.dto.homework.FeedbackResponse;
 import com.njwenglish.dto.homework.HomeworkBriefResponse;
 import com.njwenglish.dto.homework.HomeworkCountsResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
@@ -26,13 +25,10 @@ import com.njwenglish.dto.homework.SubmissionVideoResponse;
 import com.njwenglish.dto.homework.SubmitResponse;
 import com.njwenglish.dto.homework.VideoRegisterRequest;
 import com.njwenglish.dto.homework.VideoUploadUrlRequest;
-import com.njwenglish.entity.Feedback;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.SubmissionPhoto;
-import com.njwenglish.entity.enums.SubmissionStatus;
-import com.njwenglish.repository.FeedbackRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
 import com.njwenglish.repository.SubmissionRepository;
@@ -41,11 +37,9 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,7 +47,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * S-2 · S-3 · S-4 학생 제출과 T-7 선생님 확인 화면.
+ * S-2 · S-3 · S-4 학생 제출과 T-7 선생님 보기 화면.
  *
  * <p>사진은 서버를 거치지 않는다. presigned URL을 발급하면 클라이언트가 S3로 직접 PUT하고,
  * 서버는 발급한 s3Key가 맞는지만 대조해 행을 남긴다.
@@ -77,7 +71,6 @@ public class SubmissionService {
 
     private final SubmissionRepository submissionRepository;
     private final SubmissionPhotoRepository photoRepository;
-    private final FeedbackRepository feedbackRepository;
     private final HomeworkService homeworkService;
     private final StudentAccessGuard studentAccessGuard;
     private final PresignedUrlProvider presignedUrlProvider;
@@ -94,7 +87,6 @@ public class SubmissionService {
 
         List<Long> ids = page.getContent().stream().map(Submission::getId).toList();
         Map<Long, Integer> photoCounts = photoCountsOf(ids);
-        Set<Long> withFeedback = feedbackOwnersOf(ids);
         OffsetDateTime now = OffsetDateTime.now();
 
         return PageResponse.from(page.map(submission -> {
@@ -108,7 +100,6 @@ public class SubmissionService {
                 homework.getDueAt(), submission.getStatus(), submission.isLate(),
                 photoCounts.getOrDefault(submission.getId(), 0),
                 submission.hasVideo(),
-                withFeedback.contains(submission.getId()),
                 remainingMinutes(now, homework.getDueAt()));
         }));
     }
@@ -116,15 +107,13 @@ public class SubmissionService {
     @Transactional(readOnly = true)
     public StudentHomeworkDetailResponse myHomework(Long homeworkId) {
         Submission submission = findMySubmission(homeworkId);
-        Feedback feedback = feedbackRepository.findBySubmissionId(submission.getId()).orElse(null);
 
         return new StudentHomeworkDetailResponse(
             StudentHomeworkResponse.from(submission.getHomework()),
             new StudentSubmissionResponse(submission.getId(), submission.getStatus(),
                 submission.getSubmittedAt(), submission.isLate(),
                 photosOf(submission.getId()), videoOf(submission)),
-            submission.isResubmitTarget(),
-            feedback == null ? null : FeedbackResponse.from(feedback));
+            submission.isResubmitTarget());
     }
 
     /**
@@ -231,6 +220,16 @@ public class SubmissionService {
     /**
      * 제출 확정. <b>마감이 지나도 막지 않는다</b>(확정 정책). 늦음은 is_late로 남는다.
      * 아예 막으면 늦게라도 내는 학생을 선생님이 손으로 처리해야 한다.
+     *
+     * <p><b>GRID 재제출은 여기서 곧바로 ⭕가 된다.</b> 선생님이 확인해서 올리는 단계는 없다
+     * (2026-08-09 확정). 마감을 넘겨 낸 것도 ⭕고 is_late만 남는다 — 내용이 부족하면
+     * 선생님이 그리드에서 🔺·❌로 내리면 되고, 그때 grade가 재제출 표시를 내려 다시
+     * 대상으로 되돌린다.
+     *
+     * <p>부작용이 하나 있다. ⭕가 되는 순간 이 학생은 재제출 대상이 아니게 되므로
+     * {@link #findEditableSubmission}이 사진 추가·삭제·재제출을 전부 막는다. 즉
+     * <b>한 번 내면 학생이 스스로 고칠 수 없다</b>(확정). 잘못 냈으면 선생님이
+     * 그리드에서 되돌려 줘야 한다.
      */
     @Transactional
     public SubmitResponse submit(Long homeworkId) {
@@ -244,6 +243,9 @@ public class SubmissionService {
 
         OffsetDateTime now = OffsetDateTime.now();
         submission.submit(now, submission.getHomework().isLateAt(now));
+        if (submission.getHomework().isGrid()) {
+            submission.resolveByResubmission();
+        }
 
         return new SubmitResponse(submission.getId(), submission.getStatus(),
             submission.getSubmittedAt(), submission.isLate(), photoCount);
@@ -264,7 +266,6 @@ public class SubmissionService {
 
         List<Long> ids = submissions.stream().map(Submission::getId).toList();
         Map<Long, List<SubmissionPhoto>> photos = photosBySubmission(ids);
-        Set<Long> withFeedback = feedbackOwnersOf(ids);
 
         List<SubmissionListItemResponse> items = submissions.stream()
             .map(submission -> {
@@ -273,7 +274,7 @@ public class SubmissionService {
                     submission.getId(), submission.getStudent().getId(),
                     submission.getStudent().getName(),
                     submission.getStatus(), submission.getSubmittedAt(), submission.isLate(),
-                    own.size(), withFeedback.contains(submission.getId()),
+                    own.size(),
                     own.isEmpty() ? null : presignedUrlProvider.readUrl(own.get(0).getS3Key()),
                     submission.hasVideo());
             })
@@ -287,27 +288,25 @@ public class SubmissionService {
     }
 
     /**
-     * 상세 뷰어. prev·next가 있어야 목록으로 돌아가지 않고 연속으로 넘길 수 있다.
-     * 200명을 확인해야 하므로 이 동선이 없으면 실사용이 어렵다.
+     * 상세 뷰어. <b>보기 전용이다</b> — 확인·피드백 단계가 없어졌다(2026-08-09 확정).
+     * prev·next가 있어야 목록으로 돌아가지 않고 연속으로 넘길 수 있다.
      */
     @Transactional(readOnly = true)
     public SubmissionDetailResponse detail(Long submissionId) {
         Submission submission = submissionRepository.findWithStudentAndHomework(submissionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        Feedback feedback = feedbackRepository.findBySubmissionId(submissionId).orElse(null);
 
-        List<Long> awaiting = submissionRepository
-            .findAwaitingCheckIds(submission.getHomework().getId());
-        int index = awaiting.indexOf(submissionId);
+        List<Long> submitted = submissionRepository
+            .findSubmittedIds(submission.getHomework().getId());
+        int index = submitted.indexOf(submissionId);
 
         return new SubmissionDetailResponse(
             submission.getId(), submission.getStudent().getId(),
             submission.getStudent().getName(), submission.getStatus(),
             submission.getSubmittedAt(), submission.isLate(),
             photosOf(submissionId), videoOf(submission),
-            feedback == null ? null : FeedbackResponse.from(feedback),
-            index > 0 ? awaiting.get(index - 1) : null,
-            nextAwaiting(awaiting, index));
+            index > 0 ? submitted.get(index - 1) : null,
+            nextSubmitted(submitted, index));
     }
 
     // ---------- 학부모 (P-3) ----------
@@ -332,8 +331,7 @@ public class SubmissionService {
                 homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
                 submission.getResult(), submission.getCompletionRate(),
                 submission.isResolvedByResubmission(),
-                homework.getDueAt(), submission.getStatus(), submission.isLate(),
-                submission.getStatus() == SubmissionStatus.CHECKED);
+                homework.getDueAt(), submission.getStatus(), submission.isLate());
         }));
     }
 
@@ -347,18 +345,16 @@ public class SubmissionService {
     }
 
     /**
-     * 선생님이 이미 확인한 제출물은 학생이 손대지 못한다.
-     * 본 내용이 뒤바뀌면 피드백이 엉뚱한 사진에 붙는다.
+     * <b>GRID 숙제는 재제출 대상만 손댈 수 있다.</b> 목록에서 버튼을 안 그리는 것만으로는
+     * 부족하다 — URL을 직접 치면 뚫린다. 학생이 거치는 변경 경로가 전부 이 메서드를
+     * 지나므로 여기서 한 번만 막으면 된다.
      *
-     * <p>그리고 <b>GRID 숙제는 재제출 대상만 손댈 수 있다.</b> 목록에서 버튼을 안 그리는
-     * 것만으로는 부족하다 — URL을 직접 치면 뚫린다. 학생이 거치는 변경 경로가 전부
-     * 이 메서드를 지나므로 여기서 한 번만 막으면 된다.
+     * <p>제출을 확정하면 result가 DONE이 되어(자동 ⭕) 그 순간부터 이 검사에 걸린다.
+     * 즉 <b>제출 후 수정 잠금이 여기 한 줄에 같이 들어 있다.</b> 별도 상태 검사를
+     * 덧붙이지 마라.
      */
     private Submission findEditableSubmission(Long homeworkId) {
         Submission submission = findMySubmission(homeworkId);
-        if (submission.isChecked()) {
-            throw new BusinessException(ErrorCode.SUBMISSION_ALREADY_CHECKED);
-        }
         if (submission.getHomework().isGrid() && !submission.isResubmitTarget()) {
             throw new BusinessException(ErrorCode.RESUBMIT_NOT_REQUIRED);
         }
@@ -410,20 +406,15 @@ public class SubmissionService {
         return counts;
     }
 
-    private Set<Long> feedbackOwnersOf(List<Long> submissionIds) {
-        return submissionIds.isEmpty()
-            ? Set.of() : new HashSet<>(feedbackRepository.findSubmissionIdsIn(submissionIds));
-    }
-
     /**
-     * 확인이 끝난 제출물을 열면 목록에서 빠져 있다(index &lt; 0). 그때는 대기열의 처음으로 보낸다 —
+     * 미제출 칸을 열면 목록에서 빠져 있다(index &lt; 0). 그때는 처음으로 보낸다 —
      * 뒤로 가기를 누르게 하는 것보다 낫다.
      */
-    private Long nextAwaiting(List<Long> awaiting, int index) {
+    private Long nextSubmitted(List<Long> submitted, int index) {
         if (index < 0) {
-            return awaiting.isEmpty() ? null : awaiting.get(0);
+            return submitted.isEmpty() ? null : submitted.get(0);
         }
-        return index + 1 < awaiting.size() ? awaiting.get(index + 1) : null;
+        return index + 1 < submitted.size() ? submitted.get(index + 1) : null;
     }
 
     /** 마감이 없는 GRID 열은 남은 시간도 없다. 0을 내리면 "마감 임박"으로 보인다. */

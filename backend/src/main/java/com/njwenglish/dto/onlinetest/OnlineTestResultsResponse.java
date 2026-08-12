@@ -1,5 +1,6 @@
 package com.njwenglish.dto.onlinetest;
 
+import com.njwenglish.dto.weeklytest.ClinicReflection;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -16,9 +17,16 @@ public record OnlineTestResultsResponse(
     BigDecimal average,
     List<Item> items
 ) {
-    /** internalQuestionCount가 null이면 내부·외부 집계를 하지 않는다. */
+    /**
+     * internalQuestionCount가 null이면 내부·외부 집계를 하지 않는다.
+     *
+     * <p>clinicReflection은 이 테스트 결과가 성적 기입 탭의 클리닉 칸으로 자동 반영되는지다
+     * (2026-08-10). 안 되면 선생님이 손으로 적어야 하므로 <b>이유를 보여줘야 한다</b> —
+     * 조용히 안 되면 "왜 어떤 건 자동으로 차고 어떤 건 안 차지"가 미스터리가 된다.
+     */
     public record Test(Long testId, String title, Short questionCount,
-                       Short internalQuestionCount, String classRoomName) {
+                       Short internalQuestionCount, String classRoomName,
+                       ClinicReflection clinicReflection) {
     }
 
     public record Counts(int total, int notStarted, int inProgress, int submitted) {

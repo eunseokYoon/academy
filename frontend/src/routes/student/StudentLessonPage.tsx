@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Badge } from "../../shared/components/Badge";
+import { PageTitle, TintBlock } from "../../shared/components/Section";
 import { listMyLessons } from "./api";
 
 const NOW = new Date();
@@ -28,9 +29,9 @@ export default function StudentLessonPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">수업영상 및 레포트</h2>
+      <PageTitle>수업영상 및 레포트</PageTitle>
 
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-3 text-sm shadow-sm">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-3 text-sm shadow-card">
         <select
           value={year}
           onChange={(e) => {
@@ -62,42 +63,36 @@ export default function StudentLessonPage() {
       {isPending || !data ? (
         <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : data.items.length === 0 ? (
-        <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
-          공개된 수업이 없습니다.
-        </p>
+        <TintBlock tone="neutral">
+          <p className="px-4 py-6 text-center text-sm text-slate-500">공개된 수업이 없습니다.</p>
+        </TintBlock>
       ) : (
-        <ul className="space-y-2">
+        <TintBlock tone="neutral">
           {data.items.map((lesson) => (
-            <li key={lesson.lessonId}>
-              <Link
-                to={`/student/lessons/${lesson.lessonId}`}
-                className="block rounded-xl bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  {lesson.isNew && <Badge tone="danger">NEW</Badge>}
-                  <span>{lesson.lessonDate.replace(/-/g, ".")}</span>
-                  <span>·</span>
-                  <span>{lesson.classRoomName}</span>
-                </div>
-                <p className="mt-1 text-sm font-medium text-slate-900">
-                  {lesson.title ?? "제목 없음"}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {lesson.hasVideo ? (
-                    lesson.viewed ? (
-                      <Badge tone="ok">영상 시청 완료</Badge>
-                    ) : (
-                      <Badge tone="warn">영상 미시청</Badge>
-                    )
-                  ) : (
-                    <Badge>영상 없음</Badge>
-                  )}
-                  {lesson.homeworkTitle && <Badge>숙제 · {lesson.homeworkTitle}</Badge>}
-                </div>
-              </Link>
-            </li>
+            <Link
+              key={lesson.lessonId}
+              to={`/student/lessons/${lesson.lessonId}`}
+              className="block px-3.5 py-3.5 transition-colors active:bg-slate-50"
+            >
+              <div className="tnum flex items-center gap-2 text-[11.5px] text-slate-500">
+                {lesson.isNew && <Badge tone="danger">NEW</Badge>}
+                <span>{lesson.lessonDate.replace(/-/g, ".")}</span>
+                <span>·</span>
+                <span>{lesson.classRoomName}</span>
+              </div>
+              <p className="mt-1 text-[15px] font-bold tracking-[-0.015em] text-brand-900">
+                {lesson.title ?? "제목 없음"}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {/* 시청 여부는 없앴다(2026-08-11). 영상이 있는지만 말한다 */}
+                <Badge tone={lesson.hasVideo ? "ok" : "neutral"}>
+                  {lesson.hasVideo ? "영상 있음" : "영상 없음"}
+                </Badge>
+                {lesson.homeworkTitle && <Badge>숙제 · {lesson.homeworkTitle}</Badge>}
+              </div>
+            </Link>
           ))}
-        </ul>
+        </TintBlock>
       )}
 
       {data && data.totalPages > 1 && (

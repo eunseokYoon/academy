@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../../shared/api/errors";
 import { Badge } from "../../shared/components/Badge";
 import { FormError } from "../../shared/components/FormError";
+import { BackLink } from "../../shared/components/Section";
 import { remainingLabel } from "../../shared/homework/types";
 import type { OnlineTestResult } from "../../shared/onlinetest/types";
 import {
@@ -25,6 +26,7 @@ const AUTOSAVE_DELAY_MS = 1500;
  * <p>제출 전에는 정답이 응답에 없다. 결과는 제출 후 별도 응답으로 받는다.
  */
 export default function StudentOnlineTestTakePage() {
+  const navigate = useNavigate();
   const { testId } = useParams();
   const id = Number(testId);
   const queryClient = useQueryClient();
@@ -99,9 +101,13 @@ export default function StudentOnlineTestTakePage() {
     return (
       <div className="space-y-3">
         <p className="text-sm text-slate-500">응시할 수 없는 테스트입니다.</p>
-        <Link to="/student/online-tests" className="text-sm text-slate-900 underline">
+        <button
+          type="button"
+          onClick={() => navigate("/student/online-tests")}
+          className="text-sm text-brand-700 underline"
+        >
           목록으로
-        </Link>
+        </button>
       </div>
     );
   }
@@ -115,12 +121,10 @@ export default function StudentOnlineTestTakePage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/student/online-tests" className="text-sm text-slate-500 underline">
-        ← 테스트 목록
-      </Link>
+      <BackLink onClick={() => navigate("/student/online-tests")}>테스트 목록</BackLink>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">{test.title}</h2>
+      <div className="rounded-2xl bg-white p-4 shadow-card">
+        <h2 className="text-lg font-semibold text-brand-900">{test.title}</h2>
         <p className="mt-0.5 text-xs text-slate-500">
           {test.classRoomName} · {test.questionCount}문항
         </p>
@@ -150,7 +154,7 @@ export default function StudentOnlineTestTakePage() {
       ) : (
         <ul className="space-y-2">
           {Array.from({ length: test.questionCount }, (_, index) => (
-            <li key={index} className="rounded-xl bg-white p-3 shadow-sm">
+            <li key={index} className="rounded-2xl bg-white p-3 shadow-card">
               <div className="flex items-center gap-3">
                 <span className="w-7 shrink-0 text-sm font-medium text-slate-500">
                   {index + 1}
@@ -173,7 +177,7 @@ export default function StudentOnlineTestTakePage() {
                         }}
                         className={`h-9 w-9 rounded-full border text-sm ${
                           picked
-                            ? "border-slate-900 bg-slate-900 font-medium text-white"
+                            ? "border-brand-900 bg-brand-900 font-medium text-white"
                             : "border-slate-300 text-slate-600"
                         }`}
                       >
@@ -206,7 +210,7 @@ export default function StudentOnlineTestTakePage() {
                 submit.mutate();
               }
             }}
-            className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white
+            className="w-full rounded-xl bg-brand-900 px-4 py-3 text-sm font-medium text-white
                        disabled:opacity-50"
           >
             {submit.isPending ? "채점 중…" : "제출하고 채점받기"}
@@ -219,18 +223,17 @@ export default function StudentOnlineTestTakePage() {
 
 /** 제출 후에만 정답과 해설지가 내려온다. */
 function ResultView({ result }: { result: OnlineTestResult }) {
+  const navigate = useNavigate();
   // 두 칸으로 나눌 때 왼쪽이 앞 문항 전부를 갖는다. 25문항이면 왼쪽 1~13, 오른쪽 14~25
   const rowCount = Math.ceil(result.results.length / 2);
 
   return (
     <div className="space-y-4">
-      <Link to="/student/online-tests" className="text-sm text-slate-500 underline">
-        ← 테스트 목록
-      </Link>
+      <BackLink onClick={() => navigate("/student/online-tests")}>테스트 목록</BackLink>
 
-      <div className="rounded-xl bg-white p-4 text-center shadow-sm">
+      <div className="rounded-2xl bg-white p-4 text-center shadow-card">
         <p className="text-sm text-slate-500">{result.title}</p>
-        <p className="mt-1 text-3xl font-bold text-slate-900">{result.score}점</p>
+        <p className="mt-1 text-3xl font-bold text-brand-900">{result.score}점</p>
         <p className="mt-1 text-sm text-slate-600">
           {result.correctCount} / {result.questionCount}문항 정답
         </p>
@@ -242,14 +245,14 @@ function ResultView({ result }: { result: OnlineTestResult }) {
           target="_blank"
           rel="noreferrer"
           className="block rounded-xl border border-slate-300 bg-white px-4 py-3 text-center
-                     text-sm font-medium text-slate-900"
+                     text-sm font-medium text-brand-900"
         >
           해설지 보기
         </a>
       )}
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h3 className="mb-2 text-sm font-semibold text-slate-900">문항별 정오</h3>
+      <section className="rounded-2xl bg-white p-4 shadow-card">
+        <h3 className="mb-2 text-sm font-semibold text-brand-900">문항별 정오</h3>
         {/*
           문항 번호가 세로로 이어진다 — 1,2,3…이 왼쪽 칸을 채우고 나머지가 오른쪽으로 넘어간다.
           가로로 흐르면 눈이 1→2로 옆으로 갔다가 3에서 다시 왼쪽으로 돌아와야 해서,

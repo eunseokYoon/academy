@@ -223,7 +223,7 @@ class HomeworkGridServiceTest {
     }
 
     @Test
-    @DisplayName("부분완료 비율·재제출 확인 표시·제출 상태·확인대기 수가 칸에 그대로 옮겨진다")
+    @DisplayName("부분완료 비율·재제출 표시·제출 상태·재제출 수가 칸에 그대로 옮겨진다")
     void cellCarriesCompletionRateStatusAndResolvedFlag() {
         Student parkSeoJun = Fixtures.student(95L, "박서준");
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
@@ -263,7 +263,7 @@ class HomeworkGridServiceTest {
         assertThat(resolvedCell.result()).isEqualTo(HomeworkResult.DONE);
         assertThat(resolvedCell.resolvedByResubmission()).isTrue();
 
-        assertThat(response.columns().get(0).awaitingCheckCount()).isEqualTo(1);
+        assertThat(response.columns().get(0).resubmittedCount()).isEqualTo(1);
     }
 
     @Test
@@ -295,7 +295,7 @@ class HomeworkGridServiceTest {
 
         assertThat(response.columns().get(0).cells()).hasSize(1);
         assertThat(response.columns().get(0).resubmitTargetCount()).isEqualTo(0);
-        assertThat(response.columns().get(0).awaitingCheckCount()).isEqualTo(0);
+        assertThat(response.columns().get(0).resubmittedCount()).isEqualTo(0);
     }
 
     @Test

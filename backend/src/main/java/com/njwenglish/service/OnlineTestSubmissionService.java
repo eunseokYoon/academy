@@ -44,6 +44,7 @@ public class OnlineTestSubmissionService {
     private final OnlineTestRepository onlineTestRepository;
     private final OnlineTestSubmissionRepository onlineTestSubmissionRepository;
     private final PresignedUrlProvider presignedUrlProvider;
+    private final WeeklyTestService weeklyTestService;
     private final StudentAccessGuard studentAccessGuard;
 
     @Transactional(readOnly = true)
@@ -132,11 +133,36 @@ public class OnlineTestSubmissionService {
         OnlineTestScoring.Result result = OnlineTestScoring.grade(
             test.getCorrectChoices(), submission.getChosenChoices(), test.getPoints());
         submission.submit(now, result.score(), result.correctCount());
-
-        // 성적 자동 반영은 없다. 선생님이 결과 화면(문항별 오답·내부/외부 집계)을 보고
-        // 성적 기입 탭의 클리닉 칸에 직접 적는다
+        reflectToWeeklyClinic(test, me, submission);
 
         return toResult(test, submission);
+    }
+
+    /**
+     * 성적 기입 탭의 클리닉 칸에 자동 반영(2026-08-10 확정). 온라인 테스트는 클리닉을
+     * 오프라인으로 못 보는 학생의 대체본이라, 결과가 그 주차 클리닉 성적 그 자체다.
+     *
+     * <p>내부·외부 맞힌 개수는 결과 화면과 <b>같은 계산</b>을 쓴다
+     * ({@link OnlineTestService#countCorrect}) — 갈라지면 화면 숫자와 성적이 어긋난다.
+     *
+     * <p>반영이 안 되는 조건은 reflectClinicScore가 조용히 걸러낸다. 여기서 예외를 던지면
+     * 성적 반영 실패가 학생의 제출 실패가 된다 — 학생은 시험을 냈는데 안 냈다고 나온다.
+     */
+    private void reflectToWeeklyClinic(OnlineTest test, Student student,
+                                       OnlineTestSubmission submission) {
+        Short internalCount = test.getInternalQuestionCount();
+        if (internalCount == null) {
+            return;
+        }
+        Short[] correct = test.getCorrectChoices();
+        Short[] chosen = submission.getChosenChoices();
+
+        weeklyTestService.reflectClinicScore(
+            test.getClassRoom(), test.getYear(), test.getMonth(), test.getWeek(),
+            internalCount, (short) (test.getQuestionCount() - internalCount),
+            student,
+            OnlineTestService.countCorrect(correct, chosen, 0, internalCount),
+            OnlineTestService.countCorrect(correct, chosen, internalCount, correct.length));
     }
 
     /** 제출 후 결과 재조회. 제출 전이면 404다. */

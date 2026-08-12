@@ -52,6 +52,8 @@ class OnlineTestSubmissionServiceTest {
     @Mock
     private PresignedUrlProvider presignedUrlProvider;
     @Mock
+    private WeeklyTestService weeklyTestService;
+    @Mock
     private StudentAccessGuard studentAccessGuard;
 
     private OnlineTestSubmissionService onlineTestSubmissionService;
@@ -63,7 +65,7 @@ class OnlineTestSubmissionServiceTest {
     @BeforeEach
     void setUp() {
         onlineTestSubmissionService = new OnlineTestSubmissionService(onlineTestRepository,
-            onlineTestSubmissionRepository, presignedUrlProvider,
+            onlineTestSubmissionRepository, presignedUrlProvider, weeklyTestService,
             studentAccessGuard);
         given(studentAccessGuard.requireSelf()).willReturn(me);
     }

@@ -3,7 +3,8 @@ import type { FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { errorMessage } from "../../shared/api/errors";
 import { homePathOf, useAuth } from "../../shared/auth/AuthContext";
-import { ACADEMY_NAME } from "../../shared/branding";
+import { ACADEMY_NAME_HEAD, ACADEMY_NAME_TAIL } from "../../shared/branding";
+import { LogoBadge } from "../../shared/components/Logo";
 import { FullScreenLoader } from "../../shared/components/FullScreenLoader";
 import { FormError } from "../../shared/components/FormError";
 import { SubmitButton } from "../../shared/components/SubmitButton";
@@ -43,22 +44,20 @@ export default function LoginPage() {
     // 처음 만나는 화면이라 앱바의 남색을 전면에 쓴다. 흰 카드 하나만 떠 있다
     <div className="flex min-h-screen flex-col items-center justify-center bg-brand-900 p-4">
       <div className="w-full max-w-sm">
-        <div className="mb-5 flex items-center gap-2.5 px-1 text-white">
-          <span
-            aria-hidden="true"
-            className="grid h-9 w-9 place-items-center rounded-xl bg-white/15
-                       ring-1 ring-inset ring-white/25"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor">
-              <path
-                d="M5 12.5l4.2 4.2L19 7"
-                strokeWidth="2.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+        {/*
+          첫 화면이라 로고를 원래 잠금대로 세로로 세운다 — 마크 아래 워드마크.
+          앱바에서는 가로로 눕히지만 여기서는 이 앱이 무엇인지가 화면의 전부다.
+        */}
+        <div className="mb-6 flex flex-col items-center gap-3 text-white">
+          {/* 앱바(30px)보다 크므로 반경·테두리 두께도 같이 올린다 */}
+          <LogoBadge
+            className="h-[68px] w-[68px] rounded-[20px] border-2"
+            markClassName="h-[42px] w-[42px]"
+          />
+          <span className="text-xl font-extrabold tracking-[-0.02em]">
+            {ACADEMY_NAME_HEAD}
+            <span className="text-accent-500">{ACADEMY_NAME_TAIL}</span>
           </span>
-          <span className="text-lg font-extrabold tracking-[-0.02em]">{ACADEMY_NAME}</span>
         </div>
 
         <div className="card p-5">

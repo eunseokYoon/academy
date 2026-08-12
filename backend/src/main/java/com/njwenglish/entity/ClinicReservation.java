@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -46,6 +47,13 @@ public class ClinicReservation extends BaseTimeEntity {
     @JoinColumn(name = "assigned_by")
     private Teacher assignedBy;
 
+    /**
+     * 학생이 몇 시에 오는가. 클리닉 시간대(17:00~22:00) 안의 1시간 단위 값이고
+     * 마지막 슬롯은 종료 1시간 전이다. 검사는 {@link Clinic#hasSlot}이 한다.
+     */
+    @Column(name = "arrival_time", nullable = false)
+    private LocalTime arrivalTime;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ReservationStatus status;
@@ -69,13 +77,24 @@ public class ClinicReservation extends BaseTimeEntity {
      * assignedBy가 null이면 학생 본인 신청(S-9), 값이 있으면 선생님 배정(T-13)이다.
      * 명단에서 "왜 여기 있냐"는 문의에 답하려면 이 구분이 남아야 한다.
      */
-    public static ClinicReservation reserve(Clinic clinic, Student student, Teacher assignedBy) {
+    public static ClinicReservation reserve(Clinic clinic, Student student, Teacher assignedBy,
+                                            LocalTime arrivalTime) {
         ClinicReservation reservation = new ClinicReservation();
         reservation.clinic = clinic;
         reservation.student = student;
         reservation.assignedBy = assignedBy;
+        reservation.arrivalTime = arrivalTime;
         reservation.status = ReservationStatus.RESERVED;
         return reservation;
+    }
+
+    /**
+     * 같은 클리닉 안에서 도착 시각만 옮긴다. 선생님 승인은 없다(2026-08-10 확정) —
+     * 대신 호출부가 사유와 함께 ClinicChangeLog를 남긴다. 그 기록이 유일한 대응책이므로
+     * 이 메서드를 로그 없이 부르지 마라.
+     */
+    public void changeArrivalTime(LocalTime arrivalTime) {
+        this.arrivalTime = arrivalTime;
     }
 
     /** 행을 지우지 않는다. 부분 유니크 인덱스가 RESERVED만 보므로 나중에 다시 신청할 수 있다. */

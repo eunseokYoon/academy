@@ -28,13 +28,12 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
                                     @Param("to") LocalDate to);
 
     /**
-     * 수업일을 지울 수 있는지. 출석·시청·숙제가 걸려 있으면 FK로 막히기 전에 409로 돌려준다.
+     * 수업일을 지울 수 있는지. 출석·숙제가 걸려 있으면 FK로 막히기 전에 409로 돌려준다.
      * 그 수업은 이미 운영된 날이라 지우면 학생의 기록이 사라진다.
      */
     @Query(value = """
-        SELECT EXISTS (SELECT 1 FROM attendances  WHERE lesson_id = :lessonId)
-            OR EXISTS (SELECT 1 FROM lesson_views WHERE lesson_id = :lessonId)
-            OR EXISTS (SELECT 1 FROM homeworks    WHERE lesson_id = :lessonId)
+        SELECT EXISTS (SELECT 1 FROM attendances WHERE lesson_id = :lessonId)
+            OR EXISTS (SELECT 1 FROM homeworks   WHERE lesson_id = :lessonId)
         """, nativeQuery = true)
     boolean hasRecords(@Param("lessonId") Long lessonId);
 
@@ -85,6 +84,28 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         LIMIT 1
         """)
     Optional<Lesson> findNextForStudent(@Param("studentId") Long studentId,
+                                        @Param("today") LocalDate today);
+
+    /**
+     * S-1 홈의 지난 수업. findNextForStudent의 거울이라 <b>수강 중인 반 조건이 같아야 한다</b> —
+     * 한쪽만 고치면 홈에 남의 반 수업이 뜬다.
+     *
+     * <p><b>쓴 게 하나라도 있는 수업만</b> 고른다. 수업 행은 일괄 생성이라 제목·내용·영상이
+     * 전부 빈 채로 널려 있고, 그걸 그대로 집으면 홈에 빈 카드가 뜬다. 조건을 빼지 마라 —
+     * 대신 "가장 최근에 뭔가 적힌 수업"이라 지난주가 비었으면 그 전 수업이 올라온다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l JOIN FETCH l.classRoom c
+        WHERE l.lessonDate < :today
+          AND (l.content IS NOT NULL OR l.videoUrl IS NOT NULL OR l.title IS NOT NULL)
+          AND EXISTS (SELECT 1 FROM Enrollment e
+                      WHERE e.classRoom.id = l.classRoom.id
+                        AND e.student.id = :studentId
+                        AND e.leftAt IS NULL)
+        ORDER BY l.lessonDate DESC, c.name
+        LIMIT 1
+        """)
+    Optional<Lesson> findLastForStudent(@Param("studentId") Long studentId,
                                         @Param("today") LocalDate today);
 
     /** T-1 할 일: 출석 미확정. findPendingUntil과 조건이 같아야 숫자와 목록이 어긋나지 않는다. */

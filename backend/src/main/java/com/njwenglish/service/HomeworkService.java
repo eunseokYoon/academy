@@ -185,13 +185,12 @@ public class HomeworkService {
         photos.forEach(photo -> presignedUrlProvider.deleteQuietly(photo.getS3Key()));
     }
 
-    /** T-1 대시보드. 미제출·확인대기가 하나라도 남은 숙제만 나온다. */
+    /** T-1 대시보드. 안 낸 학생이 하나라도 남은 숙제만 나온다. */
     @Transactional(readOnly = true)
     public List<PendingHomeworkResponse> pending() {
         return homeworkRepository.findPendingSummaries().stream()
             .map(row -> new PendingHomeworkResponse(row.getHomeworkId(), row.getTitle(),
-                row.getClassRoomName(), row.getDueAt(),
-                row.getNotSubmitted(), row.getAwaitingCheck()))
+                row.getClassRoomName(), row.getDueAt(), row.getNotSubmitted()))
             .toList();
     }
 
@@ -270,11 +269,16 @@ public class HomeworkService {
 
         int targets = (int) rosterCells.stream()
             .filter(Submission::isResubmitTarget).count();
-        int awaiting = (int) rosterCells.stream()
-            .filter(Submission::isSubmitted).count();
+        /*
+         * 낸 학생 수. isSubmitted()가 아니라 resolvedByResubmission으로 센다 —
+         * 선생님이 그리드에서 직접 ⭕를 찍은 칸과, 학생이 재제출해서 ⭕가 된 칸을
+         * 구분해야 열 머리의 "N명 제출"이 실제로 볼 사진이 있는 수와 맞는다.
+         */
+        int resubmitted = (int) rosterCells.stream()
+            .filter(Submission::isResolvedByResubmission).count();
 
         return new HomeworkGridResponse.ColumnInfo(column.getId(), column.getTitle(),
-            column.getSortOrder(), column.getDueAt(), targets, awaiting, cellInfos);
+            column.getSortOrder(), column.getDueAt(), targets, resubmitted, cellInfos);
     }
 
     /** 사진 수는 한 번에 가져온다. 칸마다 세면 100쿼리가 나간다. */
@@ -480,8 +484,7 @@ public class HomeworkService {
         Map<Long, HomeworkCountsResponse> counts = new HashMap<>();
         for (CountRow row : submissionRepository.countsByHomeworkIds(homeworkIds)) {
             counts.put(row.getHomeworkId(), new HomeworkCountsResponse(
-                (int) row.getTotal(), (int) row.getNotSubmitted(),
-                (int) row.getSubmitted(), (int) row.getChecked()));
+                (int) row.getTotal(), (int) row.getNotSubmitted(), (int) row.getSubmitted()));
         }
         return counts;
     }

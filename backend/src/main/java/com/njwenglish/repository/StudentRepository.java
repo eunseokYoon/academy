@@ -103,18 +103,20 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
      * 다른 조건도 전부 비어서, 성적이 통째로 하드 삭제될 수 있다.
      * SubmissionRepository.countGradedOrSubmitted와 같은 모양이어야 한다.
      *
-     * <p>여섯 테이블은 아직 엔티티만 있고 리포지토리가 없다(Phase 4~6). 한 번의 EXISTS 질의로
-     * 끝내는 편이 리포지토리 여섯 개를 미리 만드는 것보다 읽기 쉽다.
+     * <p>여러 테이블을 한 번의 EXISTS 질의로 끝낸다 — 리포지토리를 그만큼 미리 만드는 것보다
+     * 읽기 쉽다. 다만 <b>네이티브 쿼리라 테이블을 드롭해도 컴파일이 통과한다.</b>
+     * 실제로 V9에서 없앤 scores와 V14에서 없앤 lesson_views가 한동안 여기 남아 있었다.
+     * 마이그레이션으로 테이블을 지울 때 이 목록을 반드시 같이 봐라.
      */
     @Query(value = """
         SELECT EXISTS (SELECT 1 FROM attendances             WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM submissions             WHERE student_id = :studentId
                                                                AND (status <> 'NOT_SUBMITTED'
                                                                     OR result IS NOT NULL))
-            OR EXISTS (SELECT 1 FROM scores                  WHERE student_id = :studentId)
+            OR EXISTS (SELECT 1 FROM weekly_test_scores      WHERE student_id = :studentId)
+            OR EXISTS (SELECT 1 FROM regular_exam_scores     WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM online_test_submissions WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM clinic_reservations     WHERE student_id = :studentId)
-            OR EXISTS (SELECT 1 FROM lesson_views            WHERE student_id = :studentId)
         """, nativeQuery = true)
     boolean hasOperationalRecords(@Param("studentId") Long studentId);
 

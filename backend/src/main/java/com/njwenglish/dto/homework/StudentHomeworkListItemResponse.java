@@ -27,6 +27,5 @@ public record StudentHomeworkListItemResponse(Long homeworkId,
                                               boolean isLate,
                                               int photoCount,
                                               boolean hasVideo,
-                                              boolean hasFeedback,
                                               Long remainingMinutes) {
 }

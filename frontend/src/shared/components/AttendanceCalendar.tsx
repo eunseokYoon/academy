@@ -188,6 +188,15 @@ function HomeworkRate({ rate }: { rate: number | null }) {
  * <p>종류를 색이나 모양으로 나누지 않는 이유는 상태에 색을 이미 다 쓰고 있어서다.
  * 종류까지 색으로 나누면 빨강이 "결석"인지 "클리닉"인지 알 수 없게 된다.
  */
+/**
+ * 칸 안의 일정 하나. <b>확정 전에는 종류만 적는다.</b>
+ *
+ * <p>"수업 미확인"은 무언가 잘못된 것처럼 읽히는데 실제로는 아직 오지 않은 날이거나
+ * 선생님이 아직 안 누른 날일 뿐이다. 달력 대부분이 미래라 이 글자가 화면을 덮었다.
+ * 회색이 이미 "확정 전"을 말하고 범례가 그 색을 풀어 준다.
+ *
+ * <p>다만 색은 눈으로만 읽힌다. 읽어 주는 기계에는 상태를 그대로 들려준다(sr-only).
+ */
 function SessionChip({ kind, status }: { kind: "수업" | "클리닉"; status: DayStatus }) {
   const style = DAY_STATUS_STYLE[status];
   return (
@@ -195,7 +204,14 @@ function SessionChip({ kind, status }: { kind: "수업" | "클리닉"; status: D
       className={`block break-keep rounded px-0.5 py-1 text-center text-[10px] leading-tight
                   ring-1 ring-inset ${style.cell}`}
     >
-      {kind} {style.label}
+      {status === "PENDING" ? (
+        <>
+          {kind}
+          <span className="sr-only"> {style.label}</span>
+        </>
+      ) : (
+        `${kind} ${style.label}`
+      )}
     </span>
   );
 }

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../../shared/api/errors";
 import { Badge } from "../../shared/components/Badge";
+import { BackLink } from "../../shared/components/Section";
 import { SUBMISSION_LABELS, formatDueAt } from "../../shared/homework/types";
 import { uploadPhoto, uploadVideo } from "../../shared/homework/upload";
 import { deletePhoto, deleteVideo, getMyHomework, submitHomework } from "./api";
@@ -18,10 +19,11 @@ interface Uploading {
 }
 
 /**
- * S-3 제출 + S-4 상세·피드백. 상태에 따라 한 화면이 두 역할을 한다.
+ * S-3 제출 + S-4 상세. 상태에 따라 한 화면이 두 역할을 한다.
  *
- * <p>선생님이 확인을 마치면(CHECKED) 수정이 막힌다. 본 내용이 뒤바뀌면
- * 피드백이 엉뚱한 사진에 붙는다.
+ * <p><b>GRID 재제출은 한 번 내면 끝이다.</b> 내는 순간 서버가 ⭕를 붙이고,
+ * 그러면 resubmitRequired가 false가 되어 이 화면이 통째로 안내문으로 바뀐다.
+ * 잘못 냈으면 선생님이 그리드에서 🔺·❌로 되돌려 줘야 다시 낼 수 있다.
  */
 export default function StudentHomeworkDetailPage() {
   const { homeworkId } = useParams();
@@ -68,8 +70,7 @@ export default function StudentHomeworkDetailPage() {
     return <p className="text-sm text-slate-500">숙제를 찾을 수 없습니다.</p>;
   }
 
-  const { homework, submission, resubmitRequired, feedback } = detail.data;
-  const locked = submission.status === "CHECKED";
+  const { homework, submission, resubmitRequired } = detail.data;
   const photoCount = submission.photos.length;
   // 제출 화면(사진·영상 추가, 제출 버튼)을 여는 유일한 근거다. 서버도 같은 기준으로
   // findEditableSubmission에서 막으므로 여기서 안 그려도 안내일 뿐이다
@@ -144,13 +145,11 @@ export default function StudentHomeworkDetailPage() {
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={() => navigate("/student/homeworks")} className="text-sm text-slate-500">
-        ← 숙제 목록
-      </button>
+      <BackLink onClick={() => navigate("/student/homeworks")}>숙제 목록</BackLink>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm">
+      <div className="rounded-2xl bg-white p-4 shadow-card">
         <div className="flex items-start justify-between gap-2">
-          <h2 className="text-lg font-semibold text-slate-900">{homework.title}</h2>
+          <h2 className="text-lg font-semibold text-brand-900">{homework.title}</h2>
           {/* 다시 낼 게 없는 GRID는 이 축이 영원히 NOT_SUBMITTED다 — 그때는 배지를
               띄우지 않는다. "미제출"이라고 크게 보이면 아래 안내 문구와 모순된다 */}
           {canSubmit && (
@@ -177,31 +176,22 @@ export default function StudentHomeworkDetailPage() {
         )}
       </div>
 
-      {feedback && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-sm font-medium text-emerald-800">선생님 피드백</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-emerald-900">{feedback.content}</p>
-        </div>
-      )}
-
       {canSubmit ? (
         <>
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="rounded-2xl bg-white p-4 shadow-card">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-slate-700">
                 사진 {photoCount}/{MAX_PHOTOS}
               </p>
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                  disabled={photoCount + uploading.length >= MAX_PHOTOS}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700
-                             disabled:opacity-40"
-                >
-                  사진 추가
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                disabled={photoCount + uploading.length >= MAX_PHOTOS}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700
+                           disabled:opacity-40"
+              >
+                사진 추가
+              </button>
             </div>
 
             <input
@@ -224,17 +214,15 @@ export default function StudentHomeworkDetailPage() {
                     alt="제출 사진"
                     className="aspect-square w-full rounded-lg object-cover"
                   />
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={() => removePhoto.mutate(photo.photoId)}
-                      className="absolute right-1 top-1 rounded-full bg-slate-900/70 px-2 py-0.5
-                                 text-xs text-white"
-                      aria-label="사진 삭제"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => removePhoto.mutate(photo.photoId)}
+                    className="absolute right-1 top-1 rounded-full bg-brand-900/70 px-2 py-0.5
+                               text-xs text-white"
+                    aria-label="사진 삭제"
+                  >
+                    ✕
+                  </button>
                 </li>
               ))}
               {/* 리사이즈+업로드에 몇 초가 걸린다. 아무 반응이 없으면 버튼을 여러 번 누른다 */}
@@ -264,20 +252,18 @@ export default function StudentHomeworkDetailPage() {
 
           </div>
 
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="rounded-2xl bg-white p-4 shadow-card">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-slate-700">영상 (1개까지)</p>
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={() => videoInput.current?.click()}
-                  disabled={videoUploading}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700
-                             disabled:opacity-40"
-                >
-                  {submission.video ? "영상 바꾸기" : "영상 추가"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => videoInput.current?.click()}
+                disabled={videoUploading}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700
+                           disabled:opacity-40"
+              >
+                {submission.video ? "영상 바꾸기" : "영상 추가"}
+              </button>
             </div>
 
             <input
@@ -306,15 +292,13 @@ export default function StudentHomeworkDetailPage() {
                   preload="metadata"
                   className="w-full rounded-lg bg-black"
                 />
-                {!locked && (
-                  <button
-                    type="button"
-                    onClick={() => removeVideo.mutate()}
-                    className="mt-2 w-full text-center text-xs text-slate-500 underline"
-                  >
-                    영상 삭제
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => removeVideo.mutate()}
+                  className="mt-2 w-full text-center text-xs text-slate-500 underline"
+                >
+                  영상 삭제
+                </button>
               </div>
             ) : (
               <p className="mt-3 text-center text-xs text-slate-400">
@@ -331,35 +315,29 @@ export default function StudentHomeworkDetailPage() {
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
-          {locked ? (
-            <p className="rounded-xl bg-slate-100 p-3 text-center text-sm text-slate-500">
-              선생님이 확인을 마쳐 더 이상 수정할 수 없습니다.
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => submit.mutate()}
-              disabled={
-                (photoCount === 0 && !submission.video) ||
-                submit.isPending ||
-                uploading.length > 0 ||
-                videoUploading
-              }
-              className="w-full rounded-lg bg-slate-900 px-4 py-3 text-base font-medium text-white
-                         disabled:bg-slate-300"
-            >
-              {submit.isPending
-                ? "제출 중…"
-                : submission.status === "SUBMITTED"
-                  ? "다시 제출하기"
-                  : "제출하기"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => submit.mutate()}
+            disabled={
+              (photoCount === 0 && !submission.video) ||
+              submit.isPending ||
+              uploading.length > 0 ||
+              videoUploading
+            }
+            className="w-full rounded-lg bg-brand-900 px-4 py-3 text-base font-medium text-white
+                       disabled:bg-slate-300"
+          >
+            {submit.isPending
+              ? "제출 중…"
+              : submission.status === "SUBMITTED"
+                ? "다시 제출하기"
+                : "제출하기"}
+          </button>
         </>
       ) : (
-        <p className="rounded-xl bg-white p-4 text-center text-sm text-slate-500 shadow-sm">
-          {homework.kind === "GRID" && submission.status === "CHECKED"
-            ? "선생님이 확인을 마쳤습니다."
+        <p className="rounded-2xl bg-white p-4 text-center text-sm text-slate-500 shadow-card">
+          {homework.kind === "GRID" && submission.status === "SUBMITTED"
+            ? "제출했습니다. 더 이상 수정할 수 없습니다."
             : "다시 제출할 숙제가 아닙니다."}
         </p>
       )}

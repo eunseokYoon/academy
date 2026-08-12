@@ -16,6 +16,7 @@ import com.njwenglish.dto.onlinetest.OnlineTestResultsResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestStudentDetailResponse;
 import com.njwenglish.dto.onlinetest.OnlineTestTakeStatus;
 import com.njwenglish.dto.onlinetest.OnlineTestUpdateRequest;
+import com.njwenglish.dto.weeklytest.ClinicReflection;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.OnlineTest;
 import com.njwenglish.entity.OnlineTestSubmission;
@@ -60,6 +61,7 @@ public class OnlineTestService {
     private final EnrollmentRepository enrollmentRepository;
     private final TeacherRepository teacherRepository;
     private final StudentAccessGuard studentAccessGuard;
+    private final WeeklyTestService weeklyTestService;
     private final OnlineTestAnswerKeys answerKeys;
     private final PresignedUrlProvider presignedUrlProvider;
 
@@ -227,11 +229,25 @@ public class OnlineTestService {
 
         return new OnlineTestResultsResponse(
             new OnlineTestResultsResponse.Test(test.getId(), test.getTitle(),
-                test.getQuestionCount(), internalCount, test.getClassRoom().getName()),
+                test.getQuestionCount(), internalCount, test.getClassRoom().getName(),
+                clinicReflectionOf(test)),
             new OnlineTestResultsResponse.Counts(items.size(),
                 items.size() - submitted - inProgress, inProgress, submitted),
             average(items),
             items);
+    }
+
+    /**
+     * 이 테스트 결과가 성적 기입 탭의 클리닉 칸으로 자동 반영되는지.
+     * 판정은 실제로 반영하는 {@code WeeklyTestService.reflectClinicScore}와 같은 곳에 있다 —
+     * 여기서 다시 구현하면 "반영됨"이라고 떠 있는데 칸은 비어 있는 상태가 생긴다.
+     */
+    private ClinicReflection clinicReflectionOf(OnlineTest test) {
+        Short internalCount = test.getInternalQuestionCount();
+        return weeklyTestService.clinicReflectionOf(
+            test.getClassRoom().getId(), test.getYear(), test.getMonth(), test.getWeek(),
+            internalCount,
+            internalCount == null ? null : (short) (test.getQuestionCount() - internalCount));
     }
 
     /** 해설지 업로드 URL. 서버는 바이트를 다루지 않고 클라이언트가 S3로 직접 PUT한다. */

@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { errorMessage } from "../../shared/api/errors";
 import { Badge } from "../../shared/components/Badge";
 import { FormError } from "../../shared/components/FormError";
+import { PageTitle, TintBlock } from "../../shared/components/Section";
 import { CATEGORY_LABELS, formatBytes } from "../../shared/material/types";
 import type { MaterialCategory } from "../../shared/material/types";
 import { formatWeek } from "../teacher/format";
@@ -46,19 +47,21 @@ export default function StudentMaterialPage() {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-slate-900">수업 자료실</h2>
+      <PageTitle>수업 자료실</PageTitle>
 
-      <div className="flex gap-1 overflow-x-auto">
+      {/* 고른 칩은 남색으로 채운다. 검정으로 두면 앱바 남색과 따로 논다 */}
+      <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5">
         {FILTERS.map((filter) => (
           <button
             key={filter.value}
             type="button"
             onClick={() => setCategory(filter.value)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${
-              category === filter.value
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-600 shadow-sm"
-            }`}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold
+                        transition-colors ${
+                          category === filter.value
+                            ? "bg-brand-900 text-white"
+                            : "bg-white text-slate-600 shadow-card"
+                        }`}
           >
             {filter.label}
           </button>
@@ -70,38 +73,39 @@ export default function StudentMaterialPage() {
       {materials.isPending ? (
         <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : items.length === 0 ? (
-        <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
-          받은 자료가 없습니다.
-        </p>
+        <TintBlock tone="neutral">
+          <p className="px-4 py-6 text-center text-sm text-slate-500">받은 자료가 없습니다.</p>
+        </TintBlock>
       ) : (
-        <ul className="space-y-2">
+        <TintBlock tone="neutral">
           {items.map((material) => (
-            <li key={material.materialId}>
-              <button
-                type="button"
-                onClick={() => download.mutate(material.materialId)}
-                disabled={download.isPending}
-                className="flex w-full items-center justify-between gap-2 rounded-xl bg-white p-3
-                           text-left shadow-sm disabled:opacity-60"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <Badge tone="neutral">{CATEGORY_LABELS[material.category]}</Badge>
-                    <span className="truncate text-sm font-medium text-slate-900">
-                      {material.title}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-500">
-                    {formatWeek(material.year, material.month, material.week)} ·{" "}
-                    {material.fileName}
-                    {material.bytes !== null && ` · ${formatBytes(material.bytes)}`}
+            <button
+              key={material.materialId}
+              type="button"
+              onClick={() => download.mutate(material.materialId)}
+              disabled={download.isPending}
+              className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left
+                         transition-colors active:bg-slate-50 disabled:opacity-60"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <Badge tone="neutral">{CATEGORY_LABELS[material.category]}</Badge>
+                  <span className="truncate text-[14px] font-semibold text-brand-900">
+                    {material.title}
                   </span>
                 </span>
-                <span className="shrink-0 text-xs text-slate-500 underline">받기</span>
-              </button>
-            </li>
+                <span className="tnum mt-0.5 block truncate text-[11.5px] text-slate-500">
+                  {formatWeek(material.year, material.month, material.week)} · {material.fileName}
+                  {material.bytes !== null && ` · ${formatBytes(material.bytes)}`}
+                </span>
+              </span>
+              <span className="shrink-0 rounded-lg border border-brand-200 bg-white px-2 py-1
+                               text-[11px] font-bold text-brand-700">
+                받기
+              </span>
+            </button>
           ))}
-        </ul>
+        </TintBlock>
       )}
     </div>
   );

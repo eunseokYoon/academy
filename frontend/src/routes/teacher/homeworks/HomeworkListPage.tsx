@@ -118,13 +118,10 @@ export default function HomeworkListPage() {
                 <p className="mt-0.5 text-sm text-slate-500">{homework.classRoomName}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-1">
                   {homework.counts.submitted > 0 && (
-                    <Badge tone="warn">확인 대기 {homework.counts.submitted}</Badge>
+                    <Badge tone="ok">제출 {homework.counts.submitted}</Badge>
                   )}
                   {homework.counts.notSubmitted > 0 && (
                     <Badge tone="neutral">미제출 {homework.counts.notSubmitted}</Badge>
-                  )}
-                  {homework.counts.checked > 0 && (
-                    <Badge tone="ok">완료 {homework.counts.checked}</Badge>
                   )}
                   {/* 수업에 연결하지 않으면 캘린더 숙제 완료율이 비어 있다 */}
                   {homework.lessonId === null && <Badge tone="danger">수업 미연결</Badge>}

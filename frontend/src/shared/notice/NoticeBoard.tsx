@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "../components/Badge";
 import { Modal } from "../components/Modal";
+import { PageTitle, SectionHead, TintBlock } from "../components/Section";
 import { getNotice, listNotices } from "./api";
 
 /**
@@ -29,44 +29,60 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
   });
 
   if (notices.isPending) {
-    return <p className="text-sm text-slate-400">불러오는 중…</p>;
+    return (
+      <>
+        <PageTitle>학원 공지 · 안내</PageTitle>
+        <p className="text-sm text-slate-400">불러오는 중…</p>
+      </>
+    );
   }
 
   const items = notices.data?.items ?? [];
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-slate-900">학원 공지 · 안내</h2>
+    <div>
+      <PageTitle>학원 공지 · 안내</PageTitle>
 
       {items.length === 0 ? (
-        <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
-          등록된 공지가 없습니다.
-        </p>
+        <TintBlock tone="neutral">
+          <p className="px-4 py-6 text-center text-sm text-slate-500">등록된 공지가 없습니다.</p>
+        </TintBlock>
       ) : (
-        <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl bg-white shadow-sm">
-          {items.map((notice) => (
-            <li key={notice.noticeId}>
+        <>
+          <SectionHead tone="brand" title="전체 공지" count={items.length} />
+          <TintBlock tone="brand">
+            {items.map((notice) => (
               <button
+                key={notice.noticeId}
                 type="button"
                 onClick={() => setOpenId(notice.noticeId)}
-                className="flex w-full items-start justify-between gap-2 px-3 py-3 text-left"
+                className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left
+                           transition-colors active:bg-brand-100/60"
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    {notice.pinned && <Badge tone="warn">고정</Badge>}
-                    <span className="truncate text-sm font-medium text-slate-900">
+                    {/* 옅은 배지는 남색 면 위에서 배경과 붙는다. 채운 남색으로 뒤집는다 */}
+                    {notice.pinned && (
+                      <span className="shrink-0 rounded bg-brand-600 px-1.5 py-0.5 text-[9.5px]
+                                       font-bold text-white">
+                        고정
+                      </span>
+                    )}
+                    <span className="truncate text-[14px] font-semibold text-brand-950">
                       {notice.title}
                     </span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-slate-500">
+                  <span className="tnum mt-0.5 block text-[11.5px] text-brand-600/70">
                     {notice.publishedAt.slice(5, 10).replace("-", "/")}
                   </span>
                 </span>
-                <span className="shrink-0 text-slate-300">›</span>
+                <span aria-hidden="true" className="shrink-0 text-brand-300">
+                  ›
+                </span>
               </button>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </TintBlock>
+        </>
       )}
 
       {openId !== null && (

@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AttendanceCalendar } from "../../shared/components/AttendanceCalendar";
-import { DAY_STATUS_STYLE } from "../../shared/attendance/types";
-import { formatClinicSlot } from "../../shared/clinic/types";
+import { PageTitle } from "../../shared/components/Section";
 import { getMyAttendances, listMyClinics } from "./api";
 
 const NOW = new Date();
 
 /**
  * S-6. 본인 출석 현황. 학부모 화면(P-2)과 <b>같은 데이터·같은 구성</b>이다 —
- * 캘린더 칸에 수업과 클리닉을 같은 칩으로 넣고, 아래에 그 달 클리닉의 출결을 나열한다.
+ * 캘린더 칸에 수업과 클리닉을 같은 칩으로 넣는다.
  * 두 화면이 어긋나면 "엄마 폰에는 다르게 나온다"는 문의가 된다.
+ *
+ * <p>클리닉 목록을 아래에 따로 그리지 마라. 캘린더가 날짜와 출결을 이미 칩으로 보여준다 —
+ * 같은 것을 줄줄이 늘어놓으면 화면만 길어진다.
  */
 export default function StudentAttendancePage() {
   const [year, setYear] = useState(NOW.getFullYear());
@@ -58,7 +60,7 @@ export default function StudentAttendancePage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-900">출석 현황</h2>
+      <PageTitle>출석 현황</PageTitle>
       {isPending || !data ? (
         <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : (
@@ -70,43 +72,8 @@ export default function StudentAttendancePage() {
         />
       )}
 
-      <section>
-        <h3 className="text-sm font-semibold text-slate-700">클리닉 출결</h3>
-        {myClinics.length > 0 ? (
-          <ul className="mt-2 space-y-2">
-            {myClinics.map((clinic) => (
-              <li
-                key={clinic.clinicId}
-                className="flex items-center justify-between gap-2 rounded-xl bg-white p-3
-                           shadow-sm"
-              >
-                <p className="text-sm font-medium text-slate-900">
-                  {formatClinicSlot(clinic)}
-                </p>
-                {/* attendStatus가 null이면 결석이 아니라 아직 출석 확정 전이다 */}
-                <span
-                  className={`rounded-md px-2 py-1 text-xs ${
-                    clinic.myReservation?.attendStatus
-                      ? DAY_STATUS_STYLE[clinic.myReservation.attendStatus].cell
-                      : DAY_STATUS_STYLE.PENDING.cell
-                  }`}
-                >
-                  {clinic.myReservation?.attendStatus
-                    ? DAY_STATUS_STYLE[clinic.myReservation.attendStatus].label
-                    : "미확인"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 rounded-xl bg-white p-4 text-sm text-slate-500 shadow-sm">
-            이 달에 신청한 클리닉이 없습니다.
-          </p>
-        )}
-      </section>
-
       <p className="text-xs text-slate-500">
-        회색 "미확인"은 선생님이 아직 출석을 확정하지 않은 날입니다. 결석이 아닙니다.
+        회색 칩은 선생님이 아직 출석을 확정하지 않은 날입니다. 결석이 아닙니다.
       </p>
     </div>
   );

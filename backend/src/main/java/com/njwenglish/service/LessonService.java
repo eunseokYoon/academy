@@ -2,6 +2,7 @@ package com.njwenglish.service;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.dto.lesson.LessonBulkCreateRequest;
 import com.njwenglish.dto.lesson.LessonBulkCreateResponse;
@@ -100,7 +101,7 @@ public class LessonService {
                 continue;
             }
             lessonRepository.save(Lesson.create(classRoom, date,
-                (short) date.getYear(), (short) date.getMonthValue(), weekOfMonth(date)));
+                (short) date.getYear(), (short) date.getMonthValue(), MonthWeeks.of(date)));
             created.add(date);
         }
         return new LessonBulkCreateResponse(created.size(), skipped, created);
@@ -161,14 +162,6 @@ public class LessonService {
         if (lessonRepository.existsByClassRoomIdAndLessonDate(classRoomId, lessonDate)) {
             throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE);
         }
-    }
-
-    /**
-     * bulk에서만 쓰는 기본값이다. 달 안에서 1일부터 7일씩 끊어 1~5주차로 본다.
-     * 달 경계에 걸친 주는 세는 방식이 갈리므로 선생님이 화면에서 고칠 수 있어야 한다.
-     */
-    private short weekOfMonth(LocalDate date) {
-        return (short) ((date.getDayOfMonth() - 1) / 7 + 1);
     }
 
     private String validVideoUrl(String videoUrl) {

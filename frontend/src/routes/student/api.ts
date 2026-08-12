@@ -1,4 +1,4 @@
-import { del, get, post, put } from "../../shared/api/client";
+import { del, get, patch, post, put } from "../../shared/api/client";
 import type { PageResponse } from "../../shared/api/types";
 import type { AttendanceCalendar, AttendanceStatus } from "../../shared/attendance/types";
 import type {
@@ -7,23 +7,22 @@ import type {
   SubmissionStatus,
 } from "../../shared/homework/types";
 import type { MaterialCategory } from "../../shared/material/types";
+import type { NoticeSummary } from "../../shared/notice/api";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 import type { LessonChangeRequest, LessonSlot } from "../../shared/lessonchange/types";
 
 export type ReservationStatus = "RESERVED" | "CANCELED" | "MOVED";
-export type ChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
-
 export interface MyReservation {
   reservationId: number;
   status: ReservationStatus;
+  /** 내가 고른 도착 시각. "17:00" 형식이다. */
+  arrivalTime: string;
   /**
    * null이면 결석이 아니라 <b>아직 출석 확정 전</b>이다.
    * 캘린더의 PENDING과 같은 뜻이라 화면에서도 같은 회색 "미확인"으로 그린다.
    */
   attendStatus: AttendanceStatus | null;
-  /** 대기 중인 변경 요청이 있을 때만 값이 있다. */
-  changeRequestStatus: ChangeRequestStatus | null;
 }
 
 /** 다른 학생 이름은 내려오지 않는다. 인원 수만이다. */
@@ -32,10 +31,20 @@ export interface StudentClinic {
   clinicDate: string;
   startTime: string;
   endTime: string;
+  /**
+   * 고를 수 있는 도착 시각. <b>서버가 계산해 내려준다</b> —
+   * 시작·종료로 여기서 다시 만들면 "마지막 슬롯은 종료 1시간 전" 규칙이 두 곳으로 갈라진다.
+   */
+  slots: string[];
   capacity: number | null;
   reservedCount: number;
-  /** 서버가 계산한다. capacity가 null이면 항상 false다. */
+  /** 서버가 계산한다. capacity가 null이면 항상 false다. 정원은 클리닉 전체 기준이다 */
   full: boolean;
+  /**
+   * "8월 2주". 화면이 주차별로 묶는 데 쓴다.
+   * <b>날짜로 여기서 다시 만들지 마라</b> — 수업·성적이 쓰는 주차 계산과 갈라진다.
+   */
+  weekLabel: string;
   myReservation: MyReservation | null;
 }
 
@@ -49,24 +58,29 @@ export const getMyAttendances = (year: number, month: number) =>
 export const listMyClinics = (from: string, to: string) =>
   get<StudentClinic[]>("/student/clinics", { from, to });
 
-export const reserveClinic = (clinicId: number) =>
-  post<{ reservationId: number; clinicId: number; status: ReservationStatus }>(
-    `/student/clinics/${clinicId}/reservation`,
-  );
-
-export const cancelClinicReservation = (clinicId: number) =>
-  del<void>(`/student/clinics/${clinicId}/reservation`);
-
-/** 학생이 직접 시간을 옮기지 못한다. 요청하면 선생님이 승인한다. */
-export const requestClinicChange = (body: {
+interface ReservationResult {
   reservationId: number;
-  targetClinicId: number | null;
-  reasonCode: string;
-  reasonNote: string | null;
-}) => post<{ requestId: number; status: ChangeRequestStatus }>(
-  "/student/clinic-change-requests",
-  body,
-);
+  clinicId: number;
+  arrivalTime: string;
+  status: ReservationStatus;
+}
+
+export const reserveClinic = (clinicId: number, arrivalTime: string) =>
+  post<ReservationResult>(`/student/clinics/${clinicId}/reservation`, { arrivalTime });
+
+/**
+ * 도착 시각 변경 · 다른 클리닉으로 이동. <b>선생님 승인이 없다</b> — 즉시 반영된다.
+ * targetClinicId를 null로 두면 같은 클리닉 안에서 시각만 바꾼다.
+ * reason은 필수다. 이 문장이 선생님에게 남는 유일한 설명이다.
+ *
+ * <p><b>취소 API는 없다</b>(2026-08-10 확정). 못 가면 다른 시각으로 옮기고,
+ * 아예 빠져야 하면 선생님이 배정을 해제한다.
+ */
+export const changeClinicReservation = (
+  clinicId: number,
+  body: { targetClinicId: number | null; arrivalTime: string; reason: string },
+) => patch<ReservationResult>(`/student/clinics/${clinicId}/reservation`, body);
+
 
 // ---------- 수업일 변경 (S-9) ----------
 
@@ -115,7 +129,6 @@ export interface StudentHomeworkListItem {
   isLate: boolean;
   photoCount: number;
   hasVideo: boolean;
-  hasFeedback: boolean;
   /** 서버가 계산한다. 음수면 마감이 지난 것이고, 마감이 없으면 null이다. */
   remainingMinutes: number | null;
 }
@@ -144,8 +157,6 @@ export interface StudentHomeworkDetail {
    * homework.kind·submission.status·homework.dueAt만으로는 판정할 수 없어 서버가 계산해 내려준다.
    */
   resubmitRequired: boolean;
-  /** 선생님 피드백. 학생 화면에만 나온다. */
-  feedback: { content: string; createdAt: string } | null;
 }
 
 export const listMyHomeworks = (params: { status?: SubmissionStatus; page?: number }) =>
@@ -220,7 +231,6 @@ export interface StudentLessonListItem {
   hasVideo: boolean;
   /** 최근 7일 내 공개된 수업이다. */
   isNew: boolean;
-  viewed: boolean;
   homeworkTitle: string | null;
 }
 
@@ -264,10 +274,6 @@ export const listMyLessons = (params: {
 
 export const getMyLesson = (lessonId: number) =>
   get<StudentLessonDetail>(`/student/lessons/${lessonId}`);
-
-/** 재생 시작(0) · 30초마다 · 이탈 시에만 호출한다. 매초 호출하지 마라. */
-export const recordLessonView = (lessonId: number, watchSeconds: number) =>
-  post<void>(`/student/lessons/${lessonId}/view`, { watchSeconds });
 
 // ---------- 성적 · 시험 일정 (S-7) ----------
 
@@ -337,7 +343,21 @@ export interface StudentHome {
     /** 음수면 마감이 지난 것이다. */
     remainingMinutes: number;
   }[];
-  noticeCount: number;
+  /**
+   * 가장 최근에 뭔가 적힌 지난 수업. 아무것도 안 적힌 수업만 있으면 null이다.
+   * <b>영상은 홈에서 재생하지 않는다</b> — embedUrl이 있으면 상세로 보내는 버튼만 그린다.
+   */
+  lastLesson: {
+    lessonId: number;
+    lessonDate: string;
+    title: string | null;
+    videoId: string | null;
+    embedUrl: string | null;
+    content: string | null;
+    nextPreview: string | null;
+  } | null;
+  /** 학부모 홈과 같은 블록이다. recent는 배너에 펼치는 상단 몇 건. */
+  notices: { totalCount: number; recent: NoticeSummary[] };
 }
 
 export const getStudentHome = () => get<StudentHome>("/student/home");

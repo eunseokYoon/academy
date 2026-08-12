@@ -1,6 +1,7 @@
 package com.njwenglish.entity;
 
 import com.njwenglish.common.entity.BaseTimeEntity;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.entity.enums.WeeklyTestType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -89,6 +90,6 @@ public class WeeklyTest extends BaseTimeEntity {
 
     /** "5월 3주" — 라벨은 서버가 만든다. 프론트가 조립하면 화면마다 표기가 갈린다. */
     public String weekLabel() {
-        return month + "월 " + week + "주";
+        return MonthWeeks.label(month, week);
     }
 }

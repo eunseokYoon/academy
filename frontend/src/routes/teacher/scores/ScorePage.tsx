@@ -138,6 +138,9 @@ export default function ScorePage() {
         year,
         month,
         week,
+        // 화면을 연 뒤에 온라인 클리닉 테스트로 채워진 칸을 서버가 지키게 하는 근거다.
+        // 빼면 방금 반영된 성적이 이 저장 한 번에 사라진다
+        loadedAt: grid.data?.loadedAt ?? null,
         tests: (grid.data?.tests ?? []).map((column) => ({
           testType: column.testType,
           totalCount: toShort(headers[column.testType]?.totalCount ?? ""),

@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useSelectedChild } from "../../shared/auth/SelectedChildContext";
 import { ExamDdayList } from "../../shared/components/ExamDdayList";
 import { ScoreSectionList } from "../../shared/components/ScoreSectionList";
+import { PageTitle } from "../../shared/components/Section";
+import { ChildSelect } from "./ChildSelect";
 import { getChildExamSchedules, getChildScores } from "./api";
 
 /**
@@ -11,7 +13,7 @@ import { getChildExamSchedules, getChildScores } from "./api";
  * 등수·백분위·반 평균은 서버가 내려주지 않고 여기서도 계산하지 않는다.
  */
 export default function ParentScorePage() {
-  const { children, selectedStudentId, setSelectedStudentId } = useSelectedChild();
+  const { selectedStudentId } = useSelectedChild();
 
   const scores = useQuery({
     queryKey: ["parent", "scores", selectedStudentId],
@@ -25,31 +27,16 @@ export default function ParentScorePage() {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">테스트 결과</h2>
-        {children.length > 1 && (
-          <select
-            value={selectedStudentId ?? ""}
-            onChange={(e) => setSelectedStudentId(Number(e.target.value))}
-            className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm"
-          >
-            {children.map((child) => (
-              <option key={child.studentId} value={child.studentId}>
-                {child.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageTitle action={<ChildSelect />}>테스트 결과</PageTitle>
 
       {scores.isPending || !scores.data ? (
         <p className="text-sm text-slate-400">불러오는 중…</p>
       ) : (
-        <>
+        <div className="space-y-5">
           <ScoreSectionList data={scores.data} />
           {exams.data && <ExamDdayList schedules={exams.data} />}
-        </>
+        </div>
       )}
     </div>
   );

@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { errorMessage } from "../../../shared/api/errors";
+import { useQuery } from "@tanstack/react-query";
 import { SUBMISSION_LABELS } from "../../../shared/homework/types";
-import { checkSubmission, createFeedback, getSubmission, updateFeedback } from "../api";
-
-/** 200명에게 매번 새로 쓰는 건 불가능하다. 한 번에 넣을 문구를 버튼으로 둔다. */
-const QUICK_PHRASES = ["잘했어요", "다시 확인 필요", "글씨 정성껏", "빠진 문제 있어요"];
+import { getSubmission } from "../api";
 
 interface Props {
   submissionId: number;
@@ -14,16 +10,18 @@ interface Props {
 }
 
 /**
- * T-7 상세 뷰어. <b>"저장하고 다음"이 이 화면의 전부다.</b>
- * 저장 후 목록으로 돌아가지 않고 다음 미확인 제출물로 바로 넘어간다 —
- * 200명을 확인해야 하므로 이 동선이 없으면 실사용이 안 된다.
+ * T-7 상세 뷰어. <b>보기 전용이다.</b>
+ *
+ * <p>확인·피드백 단계는 없앴다(2026-08-09). GRID 재제출은 학생이 내는 순간 ⭕가 되므로
+ * 선생님이 눌러야 하는 것이 없고, 이 화면은 낸 사진·영상을 훑기 위해 남아 있다.
+ * <b>입력창을 다시 붙이지 마라</b> — 강사가 1명이라 200명분 확인 절차가 그대로 병목이 된다.
+ *
+ * <p>이전·다음은 낸 학생을 이름순으로 훑는다. 목록으로 돌아가지 않고 옆 사람으로 넘어가는
+ * 이 동선이 없으면 반 전체를 보는 데 클릭이 두 배로 든다.
  */
 export default function SubmissionViewer({ submissionId, onNavigate, onClose }: Props) {
-  const queryClient = useQueryClient();
-  const [content, setContent] = useState("");
   const [photoIndex, setPhotoIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const submission = useQuery({
     queryKey: ["teacher", "submission", submissionId],
@@ -31,39 +29,12 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
   });
   const data = submission.data;
 
-  // 제출물이 바뀌면 입력창과 사진 위치를 초기화한다.
-  // 이미 쓴 피드백이 있으면 그것을 불러와 수정 모드가 된다
+  // 제출물이 바뀌면 사진 위치를 처음으로 되돌린다. 안 그러면 사진이 3장인 사람에서
+  // 1장인 사람으로 넘어갈 때 빈 화면이 뜬다
   useEffect(() => {
-    setContent(data?.feedback?.content ?? "");
     setPhotoIndex(0);
     setZoomed(false);
-    setError(null);
-  }, [data?.submissionId, data?.feedback?.content]);
-
-  const save = useMutation({
-    mutationFn: async (goNext: boolean) => {
-      const text = content.trim();
-      if (text.length === 0) {
-        await checkSubmission(submissionId);
-      } else if (data?.feedback) {
-        await updateFeedback(submissionId, text);
-      } else {
-        await createFeedback(submissionId, text);
-      }
-      return goNext;
-    },
-    onSuccess: async (goNext) => {
-      await queryClient.invalidateQueries({ queryKey: ["teacher", "submissions"] });
-      await queryClient.invalidateQueries({ queryKey: ["teacher", "homeworks"] });
-      const next = data?.nextSubmissionId ?? null;
-      if (goNext && next !== null) {
-        onNavigate(next);
-      } else {
-        onClose();
-      }
-    },
-    onError: (e) => setError(errorMessage(e, "저장하지 못했습니다.")),
-  });
+  }, [data?.submissionId]);
 
   if (submission.isPending || !data) {
     return (
@@ -83,7 +54,6 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
     ...(data.video ? [{ key: "video", url: data.video.url, video: true }] : []),
   ];
   const current = media[photoIndex];
-  const isLast = data.nextSubmissionId === null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-900">
@@ -156,60 +126,26 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
         )}
       </div>
 
-      <div className="space-y-2 bg-white p-3">
-        <div className="flex flex-wrap gap-1">
-          {QUICK_PHRASES.map((phrase) => (
-            <button
-              key={phrase}
-              type="button"
-              onClick={() => setContent((value) => (value ? `${value} ${phrase}` : phrase))}
-              className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600"
-            >
-              {phrase}
-            </button>
-          ))}
-        </div>
-
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={2}
-          placeholder="피드백 (비워 두면 확인 처리만 됩니다)"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none
-                     focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
-        />
-        {error && <p className="text-xs text-red-600">{error}</p>}
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => save.mutate(false)}
-            disabled={save.isPending}
-            className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium
-                       text-slate-700 disabled:opacity-50"
-          >
-            저장
-          </button>
-          <button
-            type="button"
-            onClick={() => save.mutate(true)}
-            disabled={save.isPending || isLast}
-            className="flex-[2] rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white
-                       disabled:bg-slate-300"
-          >
-            {isLast ? "확인 대기 없음" : "저장하고 다음"}
-          </button>
-        </div>
-
-        {data.prevSubmissionId !== null && (
-          <button
-            type="button"
-            onClick={() => onNavigate(data.prevSubmissionId!)}
-            className="w-full text-center text-xs text-slate-500 underline"
-          >
-            이전 제출물로
-          </button>
-        )}
+      {/* 학생 사이 이동. 사진 넘기기(위 ‹ ›)와 헷갈리지 않게 아래 흰 바에 이름으로 둔다 */}
+      <div className="flex gap-2 bg-white p-3">
+        <button
+          type="button"
+          onClick={() => onNavigate(data.prevSubmissionId!)}
+          disabled={data.prevSubmissionId === null}
+          className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium
+                     text-slate-700 disabled:opacity-40"
+        >
+          ← 이전 학생
+        </button>
+        <button
+          type="button"
+          onClick={() => onNavigate(data.nextSubmissionId!)}
+          disabled={data.nextSubmissionId === null}
+          className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium
+                     text-slate-700 disabled:opacity-40"
+        >
+          다음 학생 →
+        </button>
       </div>
     </div>
   );

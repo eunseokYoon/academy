@@ -77,13 +77,6 @@ public class Submission extends BaseTimeEntity {
     @Column(name = "resolved_by_resubmission", nullable = false)
     private boolean resolvedByResubmission;
 
-    /*
-     * feedback_read_at 컬럼은 DB에 남아 있지만 매핑하지 않는다. 이 값을 읽던 곳은
-     * S-1 홈의 미확인 피드백 수 하나뿐이었고 그 표시가 없어졌다. 컬럼을 지우려면
-     * 되돌릴 수 없는 마이그레이션이 필요해서 스키마는 그대로 뒀다.
-     * 읽음 표시를 되살릴 거라면 이 필드부터 복구하면 된다.
-     */
-
     /** 출제 시 대상 전원에게 미리 깔린다. 사진은 이 행에 붙어야 하므로 제출 전에도 존재한다. */
     public static Submission notSubmitted(Homework homework, Student student) {
         Submission submission = new Submission();
@@ -96,18 +89,16 @@ public class Submission extends BaseTimeEntity {
 
     /**
      * 마감 후 제출도 허용한다(확정 정책). 늦음은 상태가 아니라 is_late 플래그다 —
-     * 상태에 LATE를 두면 "늦게 냈지만 확인 완료"를 표현할 수 없다.
+     * 상태에 LATE를 두면 "늦게 냈지만 마감을 넘겼다"를 한 값으로 뭉개게 된다.
      *
-     * <p>재제출도 같은 경로다. 마감 전이면 사진을 고쳐 다시 낼 수 있고 상태는 SUBMITTED로 유지된다.
+     * <p>GRID 재제출은 호출부가 곧바로 {@link #resolveByResubmission()}을 이어 부른다.
+     * 그러면 result가 DONE이 되어 이 학생은 재제출 대상에서 빠지고, 그 순간부터
+     * SubmissionService.findEditableSubmission이 다시 손대는 것을 막는다.
      */
     public void submit(OffsetDateTime now, boolean late) {
         this.status = SubmissionStatus.SUBMITTED;
         this.submittedAt = now;
         this.isLate = late;
-    }
-
-    public void check() {
-        this.status = SubmissionStatus.CHECKED;
     }
 
     /** 다시 올리면 이전 것을 덮는다. 호출부가 이전 s3Key를 받아 S3에서 지운다. */
@@ -129,11 +120,6 @@ public class Submission extends BaseTimeEntity {
         return videoS3Key != null;
     }
 
-    /** 선생님이 이미 본 제출물은 학생이 바꿀 수 없다. 본 내용이 뒤바뀌면 안 된다. */
-    public boolean isChecked() {
-        return status == SubmissionStatus.CHECKED;
-    }
-
     public boolean isSubmitted() {
         return status == SubmissionStatus.SUBMITTED;
     }
@@ -153,7 +139,10 @@ public class Submission extends BaseTimeEntity {
         }
     }
 
-    /** 재제출을 선생님이 확인했다. 채점 결과가 ⭕로 올라가고 "재제출" 표시가 붙는다. */
+    /**
+     * 재제출이 들어왔다. 채점 결과가 ⭕로 올라가고 "재제출" 표시가 붙는다.
+     * 선생님 확인 단계는 없다 — 학생이 제출하는 순간 {@code submit} 뒤에 이어 불린다.
+     */
     public void resolveByResubmission() {
         this.result = HomeworkResult.DONE;
         this.completionRate = null;

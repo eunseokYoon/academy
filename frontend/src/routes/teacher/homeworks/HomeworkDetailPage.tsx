@@ -16,16 +16,15 @@ import type { SubmissionListItem } from "../api";
 import SubmissionViewer from "./SubmissionViewer";
 
 const CARD_TONE: Record<SubmissionStatus, string> = {
-  SUBMITTED: "border-amber-300",
+  SUBMITTED: "border-emerald-300",
   NOT_SUBMITTED: "border-slate-200 bg-slate-100",
-  CHECKED: "border-emerald-200",
 };
 
 /**
- * T-7 숙제 확인 격자. <b>강사 1명이 200명을 확인하는 화면이다.</b>
+ * T-7 숙제 제출물 격자. <b>강사 1명이 200명 것을 훑는 화면이다.</b>
  *
- * <p>정렬은 서버가 처리할 것 우선으로 준다: 확인 대기 → 미제출 → 확인 완료.
- * 미제출은 회색 카드라 한눈에 구분된다.
+ * <p>정렬은 서버가 볼 것 우선으로 준다: 제출 → 미제출.
+ * 미제출은 회색 카드라 한눈에 구분되고 눌러도 열리지 않는다.
  */
 export default function HomeworkDetailPage() {
   const { homeworkId } = useParams();
@@ -89,9 +88,8 @@ export default function HomeworkDetailPage() {
       </div>
 
       <div className="flex flex-wrap gap-1">
-        <Badge tone="warn">확인 대기 {counts.submitted}</Badge>
+        <Badge tone="ok">제출 {counts.submitted}</Badge>
         <Badge tone="neutral">미제출 {counts.notSubmitted}</Badge>
-        <Badge tone="ok">완료 {counts.checked}</Badge>
       </div>
 
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -117,7 +115,7 @@ export default function HomeworkDetailPage() {
       {deleting && (
         <DeleteHomeworkModal
           homeworkId={id}
-          hasSubmissions={counts.submitted + counts.checked > 0}
+          hasSubmissions={counts.submitted > 0}
           onClose={() => setDeleting(false)}
           onDeleted={async () => {
             await queryClient.invalidateQueries({ queryKey: ["teacher", "homeworks"] });

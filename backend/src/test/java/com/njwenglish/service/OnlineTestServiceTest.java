@@ -63,6 +63,8 @@ class OnlineTestServiceTest {
     @Mock
     private TeacherRepository teacherRepository;
     @Mock
+    private WeeklyTestService weeklyTestService;
+    @Mock
     private StudentAccessGuard studentAccessGuard;
     @Mock
     private OnlineTestAnswerKeys answerKeys;
@@ -78,7 +80,8 @@ class OnlineTestServiceTest {
     void setUp() {
         onlineTestService = new OnlineTestService(onlineTestRepository,
             onlineTestSubmissionRepository, classRoomRepository, enrollmentRepository,
-            teacherRepository, studentAccessGuard, answerKeys, presignedUrlProvider);
+            teacherRepository, studentAccessGuard, weeklyTestService, answerKeys,
+            presignedUrlProvider);
 
         Fixtures.login(Fixtures.teacher(1L));
         given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));

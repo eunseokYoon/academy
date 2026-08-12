@@ -6,6 +6,7 @@ import { get, patch } from "../../shared/api/client";
 import { errorMessage } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { FormError } from "../../shared/components/FormError";
+import { PageTitle, SectionHead, TintBlock } from "../../shared/components/Section";
 import { SubmitButton } from "../../shared/components/SubmitButton";
 import { TextField } from "../../shared/components/TextField";
 import { digitsOnly, formatPhone } from "../../shared/lib/phone";
@@ -57,31 +58,32 @@ export default function ParentMePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <PageTitle>{data.name} 님</PageTitle>
+
       <section>
-        <h2 className="text-lg font-semibold text-slate-900">{data.name} 님</h2>
-      </section>
-
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900">자녀</h3>
-        {data.children.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">
-            연결된 자녀가 없습니다. 선생님께 문의해 주세요.
-          </p>
-        ) : (
-          <ul className="mt-2 divide-y divide-slate-100">
-            {data.children.map((child) => (
-              <li key={child.studentId} className="py-2 text-sm text-slate-700">
+        <SectionHead tone="brand" title="자녀" count={data.children.length} />
+        <TintBlock tone="brand">
+          {data.children.length === 0 ? (
+            <p className="px-3.5 py-4 text-sm text-brand-700/70">
+              연결된 자녀가 없습니다. 선생님께 문의해 주세요.
+            </p>
+          ) : (
+            data.children.map((child) => (
+              <p
+                key={child.studentId}
+                className="px-3.5 py-3 text-[14px] font-semibold text-brand-950"
+              >
                 {child.name}
-              </li>
-            ))}
-          </ul>
-        )}
+              </p>
+            ))
+          )}
+        </TintBlock>
       </section>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900">연락처 변경</h3>
-        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+      <section>
+        <SectionHead tone="neutral" title="연락처 변경" />
+        <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
           <TextField
             label="전화번호"
             type="tel"
@@ -103,6 +105,7 @@ export default function ParentMePage() {
           <SubmitButton pending={mutation.isPending}>변경하기</SubmitButton>
         </form>
       </section>
+
 
       <div className="flex items-center justify-between text-sm">
         <Link to="/privacy" className="text-slate-500 underline">

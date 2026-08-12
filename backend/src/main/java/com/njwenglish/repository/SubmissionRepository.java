@@ -45,10 +45,11 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * 오픈은 별개 동작이다)까지 여기 걸려, 아무도 제출한 적 없는 칸이 "미제출"로 잡힌다.
      * 두 절을 분리해서 하나만 고치지 마라 — 나머지 절이 다시 같은 버그를 만든다.
      *
-     * <p>셋째 줄의 {@code s.status <> NOT_SUBMITTED}는 확인이 끝나 ⭕가 된 학생을 위한
-     * 별도 조건이다. 이게 없으면 선생님이 방금 확인한 결과가 목록에서 사라진다.
+     * <p>셋째 줄의 {@code s.status <> NOT_SUBMITTED}는 <b>이미 낸 학생</b>을 위한 별도
+     * 조건이다. 낸 순간 자동으로 ⭕가 붙어 둘째 줄에서 빠지므로, 이게 없으면 방금 들어온
+     * 재제출이 목록에서 사라진다 — 선생님이 사진을 볼 길이 없어진다.
      *
-     * <p>정렬은 처리할 것이 위로 온다: 확인대기 → 미제출 → 완료.
+     * <p>정렬은 볼 것이 위로 온다: 제출 → 미제출.
      * 이름은 students.name이다. user.name으로 쓰면 미가입 학생이 통째로 사라진다.
      */
     @Query("""
@@ -61,7 +62,7 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
                    AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
                                     com.njwenglish.entity.enums.HomeworkResult.NOT_DONE))
                OR s.status <> com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
-        ORDER BY CASE s.status WHEN 'SUBMITTED' THEN 0 WHEN 'NOT_SUBMITTED' THEN 1 ELSE 2 END,
+        ORDER BY CASE s.status WHEN 'SUBMITTED' THEN 0 ELSE 1 END,
                  st.name
         """)
     List<Submission> findByHomeworkForTeacher(@Param("homeworkId") Long homeworkId);
@@ -156,8 +157,8 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * 믿을 수 없게 된다. GRID는 <b>재제출 대상인데 아직 안 낸 것</b>만 미제출로 센다 —
      * {@link com.njwenglish.entity.Submission#isResubmitTarget()}과 같은 조건이다.
      *
-     * <p>submitted·checked는 그대로 둔다. 둘 다 실제로 온라인 제출 절차를 탄 것만
-     * status가 그렇게 바뀌므로 — GRID든 ONLINE이든 — "제출/확인" 그대로가 맞는 뜻이다.
+     * <p>submitted는 그대로 둔다. 실제로 온라인 제출 절차를 탄 것만 status가 바뀌므로 —
+     * GRID든 ONLINE이든 — "제출" 그대로가 맞는 뜻이다.
      */
     @Query("""
         SELECT h.id AS homeworkId,
@@ -173,9 +174,7 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
                           THEN 1
                      ELSE 0 END) AS notSubmitted,
                SUM(CASE WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED
-                        THEN 1 ELSE 0 END) AS submitted,
-               SUM(CASE WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.CHECKED
-                        THEN 1 ELSE 0 END) AS checked
+                        THEN 1 ELSE 0 END) AS submitted
         FROM Submission s JOIN s.homework h
         WHERE h.id IN :homeworkIds
         GROUP BY h.id
@@ -190,8 +189,6 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         long getNotSubmitted();
 
         long getSubmitted();
-
-        long getChecked();
     }
 
     /** 전원 미제출이 확인된 뒤에만 호출된다. homework_id에 CASCADE가 없어 먼저 지운다. */
@@ -200,15 +197,18 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     void deleteByHomeworkId(@Param("homeworkId") Long homeworkId);
 
     /**
-     * T-7의 이전·다음. 목록과 같은 정렬 위에서 앞뒤를 찾아야 순서가 어긋나지 않는다.
-     * next는 아직 확인하지 않은(SUBMITTED) 것 중 다음이다 — 확인 완료를 다시 열 이유가 없다.
+     * T-7 뷰어의 이전·다음. 목록과 같은 정렬 위에서 앞뒤를 찾아야 순서가 어긋나지 않는다.
+     *
+     * <p><b>제출한 것 전부</b>다. 확인 단계가 없어져 "아직 안 본 것"이라는 구분 자체가
+     * 사라졌고, 뷰어는 사진·영상을 훑는 용도라 이미 본 것도 다시 열 수 있어야 한다.
+     * 미제출은 보여줄 게 없으니 뺀다.
      */
     @Query("""
         SELECT s.id FROM Submission s
         WHERE s.homework.id = :homeworkId AND s.status = 'SUBMITTED'
         ORDER BY s.student.name
         """)
-    List<Long> findAwaitingCheckIds(@Param("homeworkId") Long homeworkId);
+    List<Long> findSubmittedIds(@Param("homeworkId") Long homeworkId);
 
     /**
      * 캘린더 색띠(Phase 4)의 원본. lesson에 연결된 숙제만 센다 —
@@ -234,8 +234,7 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
                          WHEN com.njwenglish.entity.enums.HomeworkResult.PARTIAL
                               THEN s.completionRate
                          ELSE 0 END
-                     WHEN s.status IN (com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED,
-                                       com.njwenglish.entity.enums.SubmissionStatus.CHECKED)
+                     WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.SUBMITTED
                           THEN 100
                      ELSE 0 END) AS scoreSum,
                COUNT(s) AS targetCount
@@ -256,9 +255,6 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
 
         long getTargetCount();
     }
-
-    /** T-1 할 일: 확인 대기 제출물. SUBMITTED는 학생이 냈지만 선생님이 아직 안 본 것이다. */
-    long countByStatus(SubmissionStatus status);
 
     /**
      * P-1·S-1 홈의 "안 낸 숙제" 수.
