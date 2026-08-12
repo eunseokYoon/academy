@@ -1,0 +1,96 @@
+# 운영 (EC2 한 대). 컨테이너 4개: web · web-reloader · backend · certbot
+# DB는 여기 없다. 관리형(Supabase/RDS)이다. 컨테이너로 띄우면 인스턴스가 죽을 때 데이터가 같이 간다.
+#
+# 사용법:
+#   .env 에 DOMAIN / TAG / REGISTRY  (배포 디렉터리, 커밋 금지)
+#   /etc/academy/env 에 DB·JWT·S3    (chmod 600, 커밋 금지 — deploy/academy.env.example 참고)
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    # TAG에 기본값을 주지 않는다. latest로 조용히 떠 버리면 롤백 대상이 사라진다.
+    image: "${REGISTRY:-academy}/academy-backend:${TAG:?TAG를 .env에 지정하세요. 예 TAG=20260730-1420}"
+    container_name: academy-backend
+    restart: always
+    env_file: /etc/academy/env
+    # ports가 아니라 expose다. 호스트 8080으로 노출하면 보안그룹을 우회해 직접 접근된다.
+    expose:
+      - "8080"
+    # Dockerfile의 -XX:MaxRAMPercentage=70과 짝. 1200m의 70% ≈ 840MB가 힙이다.
+    mem_limit: 1200m
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # t2.small은 vCPU가 1개라 JIT·Flyway가 겹치는 기동이 느리다. 60s면 배포 직후
+      # 정상인데도 unhealthy로 보인다.
+      start_period: 120s
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  web:
+    image: "${REGISTRY:-academy}/academy-frontend:${TAG:?TAG를 .env에 지정하세요}"
+    container_name: academy-web
+    restart: always
+    # nginx가 PID 1이다 (이미지 기본 ENTRYPOINT). command로 덮어쓰지 마라 — 6절 참고.
+    environment:
+      DOMAIN: "${DOMAIN:?DOMAIN을 .env에 지정하세요}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      - backend
+    # 프로세스가 살아 있는 것과 요청에 응답하는 것은 다르다. 502만 뱉는 상태도 잡아야 한다.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  # 갱신된 인증서를 반영하기 위한 주기적 reload.
+  # web과 PID 네임스페이스를 공유하므로 그 안의 PID 1 = web의 nginx 마스터다.
+  # `nginx -s reload`를 쓰지 않는 이유: reload는 /var/run/nginx.pid를 자기 컨테이너
+  # 파일시스템에서 읽는데, 이 컨테이너에서는 nginx가 뜬 적이 없어 그 파일이 없다.
+  # HUP 시그널을 직접 보내는 것이 reload가 내부에서 하는 일과 동일하다.
+  # web이 재생성되면 네임스페이스가 사라져 이 컨테이너도 죽는다 → restart: always가 복구한다.
+  web-reloader:
+    image: "${REGISTRY:-academy}/academy-frontend:${TAG:?TAG를 .env에 지정하세요}"
+    container_name: academy-web-reloader
+    restart: always
+    pid: "service:web"
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do sleep 6h & wait $${!}; kill -HUP 1 || true; done"
+    depends_on:
+      - web
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  certbot:
+    image: certbot/certbot
+    container_name: academy-certbot
+    restart: always
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do certbot renew --webroot -w /var/www/certbot --quiet;
+             sleep 12h & wait $${!}; done"
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+volumes:
+  certbot-etc:
+  certbot-www:

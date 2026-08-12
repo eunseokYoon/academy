@@ -1,26 +1,113 @@
-import { useQuery } from "@tanstack/react-query";
-import { get } from "../../shared/api/client";
+import { useState } from "react";
+import type { FormEvent } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { errorMessage } from "../../shared/api/errors";
+import { homePathOf, useAuth } from "../../shared/auth/AuthContext";
+import { ACADEMY_NAME_HEAD, ACADEMY_NAME_TAIL } from "../../shared/branding";
+import { LogoBadge } from "../../shared/components/Logo";
+import { FullScreenLoader } from "../../shared/components/FullScreenLoader";
+import { FormError } from "../../shared/components/FormError";
+import { SubmitButton } from "../../shared/components/SubmitButton";
+import { TextField } from "../../shared/components/TextField";
+import { formatPhone } from "../../shared/lib/phone";
 
-/**
- * Phase 0 자리표시자. 실제 로그인 폼은 Phase 2(C-1)에서 만든다.
- * 지금은 백엔드 연결과 CORS가 살아 있는지만 보여준다.
- */
+/** C-1. 아이디는 전화번호다. 하이픈을 넣어 입력해도 서버가 정규화한다. */
 export default function LoginPage() {
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["health"],
-    queryFn: () => get<string>("/health"),
-  });
+  const { user, loading, signIn } = useAuth();
+  const navigate = useNavigate();
 
-  const status = isPending ? "확인 중…" : isError ? "연결 실패" : data;
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setPending(true);
+    try {
+      const me = await signIn(loginId, password);
+      navigate(me.mustChangePassword ? "/password" : homePathOf(me.role), { replace: true });
+    } catch (e) {
+      setError(errorMessage(e, "로그인에 실패했습니다."));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (loading) return <FullScreenLoader />;
+  if (user) {
+    return <Navigate to={user.mustChangePassword ? "/password" : homePathOf(user.role)} replace />;
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-900">로그인</h1>
-        <p className="mt-2 text-sm text-slate-500">Phase 2에서 구현합니다.</p>
-        <p className="mt-6 text-xs text-slate-400">
-          백엔드 상태: <span className="font-mono">{status}</span>
-        </p>
+    // 처음 만나는 화면이라 앱바의 남색을 전면에 쓴다. 흰 카드 하나만 떠 있다
+    <div className="flex min-h-screen flex-col items-center justify-center bg-brand-900 p-4">
+      <div className="w-full max-w-sm">
+        {/*
+          첫 화면이라 로고를 원래 잠금대로 세로로 세운다 — 마크 아래 워드마크.
+          앱바에서는 가로로 눕히지만 여기서는 이 앱이 무엇인지가 화면의 전부다.
+        */}
+        <div className="mb-6 flex flex-col items-center gap-3 text-white">
+          {/* 앱바(30px)보다 크므로 반경·테두리 두께도 같이 올린다 */}
+          <LogoBadge
+            className="h-[68px] w-[68px] rounded-[20px] border-2"
+            markClassName="h-[42px] w-[42px]"
+          />
+          <span className="text-xl font-extrabold tracking-[-0.02em]">
+            {ACADEMY_NAME_HEAD}
+            <span className="text-accent-500">{ACADEMY_NAME_TAIL}</span>
+          </span>
+        </div>
+
+        <div className="card p-5">
+          <h1 className="text-xl font-bold tracking-[-0.01em] text-brand-900">로그인</h1>
+          <p className="mt-1 text-sm text-slate-500">전화번호로 로그인합니다.</p>
+
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <TextField
+              label="전화번호"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="username"
+              placeholder="010-1234-5678"
+              value={loginId}
+              onChange={(e) => setLoginId(formatPhone(e.target.value))}
+              required
+            />
+            <TextField
+              label="비밀번호"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <FormError message={error} />
+            <SubmitButton pending={pending}>로그인</SubmitButton>
+          </form>
+
+          <div className="mt-5 space-y-1.5 border-t border-slate-100 pt-4 text-sm text-slate-500">
+            <p>
+              처음이신가요?{" "}
+              <Link to="/signup" className="font-semibold text-brand-600 underline">
+                회원가입
+              </Link>
+            </p>
+            {/* 자동 재설정 경로는 없다. 이메일·SMS가 모두 범위 밖이다. */}
+            <p>비밀번호를 잊으셨나요? 선생님께 문의해 주세요.</p>
+          </div>
+        </div>
+
+        {/* 남색 위 흰 글씨. /50이면 대비가 겨우 걸친다 — 법정 고지라 넉넉히 둔다 */}
+        <div className="mt-5 flex justify-center gap-3 text-xs text-white/70">
+          <Link to="/terms" className="underline hover:text-white/80">
+            이용약관
+          </Link>
+          <Link to="/privacy" className="underline hover:text-white/80">
+            개인정보처리방침
+          </Link>
+        </div>
       </div>
     </div>
   );

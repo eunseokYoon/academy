@@ -1,0 +1,221 @@
+package com.njwenglish.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.njwenglish.common.error.BusinessException;
+import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.notice.NoticeCreateRequest;
+import com.njwenglish.dto.notice.NoticeUpdateRequest;
+import com.njwenglish.entity.ClassRoom;
+import com.njwenglish.entity.Notice;
+import com.njwenglish.entity.Student;
+import com.njwenglish.entity.enums.NoticeScope;
+import com.njwenglish.repository.ClassRoomRepository;
+import com.njwenglish.repository.EnrollmentRepository;
+import com.njwenglish.repository.NoticeRepository;
+import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.support.Fixtures;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
+
+/**
+ * /api/notices는 역할별 접두사가 아니라 공통 경로다. SecurityConfig가 역할을 보지 않으므로
+ * <b>권한 검증이 전부 서비스에 있다.</b> 여기가 뚫리면 학부모가 남의 자녀 studentId로
+ * 그 학생의 반 공지를 본다.
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class NoticeServiceTest {
+
+    @Mock
+    private NoticeRepository noticeRepository;
+    @Mock
+    private ClassRoomRepository classRoomRepository;
+    @Mock
+    private EnrollmentRepository enrollmentRepository;
+    @Mock
+    private TeacherRepository teacherRepository;
+    @Mock
+    private StudentAccessGuard studentAccessGuard;
+
+    private final ClassRoom classRoom = Fixtures.openClassRoom(3L, "고2 심화반", "HK7F2Q");
+    private final Student child = Fixtures.student(88L, "서동환");
+
+    private NoticeService noticeService;
+
+    @BeforeEach
+    void setUp() {
+        noticeService = new NoticeService(noticeRepository, classRoomRepository,
+            enrollmentRepository, teacherRepository, studentAccessGuard);
+        given(teacherRepository.findByUserId(any()))
+            .willReturn(Optional.of(Fixtures.teacherEntity(1L)));
+        Fixtures.login(Fixtures.teacher(1L));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private Notice notice(Long id, NoticeScope scope, ClassRoom target) {
+        Notice notice = Notice.draft("[SUMMER] 선행 안내", "본문", scope, target, false,
+            Fixtures.teacherEntity(1L));
+        ReflectionTestUtils.setField(notice, "id", id);
+        return notice;
+    }
+
+    // ---------- 권한 ----------
+
+    @Test
+    @DisplayName("studentId를 받으면 첫 줄이 requireAccessible이다")
+    void studentId를_받으면_접근_권한을_검증한다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+            .willReturn(Page.empty());
+
+        noticeService.list(88L, PageRequest.of(0, 20));
+
+        verify(studentAccessGuard).requireAccessible(88L);
+        verify(studentAccessGuard, never()).requireSelf();
+    }
+
+    @Test
+    @DisplayName("studentId가 없으면 학생 본인 조회다")
+    void studentId가_없으면_본인_조회다() {
+        given(studentAccessGuard.requireSelf()).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+            .willReturn(Page.empty());
+
+        noticeService.list(null, PageRequest.of(0, 20));
+
+        verify(studentAccessGuard).requireSelf();
+        verify(studentAccessGuard, never()).requireAccessible(any());
+    }
+
+    @Test
+    @DisplayName("자녀가 아니면 403이 그대로 전파된다")
+    void 남의_자녀_공지는_403이다() {
+        given(studentAccessGuard.requireAccessible(99L))
+            .willThrow(new BusinessException(ErrorCode.STUDENT_NOT_ACCESSIBLE));
+
+        assertThatThrownBy(() -> noticeService.list(99L, PageRequest.of(0, 20)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.STUDENT_NOT_ACCESSIBLE);
+
+        verify(noticeRepository, never()).findForStudent(any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("배정이 없는 학생도 목록 조회가 깨지지 않는다 — 빈 IN 대신 더미가 들어간다")
+    void 배정_전_학생도_공지를_조회할_수_있다() {
+        given(studentAccessGuard.requireSelf()).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of());
+        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+            .willReturn(Page.empty());
+
+        noticeService.list(null, PageRequest.of(0, 20));
+
+        verify(noticeRepository).findForStudent(eq(88L), eq(List.of(-1L)), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("대상이 아닌 공지나 초안 상세는 404다")
+    void 대상이_아닌_공지_상세는_404다() {
+        given(studentAccessGuard.requireSelf()).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(15L, 88L, List.of(3L))).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> noticeService.detail(15L, null))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    // ---------- 작성 ----------
+
+    @Test
+    @DisplayName("CLASS인데 classRoomId가 없으면 400이다")
+    void CLASS는_반이_필수다() {
+        assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
+            "제목", "본문", NoticeScope.CLASS, null, false)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+
+        verify(noticeRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("ALL인데 classRoomId가 있으면 400이다 — ck_notices_target과 같은 규칙이다")
+    void ALL은_반을_받지_않는다() {
+        assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
+            "제목", "본문", NoticeScope.ALL, 3L, false)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("새 공지는 초안이다 — 발행 전에는 학생·학부모에게 보이지 않는다")
+    void 새_공지는_초안이다() {
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(noticeRepository.save(any())).willAnswer(call -> call.getArgument(0));
+
+        var response = noticeService.create(new NoticeCreateRequest(
+            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false));
+
+        assertThat(response.publishedAt()).isNull();
+        assertThat(response.classRoomName()).isEqualTo("고2 심화반");
+    }
+
+    @Test
+    @DisplayName("제목만 고쳐도 고정이 풀리지 않는다")
+    void 부분_수정은_나머지를_건드리지_않는다() {
+        Notice pinned = notice(15L, NoticeScope.ALL, null);
+        ReflectionTestUtils.setField(pinned, "pinned", true);
+        given(noticeRepository.findWithClassRoom(15L)).willReturn(Optional.of(pinned));
+
+        var response = noticeService.update(15L,
+            new NoticeUpdateRequest("바뀐 제목", null, null, null, null));
+
+        assertThat(response.title()).isEqualTo("바뀐 제목");
+        assertThat(response.content()).isEqualTo("본문");
+        assertThat(response.pinned()).isTrue();
+    }
+
+    // ---------- 발행 ----------
+
+    @Test
+    @DisplayName("발행하면 publishedAt이 채워지고, 다시 눌러도 최초 시각을 유지한다")
+    void 재발행은_최초_시각을_유지한다() {
+        given(noticeRepository.findWithClassRoom(15L))
+            .willReturn(Optional.of(notice(15L, NoticeScope.ALL, null)));
+
+        var first = noticeService.publish(15L);
+        var second = noticeService.publish(15L);
+
+        assertThat(first.publishedAt()).isNotNull();
+        // 목록 정렬 기준이라 흔들리면 공지 순서가 바뀐다
+        assertThat(second.publishedAt()).isEqualTo(first.publishedAt());
+    }
+}

@@ -3,8 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>학원 관리</title>
+    <!-- viewport-fit=cover라야 아이폰 홈 인디케이터 높이를 env(safe-area-inset-bottom)으로
+         읽을 수 있다. 없으면 하단 탭 바가 인디케이터에 깔린다 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <!-- 주소창 색. 남색 앱바가 상태바까지 이어져 보인다 (brand-900) -->
+    <meta name="theme-color" content="#1B2A44" />
+    <title>남지원영어LAB</title>
+
+    <!--
+      Pretendard. dynamic-subset은 한글 글리프를 100여 개 파일로 쪼개서
+      실제 쓰인 글자만 받아온다 — 전체 폰트(2MB+)를 통으로 받지 않는다. 모바일에 중요하다.
+      로드 실패해도 tailwind.config.js의 fallback 스택(-apple-system 등)으로 떨어진다.
+    -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
   </head>
   <body>
     <div id="root"></div>
