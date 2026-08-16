@@ -7,18 +7,26 @@ import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.QnaMediaKeys;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.qna.QnaAnswerRequest;
 import com.njwenglish.dto.qna.QnaAnswerResponse;
 import com.njwenglish.dto.qna.QnaDetailResponse;
 import com.njwenglish.dto.qna.QnaPhotoResponse;
+import com.njwenglish.dto.qna.QnaQuestionCreateRequest;
+import com.njwenglish.dto.qna.QnaQuestionUpdateRequest;
 import com.njwenglish.dto.qna.QnaSummaryResponse;
+import com.njwenglish.dto.qna.QnaUploadUrlRequest;
+import com.njwenglish.dto.qna.QnaUploadUrlResponse;
+import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.QnaPhoto;
 import com.njwenglish.entity.QnaPost;
 import com.njwenglish.entity.Student;
+import com.njwenglish.entity.Teacher;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.QnaPhotoRepository;
 import com.njwenglish.repository.QnaPostRepository;
 import com.njwenglish.repository.TeacherRepository;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +105,112 @@ public class QnaService {
     public QnaDetailResponse question(Long postId) {
         QnaPost root = findRoot(postId);
         return toDetail(root, null, currentTeacherId());
+    }
+
+    // ---------- 사진 업로드 ----------
+
+    /**
+     * 업로드 URL 발급. <b>서명이 발급받은 사용자에 묶인다</b> — 글이 아직 없어서다.
+     * 학생·선생님이 같은 메서드를 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public QnaUploadUrlResponse uploadUrl(QnaUploadUrlRequest request) {
+        if (!qnaMediaKeys.isSupportedPhotoType(request.contentType())) {
+            throw new BusinessException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        }
+        Long userId = CurrentUser.get().userId();
+        String s3Key = qnaMediaKeys.issuePhoto(userId, request.contentType(), LocalDate.now());
+        return new QnaUploadUrlResponse(
+            presignedUrlProvider.uploadUrl(s3Key, request.contentType()), s3Key);
+    }
+
+    // ---------- 학생 쓰기 ----------
+
+    @Transactional
+    public Long createQuestion(QnaQuestionCreateRequest request) {
+        Student me = studentAccessGuard.requireSelf();
+        ClassRoom classRoom = classRoomRepository.findById(request.classRoomId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!enrollmentRepository.findActiveClassRoomIds(me.getId()).contains(classRoom.getId())) {
+            throw new BusinessException(ErrorCode.ROLE_NOT_ALLOWED);
+        }
+
+        QnaPost saved = qnaPostRepository.save(QnaPost.question(
+            classRoom, me, request.title(), request.content(), request.isPublic()));
+        attachPhotos(saved, request.s3KeysOrEmpty());
+        return saved.getId();
+    }
+
+    @Transactional
+    public Long answerAsStudent(Long postId, QnaAnswerRequest request) {
+        Student me = studentAccessGuard.requireSelf();
+        QnaPost root = readableRoot(postId, me);
+
+        QnaPost saved = qnaPostRepository.save(
+            QnaPost.answerByStudent(root, me, request.content()));
+        attachPhotos(saved, request.s3KeysOrEmpty());
+        return saved.getId();
+    }
+
+    /** 질문이든 답글이든 같은 메서드다. 한 테이블이라 얻는 이득이다. */
+    @Transactional
+    public void updateAsStudent(Long id, QnaQuestionUpdateRequest request) {
+        Student me = studentAccessGuard.requireSelf();
+        QnaPost post = qnaPostRepository.findWithAuthorById(id)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!post.isWrittenByStudent(me.getId())) {
+            throw new BusinessException(ErrorCode.ROLE_NOT_ALLOWED);
+        }
+        applyUpdate(post, request);
+    }
+
+    @Transactional
+    public void deleteAsStudent(Long id) {
+        Student me = studentAccessGuard.requireSelf();
+        QnaPost post = qnaPostRepository.findWithAuthorById(id)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!post.isWrittenByStudent(me.getId())) {
+            throw new BusinessException(ErrorCode.ROLE_NOT_ALLOWED);
+        }
+        qnaPostRepository.delete(post);
+    }
+
+    // ---------- 선생님 쓰기 ----------
+
+    @Transactional
+    public Long answerAsTeacher(Long postId, QnaAnswerRequest request) {
+        Teacher teacher = teacherRepository.findByUserId(CurrentUser.get().userId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        QnaPost root = findRoot(postId);
+
+        QnaPost saved = qnaPostRepository.save(
+            QnaPost.answerByTeacher(root, teacher, request.content()));
+        attachPhotos(saved, request.s3KeysOrEmpty());
+        return saved.getId();
+    }
+
+    /** 선생님은 <b>본인 답글만</b> 고친다. 학생 글을 대신 고치면 학생이 안 쓴 말이 남는다. */
+    @Transactional
+    public void updateAsTeacher(Long id, QnaQuestionUpdateRequest request) {
+        Long teacherId = currentTeacherId();
+        QnaPost post = qnaPostRepository.findWithAuthorById(id)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!post.isWrittenByTeacher(teacherId)) {
+            throw new BusinessException(ErrorCode.ROLE_NOT_ALLOWED);
+        }
+        applyUpdate(post, request);
+    }
+
+    /** 삭제는 전부 가능하다. 부적절한 글을 내릴 사람이 선생님뿐이다. */
+    @Transactional
+    public void deleteAsTeacher(Long id) {
+        QnaPost post = qnaPostRepository.findById(id)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        qnaPostRepository.delete(post);
     }
 
     // ---------- 내부 ----------
@@ -214,5 +328,46 @@ public class QnaService {
         return teacherRepository.findByUserId(CurrentUser.get().userId())
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND))
             .getId();
+    }
+
+    // ---------- 내부 (쓰기) ----------
+
+    /**
+     * 답글에 제목·공개여부가 오면 400이다. 통과시켜도 ck_qna_posts_shape가 막지만,
+     * 여기서 걸러야 500이 아니라 400이 나간다.
+     */
+    private void applyUpdate(QnaPost post, QnaQuestionUpdateRequest request) {
+        if (post.isRoot()) {
+            if (request.title() == null || request.isPublic() == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            post.editQuestion(request.title(), request.content(), request.isPublic());
+            return;
+        }
+        if (request.title() != null || request.isPublic() != null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        post.editAnswer(request.content());
+    }
+
+    /**
+     * s3Key는 클라이언트가 보내는 값이다. <b>서명을 반드시 대조한다</b> —
+     * 안 하면 남이 올린 파일이나 버킷 내 임의 경로를 자기 글에 붙일 수 있다.
+     */
+    private void attachPhotos(QnaPost post, List<String> s3Keys) {
+        if (s3Keys.isEmpty()) {
+            return;
+        }
+        if (s3Keys.size() > MAX_PHOTOS) {
+            throw new BusinessException(ErrorCode.QNA_PHOTO_LIMIT_EXCEEDED);
+        }
+        Long userId = CurrentUser.get().userId();
+        short order = 0;
+        for (String s3Key : s3Keys) {
+            if (!qnaMediaKeys.matchesPhoto(s3Key, userId)) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            qnaPhotoRepository.save(QnaPhoto.of(post, s3Key, order++, null));
+        }
     }
 }

@@ -18,6 +18,8 @@ public enum ErrorCode {
     ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 출석입니다."),
     DUE_DATE_PASSED(HttpStatus.CONFLICT, "마감 시간이 지났습니다."),
     PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 10장까지 첨부할 수 있습니다."),
+    /** 게시판은 5장이다. 숙제(10장)와 상한이 달라서 메시지를 공유할 수 없다. */
+    QNA_PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 5장까지 첨부할 수 있습니다."),
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),
     SUBMISSION_EXISTS(HttpStatus.CONFLICT, "제출한 학생이 있어 삭제할 수 없습니다."),
     NO_RESUBMIT_TARGET(HttpStatus.CONFLICT, "다시 제출할 학생이 없습니다."),

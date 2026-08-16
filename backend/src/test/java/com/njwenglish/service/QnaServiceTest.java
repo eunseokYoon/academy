@@ -12,6 +12,9 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.QnaMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.qna.QnaAnswerRequest;
+import com.njwenglish.dto.qna.QnaQuestionCreateRequest;
+import com.njwenglish.dto.qna.QnaQuestionUpdateRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.QnaPost;
 import com.njwenglish.entity.Student;
@@ -185,6 +188,89 @@ class QnaServiceTest {
         ArgumentCaptor<List<Long>> captor = ArgumentCaptor.forClass(List.class);
         verify(qnaPostRepository).findRootsForStudent(captor.capture(), any(), any());
         assertThat(captor.getValue()).containsExactly(-1L);
+    }
+
+    @Test
+    @DisplayName("내 반이 아닌 반에는 질문을 쓸 수 없다")
+    void cannotWriteToOtherClass() {
+        given(classRoomRepository.findById(2L)).willReturn(Optional.of(otherClass));
+
+        var request = new QnaQuestionCreateRequest(2L, "제목", "본문", false, List.of());
+
+        assertThatThrownBy(() -> qnaService.createQuestion(request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.ROLE_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("서명이 맞지 않는 s3Key는 붙일 수 없다")
+    void forgedS3KeyRejected() {
+        given(classRoomRepository.findById(1L)).willReturn(Optional.of(myClass));
+        given(qnaMediaKeys.matchesPhoto(any(), any())).willReturn(false);
+
+        var request = new QnaQuestionCreateRequest(
+            1L, "제목", "본문", false, List.of("submissions/2026/08/남의파일.webp"));
+
+        assertThatThrownBy(() -> qnaService.createQuestion(request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("사진은 5장까지다")
+    void photoLimit() {
+        given(classRoomRepository.findById(1L)).willReturn(Optional.of(myClass));
+        given(qnaMediaKeys.matchesPhoto(any(), any())).willReturn(true);
+
+        var request = new QnaQuestionCreateRequest(
+            1L, "제목", "본문", false, List.of("a", "b", "c", "d", "e", "f"));
+
+        assertThatThrownBy(() -> qnaService.createQuestion(request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.QNA_PHOTO_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    @DisplayName("남의 글은 수정할 수 없다")
+    void cannotEditOthers() {
+        QnaPost others = question(6L, myClass, classmate, "남의 글", true);
+        given(qnaPostRepository.findWithAuthorById(6L)).willReturn(Optional.of(others));
+
+        var request = new QnaQuestionUpdateRequest("바꾼 제목", "바꾼 본문", true);
+
+        assertThatThrownBy(() -> qnaService.updateAsStudent(6L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.ROLE_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("답글에 제목·공개여부를 보내면 400이다")
+    void cannotSetTitleOnAnswer() {
+        QnaPost root = question(7L, myClass, me, "질문", true);
+        QnaPost answer = QnaPost.answerByStudent(root, me, "답글");
+        ReflectionTestUtils.setField(answer, "id", 8L);
+        given(qnaPostRepository.findWithAuthorById(8L)).willReturn(Optional.of(answer));
+
+        var request = new QnaQuestionUpdateRequest("제목", "본문", true);
+
+        assertThatThrownBy(() -> qnaService.updateAsStudent(8L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("답글의 답글은 만들 수 없다")
+    void noNestedAnswer() {
+        QnaPost root = question(9L, myClass, me, "질문", true);
+        QnaPost answer = QnaPost.answerByStudent(root, me, "답글");
+        ReflectionTestUtils.setField(answer, "id", 10L);
+        given(qnaPostRepository.findWithAuthorById(10L)).willReturn(Optional.of(answer));
+
+        var request = new QnaAnswerRequest("대댓글", List.of());
+
+        assertThatThrownBy(() -> qnaService.answerAsStudent(10L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
 
     private QnaPost question(Long id, ClassRoom classRoom, Student author, String title,
