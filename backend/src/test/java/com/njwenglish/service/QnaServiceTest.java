@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
@@ -271,6 +272,47 @@ class QnaServiceTest {
         assertThatThrownBy(() -> qnaService.answerAsStudent(10L, request))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("학생은 남의 비공개 질문에 답글을 달 수 없다")
+    void cannotAnswerOthersPrivateQuestion() {
+        QnaPost secret = question(11L, myClass, classmate, "성적 상담", false);
+        given(qnaPostRepository.findWithAuthorById(11L)).willReturn(Optional.of(secret));
+
+        var request = new QnaAnswerRequest("답글", List.of());
+
+        assertThatThrownBy(() -> qnaService.answerAsStudent(11L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.ROLE_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("학생은 남의 글을 삭제할 수 없다")
+    void cannotDeleteOthers() {
+        QnaPost others = question(12L, myClass, classmate, "남의 글", true);
+        given(qnaPostRepository.findWithAuthorById(12L)).willReturn(Optional.of(others));
+
+        assertThatThrownBy(() -> qnaService.deleteAsStudent(12L))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.ROLE_NOT_ALLOWED);
+
+        verify(qnaPostRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("선생님은 본인 답글만 수정할 수 있다")
+    void teacherCanOnlyEditOwnAnswer() {
+        Fixtures.login(Fixtures.teacher(1L));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(Fixtures.teacherEntity(1L)));
+        QnaPost studentQuestion = question(13L, myClass, me, "질문", true);
+        given(qnaPostRepository.findWithAuthorById(13L)).willReturn(Optional.of(studentQuestion));
+
+        var request = new QnaQuestionUpdateRequest("바뀐 제목", "바뀐 본문", true);
+
+        assertThatThrownBy(() -> qnaService.updateAsTeacher(13L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.ROLE_NOT_ALLOWED);
     }
 
     private QnaPost question(Long id, ClassRoom classRoom, Student author, String title,
