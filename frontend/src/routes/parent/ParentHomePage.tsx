@@ -71,7 +71,7 @@ export default function ParentHomePage() {
     });
   }
   stats.push({
-    label: "안 낸 숙제",
+    label: "미완료 숙제",
     value: `${pendingHomeworkCount}`,
     sub: pendingHomeworkCount > 0 ? "확인 필요" : "다 냈어요",
     hot: pendingHomeworkCount > 0,
@@ -147,8 +147,8 @@ export default function ParentHomePage() {
           <div className="flex items-center gap-3 px-3.5 py-3.5">
             <p className="min-w-0 flex-1 text-[14px] font-bold text-brand-900">
               {pendingHomeworkCount > 0
-                ? `안 낸 숙제가 ${pendingHomeworkCount}건 있습니다`
-                : "안 낸 숙제가 없습니다"}
+                ? `미완료 숙제가 ${pendingHomeworkCount}건 있습니다`
+                : "미완료 숙제가 없습니다"}
             </p>
             {nextClinic && (
               <span className="tnum shrink-0 rounded-lg border border-brand-200 bg-white px-2 py-1

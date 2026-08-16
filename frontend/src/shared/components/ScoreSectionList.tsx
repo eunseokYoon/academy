@@ -23,7 +23,7 @@ export function ScoreSectionList({ data }: { data: StudentScoreData }) {
       {/*
         빨강이 아니라 주황이다. 빨강은 이 앱에서 "결석·위험" 하나만 뜻하기로 해 뒀고,
         재시험 예정은 위험이 아니라 <b>학생이 아직 처리 안 한 것</b>이다 —
-        안 낸 숙제와 같은 뜻이라 같은 색을 쓴다. tailwind.config의 accent 주석을 봐라.
+        미완료 숙제와 같은 뜻이라 같은 색을 쓴다. tailwind.config의 accent 주석을 봐라.
       */}
       {data.retestScheduled.length > 0 && (
         <section>

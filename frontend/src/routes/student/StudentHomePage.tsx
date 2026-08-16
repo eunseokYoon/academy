@@ -61,7 +61,7 @@ export default function StudentHomePage() {
     지면의 숫자 칸. 값이 없는 건 "미정"으로 채우지 않고 <b>칸째로 뺀다</b> —
     없는 시험에 D-0을 넣으면 시험이 오늘로 읽힌다. 그래서 길이가 1~3으로 변한다.
 
-    안 낸 숙제만 항상 있다. 0도 뜻이 있는 값이라서다("다 냈다"). 대신 0일 때는
+    미완료 숙제만 항상 있다. 0도 뜻이 있는 값이라서다("다 냈다"). 대신 0일 때는
     주황을 끈다 — 처리할 게 없는데 주황이면 그 색이 뜻을 잃는다.
   */
   const stats: HeroStat[] = [];
@@ -75,7 +75,7 @@ export default function StudentHomePage() {
     });
   }
   stats.push({
-    label: "안 낸 숙제",
+    label: "미완료 숙제",
     value: `${pending}`,
     sub: pending > 0 ? "확인하세요" : "다 냈어요",
     hot: pending > 0,
@@ -98,7 +98,7 @@ export default function StudentHomePage() {
             {/* 이름 한 곳만 주황이다. 장식용 세 곳 중 하나 — tailwind.config의 accent 주석 */}
             <span className="text-accent-300">{student.name}</span> 학생,
             <br />
-            {pending > 0 ? `안 낸 숙제가 ${pending}개 있어요` : "안 낸 숙제가 없어요"}
+            {pending > 0 ? `미완료 숙제가 ${pending}개 있어요` : "미완료 숙제가 없어요"}
           </>
         }
         stats={stats}
@@ -127,7 +127,7 @@ export default function StudentHomePage() {
         {pending === 0 ? (
           <TintBlock tone="neutral">
             <p className="px-4 py-6 text-center text-sm text-slate-500">
-              안 낸 숙제가 없습니다. 잘하고 있어요.
+              미완료 숙제가 없습니다. 잘하고 있어요.
             </p>
           </TintBlock>
         ) : (
@@ -151,7 +151,7 @@ export default function StudentHomePage() {
                 {/*
                   주황 면 위에서는 옅은 배지가 배경에 묻힌다. 흰 바탕에 주황 테두리로
                   뒤집어야 읽힌다. 마감이 지난 것도 빨강으로 올리지 않는다 —
-                  빨강은 이 앱에서 "결석·위험"만 뜻하고, 안 낸 숙제는 위험이 아니다.
+                  빨강은 이 앱에서 "결석·위험"만 뜻하고, 미완료 숙제는 위험이 아니다.
                 */}
                 <span
                   className="tnum shrink-0 rounded-lg border border-accent-200 bg-white px-2 py-1

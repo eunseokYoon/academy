@@ -67,7 +67,7 @@ export function QuickRail({ items }: { items: QuickItem[] }) {
               여기서 알아야 하는 건 개수가 아니라 "볼 게 있다"뿐이다. 개수는 들어가서 본다.
 
               빨강이 아니라 로고의 주황이다. 빨강은 이 앱에서 "결석·위험"만 뜻하기로
-              해 뒀는데 안 낸 숙제 알림은 위험이 아니다.
+              해 뒀는데 미완료 숙제 알림은 위험이 아니다.
             */}
             {item.count != null && item.count > 0 && (
               <span
