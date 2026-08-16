@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
@@ -27,10 +28,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -150,6 +153,38 @@ class QnaServiceTest {
         given(qnaPostRepository.findAnswersByPostId(5L)).willReturn(List.of());
 
         assertThat(qnaService.question(5L).title()).isEqualTo("성적 상담");
+    }
+
+    @Test
+    @DisplayName("내 반이 아닌 classRoomId를 넘겨도 그 반의 글은 조회되지 않는다")
+    void classRoomIdNotMineIsExcluded() {
+        given(qnaPostRepository.findRootsForStudent(any(), any(), any()))
+            .willReturn(Page.empty());
+
+        qnaService.myQuestions(2L, PageRequest.of(0, 20));
+
+        // 반환값이 비었다는 것만 보면 mock이 mock을 확인하는 꼴이다.
+        // 실제로 쿼리에 넘어간 classRoomIds를 캡처해서 2L이 없는지, 그리고 빈 목록 대신
+        // NO_CLASS_ROOM 센티넬(-1L)이 들어갔는지를 본다.
+        ArgumentCaptor<List<Long>> captor = ArgumentCaptor.forClass(List.class);
+        verify(qnaPostRepository).findRootsForStudent(captor.capture(), any(), any());
+        assertThat(captor.getValue()).doesNotContain(2L);
+        assertThat(captor.getValue()).containsExactly(-1L);
+    }
+
+    @Test
+    @DisplayName("활성 반이 하나도 없어도 조회 쿼리에 빈 목록 대신 더미가 들어간다")
+    void noActiveClassRoomUsesSentinel() {
+        given(enrollmentRepository.findActiveClassRoomIds(10L)).willReturn(List.of());
+        given(qnaPostRepository.findRootsForStudent(any(), any(), any()))
+            .willReturn(Page.empty());
+
+        qnaService.myQuestions(null, PageRequest.of(0, 20));
+
+        // 빈 리스트를 그대로 IN에 넘기면 쿼리 자체가 깨진다. NO_CLASS_ROOM이 그걸 막는다.
+        ArgumentCaptor<List<Long>> captor = ArgumentCaptor.forClass(List.class);
+        verify(qnaPostRepository).findRootsForStudent(captor.capture(), any(), any());
+        assertThat(captor.getValue()).containsExactly(-1L);
     }
 
     private QnaPost question(Long id, ClassRoom classRoom, Student author, String title,
