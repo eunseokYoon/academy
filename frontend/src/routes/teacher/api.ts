@@ -18,6 +18,7 @@ import type {
   WeeklyTestGrid,
   WeeklyTestSaveBody,
 } from "../../shared/score/types";
+import type { QnaDetail, QnaSummary, QnaUploadUrl } from "../../shared/qna/types";
 
 export type StudentStatus = "ENROLLED" | "WITHDRAWN";
 export type ClassRoomStatus = "ACTIVE" | "CLOSED";
@@ -1044,3 +1045,26 @@ export const publishNotice = (noticeId: number) =>
   post<TeacherNotice>(`/teacher/notices/${noticeId}/publish`);
 
 export const deleteNotice = (noticeId: number) => del<void>(`/teacher/notices/${noticeId}`);
+
+// ---------- T-15 질의응답 ----------
+
+export const fetchTeacherQnaList = (params: { classRoomId?: number; page?: number }) =>
+  get<PageResponse<QnaSummary>>("/teacher/qna", params);
+
+export const fetchTeacherQnaDetail = (postId: number) =>
+  get<QnaDetail>(`/teacher/qna/${postId}`);
+
+export const answerTeacherQna = (
+  postId: number,
+  body: { content: string; s3Keys: string[] },
+) => post<number>(`/teacher/qna/${postId}/comments`, body);
+
+/** 선생님은 본인 답글만 고친다. title·isPublic을 보내면 400이다. */
+export const updateTeacherQna = (id: number, body: { content: string }) =>
+  patch<void>(`/teacher/qna/${id}`, body);
+
+/** 질문을 지우면 답글과 사진이 함께 사라진다. */
+export const deleteTeacherQna = (id: number) => del<void>(`/teacher/qna/${id}`);
+
+export const issueTeacherQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
+  post<QnaUploadUrl>("/teacher/qna/photos/upload-url", body);

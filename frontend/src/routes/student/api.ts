@@ -11,6 +11,7 @@ import type { NoticeSummary } from "../../shared/notice/api";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 import type { LessonChangeRequest, LessonSlot } from "../../shared/lessonchange/types";
+import type { QnaDetail, QnaSummary, QnaUploadUrl } from "../../shared/qna/types";
 
 export type ReservationStatus = "RESERVED" | "CANCELED" | "MOVED";
 export interface MyReservation {
@@ -405,3 +406,33 @@ export const submitOnlineTest = (testId: number) =>
 
 export const getOnlineTestResult = (testId: number) =>
   get<OnlineTestResult>(`/student/online-tests/${testId}/result`);
+
+// ---------- S-9 질의응답 ----------
+
+export const fetchQnaList = (params: { classRoomId?: number; page?: number }) =>
+  get<PageResponse<QnaSummary>>("/student/qna", params);
+
+export const fetchQnaDetail = (postId: number) =>
+  get<QnaDetail>(`/student/qna/${postId}`);
+
+export const createQna = (body: {
+  classRoomId: number;
+  title: string;
+  content: string;
+  isPublic: boolean;
+  s3Keys: string[];
+}) => post<number>("/student/qna", body);
+
+export const answerQna = (postId: number, body: { content: string; s3Keys: string[] }) =>
+  post<number>(`/student/qna/${postId}/comments`, body);
+
+/** 질문과 답글 공통이다. 답글이면 title·isPublic을 빼야 400이 안 난다. */
+export const updateQna = (
+  id: number,
+  body: { title?: string; content: string; isPublic?: boolean },
+) => patch<void>(`/student/qna/${id}`, body);
+
+export const deleteQna = (id: number) => del<void>(`/student/qna/${id}`);
+
+export const issueQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
+  post<QnaUploadUrl>("/student/qna/photos/upload-url", body);

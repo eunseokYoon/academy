@@ -4,40 +4,12 @@ import {
   registerPhoto,
   registerVideo,
 } from "../../routes/student/api";
-
-const MAX_SIDE = 1600;
-const QUALITY = 0.8;
+import { resizeImage } from "../media/resize";
 
 /** 서버와 같은 값. 넘으면 올리기 전에 여기서 막아 헛된 업로드를 피한다. */
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
-
-/**
- * 업로드 전 브라우저에서 줄인다. <b>이 함수 하나가 연간 저장 비용의 대부분을 결정한다.</b>
- * 요즘 폰 사진은 장당 3~4MB라 원본 그대로면 연 200GB가 넘고,
- * 선생님이 T-7에서 넘길 때마다 로딩이 멈춘다.
- *
- * <p>imageOrientation: "from-image"가 없으면 EXIF 회전이 무시돼 사진이 눕는다.
- */
-export async function resizeImage(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("이미지를 변환하지 못했습니다."))),
-      "image/webp",
-      QUALITY,
-    );
-  });
-}
 
 /**
  * 리사이즈 → S3 직접 PUT → 서버에 등록. 세 단계다.
