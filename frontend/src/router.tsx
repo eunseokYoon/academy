@@ -50,6 +50,8 @@ import ScorePage from "./routes/teacher/scores/ScorePage";
 import ExamSchedulePage from "./routes/teacher/exams/ExamSchedulePage";
 import OnlineTestListPage from "./routes/teacher/onlinetests/OnlineTestListPage";
 import OnlineTestDetailPage from "./routes/teacher/onlinetests/OnlineTestDetailPage";
+import QnaListPage from "./routes/teacher/qna/QnaListPage";
+import QnaDetailPage from "./routes/teacher/qna/QnaDetailPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -136,6 +138,8 @@ export const router = createBrowserRouter([
       { path: "online-tests/:testId", element: <OnlineTestDetailPage /> },
       { path: "materials", element: <MaterialPage /> },
       { path: "notices", element: <NoticePage /> },
+      { path: "qna", element: <QnaListPage /> },
+      { path: "qna/:postId", element: <QnaDetailPage /> },
     ],
   },
   { path: "/", element: <RoleRedirect /> },

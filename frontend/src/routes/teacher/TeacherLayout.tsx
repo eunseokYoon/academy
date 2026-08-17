@@ -19,6 +19,7 @@ const TABS: AppBarTab[] = [
   { to: "/teacher/online-tests", label: "온라인테스트" },
   { to: "/teacher/materials", label: "자료실" },
   { to: "/teacher/notices", label: "공지" },
+  { to: "/teacher/qna", label: "질의응답" },
 ];
 
 /**
