@@ -19,6 +19,8 @@ import StudentLessonDetailPage from "./routes/student/StudentLessonDetailPage";
 import StudentScorePage from "./routes/student/StudentScorePage";
 import StudentOnlineTestPage from "./routes/student/StudentOnlineTestPage";
 import StudentOnlineTestTakePage from "./routes/student/StudentOnlineTestTakePage";
+import StudentQnaPage from "./routes/student/StudentQnaPage";
+import StudentQnaDetailPage from "./routes/student/StudentQnaDetailPage";
 import ParentLayout from "./routes/parent/ParentLayout";
 import ParentHomePage from "./routes/parent/ParentHomePage";
 import ParentMePage from "./routes/parent/ParentMePage";
@@ -83,6 +85,8 @@ export const router = createBrowserRouter([
       { path: "online-tests/:testId", element: <StudentOnlineTestTakePage /> },
       { path: "materials", element: <StudentMaterialPage /> },
       { path: "notices", element: <StudentNoticePage /> },
+      { path: "qna", element: <StudentQnaPage /> },
+      { path: "qna/:postId", element: <StudentQnaDetailPage /> },
     ],
   },
   {

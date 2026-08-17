@@ -44,6 +44,7 @@ const QUICK_ITEMS = (pendingHomework: number, noticeCount: number) => [
   { to: "/student/clinics", icon: "clock" as const, label: "스케줄" },
   { to: "/student/materials", icon: "folder" as const, label: "자료실" },
   { to: "/student/notices", icon: "megaphone" as const, label: "공지", count: noticeCount },
+  { to: "/student/qna", icon: "question" as const, label: "질문" },
 ];
 
 export default function StudentHomePage() {

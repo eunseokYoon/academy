@@ -436,3 +436,7 @@ export const deleteQna = (id: number) => del<void>(`/student/qna/${id}`);
 
 export const issueQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
   post<QnaUploadUrl>("/student/qna/photos/upload-url", body);
+
+/** 글쓰기에서 반을 고르기 위한 목록. 글이 하나도 없는 반도 포함한다. */
+export const fetchQnaClassRooms = () =>
+  get<{ classRoomId: number; name: string }[]>("/student/qna/class-rooms");
