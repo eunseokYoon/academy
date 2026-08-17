@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { createQna, fetchQnaClassRooms, fetchQnaList } from "./api";
+import { createQna, fetchQnaList, getMe } from "./api";
 import { PhotoPicker } from "../../shared/qna/PhotoPicker";
 
 /**
@@ -22,10 +22,17 @@ export default function StudentQnaPage() {
     queryFn: () => fetchQnaList({}),
   });
 
-  const { data: classRooms } = useQuery({
-    queryKey: ["student", "qna", "class-rooms"],
-    queryFn: fetchQnaClassRooms,
+  /*
+   * 글쓰기용 반 목록은 별도 엔드포인트를 두지 않는다. S-7의 getMe()가 이미
+   * 재원 중인 반 전체(글이 없는 반 포함)를 {classRoomId, name}[]로 내려주고,
+   * 다른 학생 화면(StudentScorePage)도 같은 쿼리키("student","me")를 쓰므로
+   * 여기서도 재사용해야 캐시가 한 벌로 유지되고 중복 요청이 나지 않는다.
+   */
+  const { data: me } = useQuery({
+    queryKey: ["student", "me"],
+    queryFn: getMe,
   });
+  const classRooms = me?.classRooms;
 
   return (
     <div className="space-y-4">

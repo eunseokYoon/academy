@@ -9,7 +9,6 @@ import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.qna.QnaAnswerRequest;
 import com.njwenglish.dto.qna.QnaAnswerResponse;
-import com.njwenglish.dto.qna.QnaClassRoomResponse;
 import com.njwenglish.dto.qna.QnaDetailResponse;
 import com.njwenglish.dto.qna.QnaPhotoResponse;
 import com.njwenglish.dto.qna.QnaQuestionCreateRequest;
@@ -84,19 +83,6 @@ public class QnaService {
         Student me = studentAccessGuard.requireSelf();
         QnaPost root = readableRoot(postId, me);
         return toDetail(root, me.getId(), null);
-    }
-
-    /**
-     * 글쓰기에서 반을 고르기 위한 목록. myQuestions의 classRoomName과 달리
-     * <b>글이 하나도 없는 반까지</b> 나온다 — 질문 목록에서 뽑으면 그 반이 사라진다.
-     */
-    @Transactional(readOnly = true)
-    public List<QnaClassRoomResponse> myClassRooms() {
-        Student me = studentAccessGuard.requireSelf();
-        return enrollmentRepository.findByStudentIdAndLeftAtIsNull(me.getId()).stream()
-            .map(e -> new QnaClassRoomResponse(
-                e.getClassRoom().getId(), e.getClassRoom().getName()))
-            .toList();
     }
 
     // ---------- 선생님 ----------
