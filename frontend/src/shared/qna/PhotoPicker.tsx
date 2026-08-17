@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QNA_MAX_PHOTOS } from "./types";
 import { uploadQnaPhoto } from "./upload";
 
@@ -25,6 +25,15 @@ export function PhotoPicker({
   const [error, setError] = useState<string | null>(null);
 
   const full = value.length >= QNA_MAX_PHOTOS;
+
+  /**
+   * 부모가 제출 후 value를 []로 비우는 경로가 있다(답글 폼). 그때 previews만 남으면
+   * 두 배열의 인덱스가 어긋나서, 남아 있는 옛 썸네일의 ✕가 새로 올린 사진을 지운다.
+   * 컴포넌트가 언마운트되지 않으므로 useState 초기값으로는 못 막는다.
+   */
+  useEffect(() => {
+    if (value.length === 0) setPreviews([]);
+  }, [value.length]);
 
   async function handlePick(files: FileList | null) {
     if (!files || files.length === 0) return;

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Icon } from "../components/Icon";
 import type { QnaPhoto } from "./types";
 
 /**
@@ -9,6 +10,19 @@ import type { QnaPhoto } from "./types";
  */
 export function PhotoStrip({ photos }: { photos: QnaPhoto[] }) {
   const [zoomed, setZoomed] = useState<string | null>(null);
+
+  /**
+   * 여는 버튼은 키보드로 누를 수 있는데 배경 클릭만으로 닫으면 키보드 사용자가
+   * 오버레이에 갇힌다. Esc로 닫는 경로를 열려 있는 동안만 붙인다.
+   */
+  useEffect(() => {
+    if (!zoomed) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setZoomed(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [zoomed]);
 
   if (photos.length === 0) return null;
 
@@ -33,6 +47,14 @@ export function PhotoStrip({ photos }: { photos: QnaPhoto[] }) {
           onClick={() => setZoomed(null)}
           className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4"
         >
+          <button
+            type="button"
+            onClick={() => setZoomed(null)}
+            aria-label="닫기"
+            className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-white"
+          >
+            <Icon name="close" className="h-5 w-5" />
+          </button>
           <img src={zoomed} alt="" className="max-h-full max-w-full object-contain" />
         </div>
       )}
