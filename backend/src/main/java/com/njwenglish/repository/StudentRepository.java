@@ -107,6 +107,12 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
      * 읽기 쉽다. 다만 <b>네이티브 쿼리라 테이블을 드롭해도 컴파일이 통과한다.</b>
      * 실제로 V9에서 없앤 scores와 V14에서 없앤 lesson_views가 한동안 여기 남아 있었다.
      * 마이그레이션으로 테이블을 지울 때 이 목록을 반드시 같이 봐라.
+     *
+     * <p>qna_posts는 존재 여부만 본다. submissions처럼 status로 거를 필요가 없다 — 게시판 글은
+     * 숙제처럼 재원생 전원에게 미리 깔리지 않고 학생이 직접 쓸 때만 생긴다. 글이 하나라도
+     * 있다는 것 자체가 제3자가 아니라 실제로 활동한 학생이라는 증거다. student_id에
+     * ON DELETE가 없어(RESTRICT 기본값) 이 검사를 빼먹으면 삭제가 409가 아니라 FK 위반으로
+     * 처리되지 않은 500이 된다.
      */
     @Query(value = """
         SELECT EXISTS (SELECT 1 FROM attendances             WHERE student_id = :studentId)
@@ -117,6 +123,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             OR EXISTS (SELECT 1 FROM regular_exam_scores     WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM online_test_submissions WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM clinic_reservations     WHERE student_id = :studentId)
+            OR EXISTS (SELECT 1 FROM qna_posts               WHERE student_id = :studentId)
         """, nativeQuery = true)
     boolean hasOperationalRecords(@Param("studentId") Long studentId);
 

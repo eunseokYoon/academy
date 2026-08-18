@@ -118,14 +118,4 @@ public class QnaPost extends BaseTimeEntity {
     public boolean isWrittenByTeacher(Long teacherId) {
         return teacher != null && teacher.getId().equals(teacherId);
     }
-
-    /** 질문이면 자기 반, 답글이면 부모의 반. */
-    public ClassRoom classRoomOfThread() {
-        return isRoot() ? classRoom : parent.getClassRoom();
-    }
-
-    /** 질문이면 자기 자신, 답글이면 부모. 권한 판정은 항상 질문 기준이다. */
-    public QnaPost root() {
-        return isRoot() ? this : parent;
-    }
 }
