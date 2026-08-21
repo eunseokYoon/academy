@@ -14,12 +14,15 @@ import jakarta.validation.constraints.NotNull;
  * 순간 XSS 처리가 필요해진다. 줄바꿈 유지까지가 범위다.
  *
  * <p>만들어진 공지는 <b>초안</b>이다. publish를 따로 호출해야 학생·학부모에게 보인다.
+ *
+ * <p>studentsOnly를 켜면 학부모 목록·상세·홈 배너에서 이 공지가 빠진다.
  */
 public record NoticeCreateRequest(
     @NotBlank String title,
     @NotBlank String content,
     @NotNull NoticeScope scope,
     Long classRoomId,
-    boolean pinned
+    boolean pinned,
+    boolean studentsOnly
 ) {
 }

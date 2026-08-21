@@ -15,6 +15,7 @@ import com.njwenglish.entity.Notice;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.NoticeScope;
+import com.njwenglish.entity.enums.UserRole;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.NoticeRepository;
@@ -63,7 +64,8 @@ public class NoticeService {
     public PageResponse<NoticeSummaryResponse> list(Long studentId, Pageable pageable) {
         Student student = resolveStudent(studentId);
         return PageResponse.from(noticeRepository
-            .findForStudent(student.getId(), classRoomIdsOf(student.getId()), pageable)
+            .findForStudent(student.getId(), classRoomIdsOf(student.getId()), parentView(),
+                pageable)
             .map(NoticeSummaryResponse::from));
     }
 
@@ -72,7 +74,8 @@ public class NoticeService {
         Student student = resolveStudent(studentId);
         // 목록과 같은 조건으로 조회한다. 대상이 아니거나 초안이면 아예 나오지 않는다
         return noticeRepository
-            .findForStudent(noticeId, student.getId(), classRoomIdsOf(student.getId()))
+            .findForStudent(noticeId, student.getId(), classRoomIdsOf(student.getId()),
+                parentView())
             .map(NoticeDetailResponse::from)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
@@ -80,14 +83,15 @@ public class NoticeService {
     /** 홈 화면용. 목록과 같은 조건이라 개수와 목록이 어긋나지 않는다. */
     @Transactional(readOnly = true)
     public long countFor(Long studentId) {
-        return noticeRepository.countForStudent(studentId, classRoomIdsOf(studentId));
+        return noticeRepository.countForStudent(studentId, classRoomIdsOf(studentId),
+            parentView());
     }
 
     /** P-1 홈 배너. 상단 몇 건만 필요하다. */
     @Transactional(readOnly = true)
     public List<NoticeSummaryResponse> recentFor(Long studentId) {
         return noticeRepository
-            .findRecentForStudent(studentId, classRoomIdsOf(studentId),
+            .findRecentForStudent(studentId, classRoomIdsOf(studentId), parentView(),
                 PageRequest.of(0, HOME_RECENT_SIZE))
             .stream()
             .map(NoticeSummaryResponse::from)
@@ -131,7 +135,7 @@ public class NoticeService {
 
         return NoticeResponse.from(noticeRepository.save(Notice.draft(
             request.title(), request.content(), request.scope(),
-            classRoom, request.pinned(), teacher)));
+            classRoom, request.pinned(), request.studentsOnly(), teacher)));
     }
 
     @Transactional
@@ -141,7 +145,9 @@ public class NoticeService {
         notice.edit(
             request.title() == null ? notice.getTitle() : request.title(),
             request.content() == null ? notice.getContent() : request.content(),
-            request.pinned() == null ? notice.isPinned() : request.pinned());
+            request.pinned() == null ? notice.isPinned() : request.pinned(),
+            request.studentsOnly() == null
+                ? notice.isStudentsOnly() : request.studentsOnly());
 
         // scope를 보냈을 때만 대상을 건드린다. 따로 바꾸면 ck_notices_target에 걸린다
         if (request.scope() != null) {
@@ -181,6 +187,15 @@ public class NoticeService {
         return studentId == null
             ? studentAccessGuard.requireSelf()
             : studentAccessGuard.requireAccessible(studentId);
+    }
+
+    /**
+     * 학부모 조회인지. <b>studentId의 유무로 판정하지 마라.</b> 학생도 자기 studentId를
+     * 붙여 부를 수 있고 requireAccessible이 통과시킨다 — 그러면 학생만 공지가
+     * 정작 학생에게 안 보인다. 선생님(T-10)은 이 경로를 쓰지 않는다.
+     */
+    private boolean parentView() {
+        return CurrentUser.get().role() == UserRole.PARENT;
     }
 
     private List<Long> classRoomIdsOf(Long studentId) {

@@ -10,6 +10,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * <b>parentView 조건은 넷 모두에 있어야 한다.</b> 목록·상세만 막으면 HomeService가
+ * 학부모 홈 배너에 쓰는 countForStudent·findRecentForStudent로 그대로 샌다.
+ *
+ * <p>조건을 n에 직접 건다. n.classRoom.id 같은 경로를 새로 만들지 마라 —
+ * 암묵적 INNER JOIN이 생겨 다른 scope의 공지가 통째로 사라진다.
+ */
 public interface NoticeRepository extends JpaRepository<Notice, Long> {
 
     /**
@@ -37,6 +44,7 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (:parentView = false OR n.studentsOnly = false)
         ORDER BY n.pinned DESC, n.publishedAt DESC, n.id DESC
         """,
         countQuery = """
@@ -45,9 +53,11 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (:parentView = false OR n.studentsOnly = false)
         """)
     Page<Notice> findForStudent(@Param("studentId") Long studentId,
                                 @Param("classRoomIds") Collection<Long> classRoomIds,
+                                @Param("parentView") boolean parentView,
                                 Pageable pageable);
 
     /** P-1·S-1 홈의 공지 개수. 목록과 같은 조건이어야 숫자와 목록이 어긋나지 않는다. */
@@ -57,9 +67,11 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (:parentView = false OR n.studentsOnly = false)
         """)
     long countForStudent(@Param("studentId") Long studentId,
-                         @Param("classRoomIds") Collection<Long> classRoomIds);
+                         @Param("classRoomIds") Collection<Long> classRoomIds,
+                         @Param("parentView") boolean parentView);
 
     /** 상세. 목록과 같은 조건이라 대상이 아닌 공지는 조회되지 않는다(404). */
     @Query("""
@@ -69,10 +81,12 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         WHERE n.id = :noticeId
           AND n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (:parentView = false OR n.studentsOnly = false)
         """)
     Optional<Notice> findForStudent(@Param("noticeId") Long noticeId,
                                     @Param("studentId") Long studentId,
-                                    @Param("classRoomIds") Collection<Long> classRoomIds);
+                                    @Param("classRoomIds") Collection<Long> classRoomIds,
+                                    @Param("parentView") boolean parentView);
 
     /**
      * T-10 목록. 초안까지 전부 보여준다 — 선생님이 작성 중인 글을 찾을 곳이 여기뿐이다.
@@ -101,9 +115,11 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (:parentView = false OR n.studentsOnly = false)
         ORDER BY n.pinned DESC, n.publishedAt DESC, n.id DESC
         """)
     List<Notice> findRecentForStudent(@Param("studentId") Long studentId,
                                       @Param("classRoomIds") Collection<Long> classRoomIds,
+                                      @Param("parentView") boolean parentView,
                                       Pageable pageable);
 }

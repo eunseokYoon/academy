@@ -3,6 +3,7 @@ package com.njwenglish.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -79,8 +80,12 @@ class NoticeServiceTest {
     }
 
     private Notice notice(Long id, NoticeScope scope, ClassRoom target) {
+        return notice(id, scope, target, false);
+    }
+
+    private Notice notice(Long id, NoticeScope scope, ClassRoom target, boolean studentsOnly) {
         Notice notice = Notice.draft("[SUMMER] 선행 안내", "본문", scope, target, false,
-            Fixtures.teacherEntity(1L));
+            studentsOnly, Fixtures.teacherEntity(1L));
         ReflectionTestUtils.setField(notice, "id", id);
         return notice;
     }
@@ -92,7 +97,7 @@ class NoticeServiceTest {
     void studentId를_받으면_접근_권한을_검증한다() {
         given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
-        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+        given(noticeRepository.findForStudent(any(), any(), anyBoolean(), any(Pageable.class)))
             .willReturn(Page.empty());
 
         noticeService.list(88L, PageRequest.of(0, 20));
@@ -106,7 +111,7 @@ class NoticeServiceTest {
     void studentId가_없으면_본인_조회다() {
         given(studentAccessGuard.requireSelf()).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
-        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+        given(noticeRepository.findForStudent(any(), any(), anyBoolean(), any(Pageable.class)))
             .willReturn(Page.empty());
 
         noticeService.list(null, PageRequest.of(0, 20));
@@ -125,7 +130,8 @@ class NoticeServiceTest {
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.STUDENT_NOT_ACCESSIBLE);
 
-        verify(noticeRepository, never()).findForStudent(any(), any(), any(Pageable.class));
+        verify(noticeRepository, never())
+            .findForStudent(any(), any(), anyBoolean(), any(Pageable.class));
     }
 
     @Test
@@ -133,12 +139,13 @@ class NoticeServiceTest {
     void 배정_전_학생도_공지를_조회할_수_있다() {
         given(studentAccessGuard.requireSelf()).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of());
-        given(noticeRepository.findForStudent(any(), any(), any(Pageable.class)))
+        given(noticeRepository.findForStudent(any(), any(), anyBoolean(), any(Pageable.class)))
             .willReturn(Page.empty());
 
         noticeService.list(null, PageRequest.of(0, 20));
 
-        verify(noticeRepository).findForStudent(eq(88L), eq(List.of(-1L)), any(Pageable.class));
+        verify(noticeRepository)
+            .findForStudent(eq(88L), eq(List.of(-1L)), anyBoolean(), any(Pageable.class));
     }
 
     @Test
@@ -146,7 +153,8 @@ class NoticeServiceTest {
     void 대상이_아닌_공지_상세는_404다() {
         given(studentAccessGuard.requireSelf()).willReturn(child);
         given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
-        given(noticeRepository.findForStudent(15L, 88L, List.of(3L))).willReturn(Optional.empty());
+        given(noticeRepository.findForStudent(eq(15L), eq(88L), eq(List.of(3L)), anyBoolean()))
+            .willReturn(Optional.empty());
 
         assertThatThrownBy(() -> noticeService.detail(15L, null))
             .isInstanceOf(BusinessException.class)
@@ -159,7 +167,7 @@ class NoticeServiceTest {
     @DisplayName("CLASS인데 classRoomId가 없으면 400이다")
     void CLASS는_반이_필수다() {
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.CLASS, null, false)))
+            "제목", "본문", NoticeScope.CLASS, null, false, false)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
 
@@ -170,7 +178,7 @@ class NoticeServiceTest {
     @DisplayName("ALL인데 classRoomId가 있으면 400이다 — ck_notices_target과 같은 규칙이다")
     void ALL은_반을_받지_않는다() {
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.ALL, 3L, false)))
+            "제목", "본문", NoticeScope.ALL, 3L, false, false)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
@@ -182,7 +190,7 @@ class NoticeServiceTest {
         given(noticeRepository.save(any())).willAnswer(call -> call.getArgument(0));
 
         var response = noticeService.create(new NoticeCreateRequest(
-            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false));
+            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false, false));
 
         assertThat(response.publishedAt()).isNull();
         assertThat(response.classRoomName()).isEqualTo("고2 심화반");
@@ -196,7 +204,7 @@ class NoticeServiceTest {
         given(noticeRepository.findWithClassRoom(15L)).willReturn(Optional.of(pinned));
 
         var response = noticeService.update(15L,
-            new NoticeUpdateRequest("바뀐 제목", null, null, null, null));
+            new NoticeUpdateRequest("바뀐 제목", null, null, null, null, null));
 
         assertThat(response.title()).isEqualTo("바뀐 제목");
         assertThat(response.content()).isEqualTo("본문");
@@ -217,5 +225,117 @@ class NoticeServiceTest {
         assertThat(first.publishedAt()).isNotNull();
         // 목록 정렬 기준이라 흔들리면 공지 순서가 바뀐다
         assertThat(second.publishedAt()).isEqualTo(first.publishedAt());
+    }
+
+    // ---------- 학생만 보기 ----------
+
+    @Test
+    @DisplayName("학부모가 목록을 보면 parentView=true로 조회한다")
+    void 학부모_목록은_parentView가_true다() {
+        Fixtures.login(Fixtures.parentUser(9L));
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(any(), any(), eq(true), any(Pageable.class)))
+            .willReturn(Page.empty());
+
+        noticeService.list(88L, PageRequest.of(0, 20));
+
+        verify(noticeRepository).findForStudent(eq(88L), any(), eq(true), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("학생이 자기 studentId를 붙여 불러도 parentView=false다")
+    void 학생이_자기_id를_붙여도_parentView는_false다() {
+        // studentId != null을 학부모 판정으로 쓰면 여기서 학생만 공지가 학생에게 사라진다
+        Fixtures.login(Fixtures.studentUser(7L));
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(any(), any(), eq(false), any(Pageable.class)))
+            .willReturn(Page.empty());
+
+        noticeService.list(88L, PageRequest.of(0, 20));
+
+        verify(noticeRepository).findForStudent(eq(88L), any(), eq(false), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("홈 배너 개수에도 학부모 필터가 걸린다")
+    void 홈_배너_개수에도_필터가_걸린다() {
+        // HomeService가 학부모 홈에서 이 메서드를 그대로 쓴다.
+        // 여기를 빠뜨리면 목록에서 가려진 공지가 배너에서 샌다
+        Fixtures.login(Fixtures.parentUser(9L));
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.countForStudent(any(), any(), eq(true))).willReturn(2L);
+
+        assertThat(noticeService.countFor(88L)).isEqualTo(2L);
+
+        verify(noticeRepository).countForStudent(eq(88L), any(), eq(true));
+    }
+
+    @Test
+    @DisplayName("홈 배너 목록에도 학부모 필터가 걸린다")
+    void 홈_배너_목록에도_필터가_걸린다() {
+        Fixtures.login(Fixtures.parentUser(9L));
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findRecentForStudent(any(), any(), eq(true), any(Pageable.class)))
+            .willReturn(List.of());
+
+        noticeService.recentFor(88L);
+
+        verify(noticeRepository)
+            .findRecentForStudent(eq(88L), any(), eq(true), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("상세에도 학부모 필터가 걸린다")
+    void 상세에도_필터가_걸린다() {
+        Fixtures.login(Fixtures.parentUser(9L));
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(eq(5L), any(), any(), eq(true)))
+            .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> noticeService.detail(5L, 88L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
+
+        verify(noticeRepository).findForStudent(eq(5L), eq(88L), any(), eq(true));
+    }
+
+    @Test
+    @DisplayName("수업일 변경이 만든 개인 공지는 학부모에게 그대로 간다")
+    void 개인_공지는_학부모에게_간다() {
+        // publishedForStudent가 studentsOnly를 건드리지 않아야 한다.
+        // 학부모가 못 받으면 변경 알림 자체가 무의미하다
+        Notice personal = Notice.publishedForStudent(
+            "수업일이 바뀌었습니다", "8/25 → 8/26", child,
+            Fixtures.teacherEntity(1L), java.time.OffsetDateTime.now());
+
+        assertThat(personal.isStudentsOnly()).isFalse();
+    }
+
+    @Test
+    @DisplayName("선생님이 학생만 보기로 공지를 만든다")
+    void 학생만_보기로_공지를_만든다() {
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(noticeRepository.save(any(Notice.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        var response = noticeService.create(new NoticeCreateRequest(
+            "이번 주 교재", "첨부 확인하세요", NoticeScope.CLASS, 3L, false, true));
+
+        assertThat(response.studentsOnly()).isTrue();
+    }
+
+    @Test
+    @DisplayName("수정에서 studentsOnly가 null이면 그대로 둔다")
+    void studentsOnly가_null이면_유지된다() {
+        Notice existing = notice(5L, NoticeScope.CLASS, classRoom, true);
+        given(noticeRepository.findWithClassRoom(5L)).willReturn(Optional.of(existing));
+
+        var response = noticeService.update(5L,
+            new NoticeUpdateRequest("제목만 수정", null, null, null, null, null));
+
+        assertThat(response.studentsOnly()).isTrue();
     }
 }

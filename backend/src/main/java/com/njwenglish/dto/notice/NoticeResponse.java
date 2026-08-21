@@ -21,6 +21,7 @@ public record NoticeResponse(
     Long studentId,
     String studentName,
     boolean pinned,
+    boolean studentsOnly,
     OffsetDateTime publishedAt,
     OffsetDateTime createdAt
 ) {
@@ -32,6 +33,7 @@ public record NoticeResponse(
             notice.getStudent() == null ? null : notice.getStudent().getId(),
             // 학생 이름은 students.name이다. users.name이 아니다 — 미가입 학생은 users 행이 없다
             notice.getStudent() == null ? null : notice.getStudent().getName(),
-            notice.isPinned(), notice.getPublishedAt(), notice.getCreatedAt());
+            notice.isPinned(), notice.isStudentsOnly(), notice.getPublishedAt(),
+            notice.getCreatedAt());
     }
 }

@@ -62,6 +62,17 @@ public class Notice extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean pinned;
 
+    /**
+     * 켜면 학부모에게 보이지 않는다. 자료가 붙은 공지를 가리는 용도다.
+     *
+     * <p><b>학부모 판정은 studentId가 아니라 역할이다.</b> 조회 쪽에서
+     * CurrentUser.get().role() == PARENT로 본다 — 학생도 자기 studentId를 붙여
+     * 부를 수 있어서, studentId != null을 학부모로 읽으면 학생만 공지가
+     * 정작 학생에게 사라진다.
+     */
+    @Column(name = "students_only", nullable = false)
+    private boolean studentsOnly;
+
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
 
@@ -76,13 +87,15 @@ public class Notice extends BaseTimeEntity {
      * (ck_notices_target). 호출부에서 검증한 뒤 넘긴다.
      */
     public static Notice draft(String title, String content, NoticeScope scope,
-                               ClassRoom classRoom, boolean pinned, Teacher createdBy) {
+                               ClassRoom classRoom, boolean pinned, boolean studentsOnly,
+                               Teacher createdBy) {
         Notice notice = new Notice();
         notice.title = title;
         notice.content = content;
         notice.scope = scope;
         notice.classRoom = classRoom;
         notice.pinned = pinned;
+        notice.studentsOnly = studentsOnly;
         notice.createdBy = createdBy;
         return notice;
     }
@@ -92,6 +105,8 @@ public class Notice extends BaseTimeEntity {
      * 목적이라 선생님이 발행 버튼을 한 번 더 누를 이유가 없다. 안 누르면 아무에게도 안 간다.
      *
      * <p>pinned는 false 고정이다. 개인 공지가 반 공지 위로 올라가면 목록 정렬이 뒤집힌다.
+     *
+     * <p>studentsOnly는 false로 둔다. 개인 공지는 학부모가 봐야 하는 알림이다.
      */
     public static Notice publishedForStudent(String title, String content, Student student,
                                              Teacher createdBy, OffsetDateTime now) {
@@ -106,10 +121,11 @@ public class Notice extends BaseTimeEntity {
         return notice;
     }
 
-    public void edit(String title, String content, boolean pinned) {
+    public void edit(String title, String content, boolean pinned, boolean studentsOnly) {
         this.title = title;
         this.content = content;
         this.pinned = pinned;
+        this.studentsOnly = studentsOnly;
     }
 
     /**
