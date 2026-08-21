@@ -3,6 +3,7 @@ package com.njwenglish.dto.notice;
 import com.njwenglish.entity.enums.NoticeScope;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 
 /**
  * scope별 필수 필드를 서버에서 검증한다. {@code CLASS}면 classRoomId가 있어야 하고,
@@ -16,6 +17,9 @@ import jakarta.validation.constraints.NotNull;
  * <p>만들어진 공지는 <b>초안</b>이다. publish를 따로 호출해야 학생·학부모에게 보인다.
  *
  * <p>studentsOnly를 켜면 학부모 목록·상세·홈 배너에서 이 공지가 빠진다.
+ *
+ * <p>attachments는 최대 5개다. 각 s3Key는 {@code POST /teacher/notices/attachments/upload-url}로
+ * 발급받아 서버에 서명을 대조받는다 — 그대로 믿으면 버킷 내 임의 경로를 첨부로 등록할 수 있다.
  */
 public record NoticeCreateRequest(
     @NotBlank String title,
@@ -23,6 +27,7 @@ public record NoticeCreateRequest(
     @NotNull NoticeScope scope,
     Long classRoomId,
     boolean pinned,
-    boolean studentsOnly
+    boolean studentsOnly,
+    List<NoticeAttachmentRequest> attachments
 ) {
 }

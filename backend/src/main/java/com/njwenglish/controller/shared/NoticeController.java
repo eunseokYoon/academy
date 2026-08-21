@@ -2,6 +2,7 @@ package com.njwenglish.controller.shared;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.common.response.PageResponse;
+import com.njwenglish.dto.material.DownloadUrlResponse;
 import com.njwenglish.dto.notice.NoticeDetailResponse;
 import com.njwenglish.dto.notice.NoticeSummaryResponse;
 import com.njwenglish.service.NoticeService;
@@ -43,5 +44,15 @@ public class NoticeController {
         @PathVariable Long noticeId,
         @RequestParam(required = false) Long studentId) {
         return ApiResponse.ok(noticeService.detail(noticeId, studentId));
+    }
+
+    /** 첨부 다운로드. 대상이 아니면 404다 — 목록과 같은 조건으로 다시 확인한다. */
+    @GetMapping("/{noticeId}/attachments/{attachmentId}/download-url")
+    public ApiResponse<DownloadUrlResponse> attachmentDownloadUrl(
+        @PathVariable Long noticeId,
+        @PathVariable Long attachmentId,
+        @RequestParam(required = false) Long studentId) {
+        return ApiResponse.ok(
+            noticeService.attachmentDownloadUrl(noticeId, attachmentId, studentId));
     }
 }

@@ -11,15 +11,21 @@ import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.s3.MaterialKeys;
+import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.dto.material.MaterialUploadUrlRequest;
+import com.njwenglish.dto.notice.NoticeAttachmentRequest;
 import com.njwenglish.dto.notice.NoticeCreateRequest;
 import com.njwenglish.dto.notice.NoticeUpdateRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Notice;
+import com.njwenglish.entity.NoticeAttachment;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.enums.NoticeScope;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
+import com.njwenglish.repository.NoticeAttachmentRepository;
 import com.njwenglish.repository.NoticeRepository;
 import com.njwenglish.repository.TeacherRepository;
 import com.njwenglish.support.Fixtures;
@@ -59,6 +65,12 @@ class NoticeServiceTest {
     private TeacherRepository teacherRepository;
     @Mock
     private StudentAccessGuard studentAccessGuard;
+    @Mock
+    private NoticeAttachmentRepository attachmentRepository;
+    @Mock
+    private PresignedUrlProvider presignedUrlProvider;
+    @Mock
+    private MaterialKeys materialKeys;
 
     private final ClassRoom classRoom = Fixtures.openClassRoom(3L, "고2 심화반", "HK7F2Q");
     private final Student child = Fixtures.student(88L, "서동환");
@@ -68,7 +80,8 @@ class NoticeServiceTest {
     @BeforeEach
     void setUp() {
         noticeService = new NoticeService(noticeRepository, classRoomRepository,
-            enrollmentRepository, teacherRepository, studentAccessGuard);
+            enrollmentRepository, teacherRepository, studentAccessGuard, attachmentRepository,
+            presignedUrlProvider, materialKeys);
         given(teacherRepository.findByUserId(any()))
             .willReturn(Optional.of(Fixtures.teacherEntity(1L)));
         Fixtures.login(Fixtures.teacher(1L));
@@ -167,7 +180,7 @@ class NoticeServiceTest {
     @DisplayName("CLASS인데 classRoomId가 없으면 400이다")
     void CLASS는_반이_필수다() {
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.CLASS, null, false, false)))
+            "제목", "본문", NoticeScope.CLASS, null, false, false, List.of())))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
 
@@ -178,7 +191,7 @@ class NoticeServiceTest {
     @DisplayName("ALL인데 classRoomId가 있으면 400이다 — ck_notices_target과 같은 규칙이다")
     void ALL은_반을_받지_않는다() {
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.ALL, 3L, false, false)))
+            "제목", "본문", NoticeScope.ALL, 3L, false, false, List.of())))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
@@ -190,7 +203,7 @@ class NoticeServiceTest {
         given(noticeRepository.save(any())).willAnswer(call -> call.getArgument(0));
 
         var response = noticeService.create(new NoticeCreateRequest(
-            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false, false));
+            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false, false, List.of()));
 
         assertThat(response.publishedAt()).isNull();
         assertThat(response.classRoomName()).isEqualTo("고2 심화반");
@@ -204,7 +217,7 @@ class NoticeServiceTest {
         given(noticeRepository.findWithClassRoom(15L)).willReturn(Optional.of(pinned));
 
         var response = noticeService.update(15L,
-            new NoticeUpdateRequest("바뀐 제목", null, null, null, null, null));
+            new NoticeUpdateRequest("바뀐 제목", null, null, null, null, null, null));
 
         assertThat(response.title()).isEqualTo("바뀐 제목");
         assertThat(response.content()).isEqualTo("본문");
@@ -322,7 +335,7 @@ class NoticeServiceTest {
             .willAnswer(invocation -> invocation.getArgument(0));
 
         var response = noticeService.create(new NoticeCreateRequest(
-            "이번 주 교재", "첨부 확인하세요", NoticeScope.CLASS, 3L, false, true));
+            "이번 주 교재", "첨부 확인하세요", NoticeScope.CLASS, 3L, false, true, List.of()));
 
         assertThat(response.studentsOnly()).isTrue();
     }
@@ -334,8 +347,101 @@ class NoticeServiceTest {
         given(noticeRepository.findWithClassRoom(5L)).willReturn(Optional.of(existing));
 
         var response = noticeService.update(5L,
-            new NoticeUpdateRequest("제목만 수정", null, null, null, null, null));
+            new NoticeUpdateRequest("제목만 수정", null, null, null, null, null, null));
 
         assertThat(response.studentsOnly()).isTrue();
+    }
+
+    // ---------- 첨부 ----------
+
+    @Test
+    @DisplayName("허용하지 않는 확장자면 400이다")
+    void 허용하지_않는_확장자는_400이다() {
+        given(materialKeys.extensionOf("악성.exe")).willReturn(null);
+
+        assertThatThrownBy(() -> noticeService.issueAttachmentUploadUrl(
+            new MaterialUploadUrlRequest("악성.exe", 1024L)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNSUPPORTED_FILE_TYPE);
+    }
+
+    @Test
+    @DisplayName("50MB를 넘으면 413이다")
+    void 용량_초과는_413이다() {
+        given(materialKeys.extensionOf("교재.pdf")).willReturn("pdf");
+
+        assertThatThrownBy(() -> noticeService.issueAttachmentUploadUrl(
+            new MaterialUploadUrlRequest("교재.pdf", MaterialKeys.MAX_BYTES + 1)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_TOO_LARGE);
+    }
+
+    @Test
+    @DisplayName("남이 발급받은 s3Key는 400이다")
+    void 서명이_안_맞는_s3Key는_400이다() {
+        // 대조를 빼면 버킷 내 임의 경로를 첨부로 등록할 수 있다
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(materialKeys.matches("materials/2026/08/남의키.pdf", 1L)).willReturn(false);
+
+        assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
+            "제목", "본문", NoticeScope.CLASS, 3L, false, true,
+            List.of(new NoticeAttachmentRequest(
+                "materials/2026/08/남의키.pdf", "교재.pdf", 1024L)))))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("첨부가 6개면 409다")
+    void 첨부_6개는_409다() {
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(materialKeys.matches(any(), eq(1L))).willReturn(true);
+
+        List<NoticeAttachmentRequest> six = java.util.stream.IntStream.range(0, 6)
+            .mapToObj(i -> new NoticeAttachmentRequest(
+                "materials/2026/08/key" + i + ".pdf", "교재" + i + ".pdf", 1024L))
+            .toList();
+
+        assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
+            "제목", "본문", NoticeScope.CLASS, 3L, false, true, six)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ATTACHMENT_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    @DisplayName("공지를 지우면 마지막 참조인 S3 객체를 지운다")
+    void 공지를_지우면_S3_객체도_지운다() {
+        // ON DELETE CASCADE는 행만 지운다. 세지 않고 지우면 남은 참조가 깨진다
+        Notice existing = notice(5L, NoticeScope.CLASS, classRoom, true);
+        given(noticeRepository.findWithClassRoom(5L)).willReturn(Optional.of(existing));
+        given(attachmentRepository.findByNoticeIdOrderBySortOrder(5L)).willReturn(List.of(
+            attachment("materials/2026/08/a.pdf"), attachment("materials/2026/08/b.pdf")));
+        given(attachmentRepository.countByS3Key("materials/2026/08/a.pdf")).willReturn(0L);
+        given(attachmentRepository.countByS3Key("materials/2026/08/b.pdf")).willReturn(1L);
+
+        noticeService.delete(5L);
+
+        verify(presignedUrlProvider).deleteQuietly("materials/2026/08/a.pdf");
+        verify(presignedUrlProvider, never()).deleteQuietly("materials/2026/08/b.pdf");
+    }
+
+    @Test
+    @DisplayName("학부모는 학생만 공지의 첨부 다운로드 URL을 못 받는다")
+    void 학부모는_학생만_공지의_첨부를_못_받는다() {
+        // 목록에서 가려졌다고 안심하면 안 된다. URL을 직접 치면 목록을 거치지 않는다
+        Fixtures.login(Fixtures.parentUser(9L));
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(child);
+        given(enrollmentRepository.findActiveClassRoomIds(88L)).willReturn(List.of(3L));
+        given(noticeRepository.findForStudent(eq(5L), any(), any(), eq(true)))
+            .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> noticeService.attachmentDownloadUrl(5L, 11L, 88L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    private NoticeAttachment attachment(String s3Key) {
+        return NoticeAttachment.of(notice(5L, NoticeScope.CLASS, classRoom),
+            s3Key, "교재.pdf", 1024L, (short) 0);
     }
 }
