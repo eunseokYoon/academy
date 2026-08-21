@@ -999,6 +999,13 @@ export const deleteMaterial = (materialId: number) =>
 
 // ---------- 공지 (T-10) ----------
 
+/** s3Key는 내려주지 않는다 — 다운로드는 별도 엔드포인트가 권한을 다시 확인한다. */
+export interface TeacherNoticeAttachment {
+  attachmentId: number;
+  fileName: string;
+  bytes: number;
+}
+
 /** publishedAt이 null이면 초안이다 — 학생·학부모에게 안 나간 글이다. */
 export interface TeacherNotice {
   noticeId: number;
@@ -1011,8 +1018,11 @@ export interface TeacherNotice {
   studentId: number | null;
   studentName: string | null;
   pinned: boolean;
+  /** 켜면 학부모 목록·상세·홈 배너에서 이 공지가 빠진다. */
+  studentsOnly: boolean;
   publishedAt: string | null;
   createdAt: string;
+  attachments: TeacherNoticeAttachment[];
 }
 
 export const listTeacherNotices = (params: { page?: number }) =>
@@ -1021,6 +1031,13 @@ export const listTeacherNotices = (params: { page?: number }) =>
 export const getTeacherNotice = (noticeId: number) =>
   get<TeacherNotice>(`/teacher/notices/${noticeId}`);
 
+/** 등록용 첨부 값. s3Key는 업로드 URL 발급 응답에서 그대로 가져온다. */
+export interface NoticeAttachmentInput {
+  s3Key: string;
+  fileName: string;
+  bytes: number;
+}
+
 /** 만들면 초안이다. publish를 따로 호출해야 학생·학부모에게 보인다. */
 export const createNotice = (body: {
   title: string;
@@ -1028,6 +1045,8 @@ export const createNotice = (body: {
   scope: NoticeScope;
   classRoomId: number | null;
   pinned: boolean;
+  studentsOnly: boolean;
+  attachments: NoticeAttachmentInput[];
 }) => post<TeacherNotice>("/teacher/notices", body);
 
 export const updateNotice = (
@@ -1038,6 +1057,9 @@ export const updateNotice = (
     pinned: boolean;
     scope: NoticeScope;
     classRoomId: number | null;
+    studentsOnly: boolean;
+    /** 빼면(undefined) 기존 첨부를 그대로 둔다. 배열을 보내면 통째로 교체한다 — 빈 배열은 "전부 지운다"다. */
+    attachments: NoticeAttachmentInput[];
   }>,
 ) => patch<TeacherNotice>(`/teacher/notices/${noticeId}`, body);
 

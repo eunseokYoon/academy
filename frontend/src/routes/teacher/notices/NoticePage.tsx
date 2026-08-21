@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "../../../shared/api/errors";
@@ -8,6 +8,8 @@ import { Modal } from "../../../shared/components/Modal";
 import { SubmitButton } from "../../../shared/components/SubmitButton";
 import { TextAreaField } from "../../../shared/components/TextAreaField";
 import { TextField } from "../../../shared/components/TextField";
+import type { AttachmentDraft } from "../../../shared/notice/attachmentUpload";
+import { uploadNoticeAttachment } from "../../../shared/notice/attachmentUpload";
 import {
   createNotice,
   deleteNotice,
@@ -17,6 +19,14 @@ import {
   updateNotice,
 } from "../api";
 import type { TeacherNotice } from "../api";
+
+const MAX_ATTACHMENTS = 5;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
 
 /**
  * T-10 공지 관리. 작성 → (수정) → 발행 순서다.
@@ -179,6 +189,10 @@ function NoticeModal({
   const [selected, setSelected] = useState<number[]>(
     notice?.classRoomId ? [notice.classRoomId] : [],
   );
+  const [studentsOnly, setStudentsOnly] = useState(notice?.studentsOnly ?? false);
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   const classRooms = useQuery({
@@ -187,24 +201,66 @@ function NoticeModal({
   });
   const rooms = (classRooms.data ?? []).filter((room) => room.status === "ACTIVE");
 
+  /**
+   * 자료가 붙으면 기본을 「학생만」으로 돌린다. 자료실이 학생 전용이었던 규칙이
+   * 이제 이 체크박스 하나에 걸려 있어서, 실수하는 방향이 유출 쪽이면 안 된다.
+   * 선생님이 직접 끄는 건 막지 않는다.
+   */
+  const addFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    if (attachments.length + files.length > MAX_ATTACHMENTS) {
+      setError(`첨부 파일은 최대 ${MAX_ATTACHMENTS}개까지 올릴 수 있습니다.`);
+      return;
+    }
+    setError(null);
+    setUploading(true);
+    try {
+      const uploaded = await Promise.all(files.map(uploadNoticeAttachment));
+      setAttachments((prev) => [...prev, ...uploaded]);
+      setStudentsOnly(true);
+    } catch (e) {
+      setError(errorMessage(e, "파일을 올리지 못했습니다."));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const save = useMutation({
     mutationFn: async () => {
-      const body = { title: title.trim(), content: content.trim(), pinned };
+      const body = { title: title.trim(), content: content.trim(), pinned, studentsOnly };
+      const attachmentPayload = attachments.map(({ s3Key, fileName, bytes }) => ({
+        s3Key,
+        fileName,
+        bytes,
+      }));
       if (notice) {
         await updateNotice(notice.noticeId, {
           ...body,
           scope: scopeAll ? "ALL" : "CLASS",
           classRoomId: scopeAll ? null : selected[0],
+          // 손대지 않았으면 attachments를 아예 보내지 않는다 — 빈 배열은 "전부 지운다"는
+          // 뜻이라, 파일을 안 건드렸는데 보내면 기존 첨부가 사라진다.
+          ...(attachments.length > 0 ? { attachments: attachmentPayload } : {}),
         });
         return;
       }
       if (scopeAll) {
-        await createNotice({ ...body, scope: "ALL", classRoomId: null });
+        await createNotice({
+          ...body,
+          scope: "ALL",
+          classRoomId: null,
+          attachments: attachmentPayload,
+        });
         return;
       }
       // 반마다 한 행이다. 반을 여러 개 고르면 그만큼 만든다
       for (const classRoomId of selected) {
-        await createNotice({ ...body, scope: "CLASS", classRoomId });
+        await createNotice({ ...body, scope: "CLASS", classRoomId, attachments: attachmentPayload });
       }
     },
     onSuccess: onDone,
@@ -214,6 +270,11 @@ function NoticeModal({
   function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (uploading) {
+      // 업로드가 끝나기 전에 저장하면 방금 고른 파일이 attachments에 안 실린다
+      setError("파일을 올리는 중입니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
     if (title.trim() === "" || content.trim() === "") {
       setError("제목과 내용을 입력해 주세요.");
       return;
@@ -293,6 +354,82 @@ function NoticeModal({
           </ul>
         )}
 
+        <div>
+          <p className="mb-1 text-sm font-medium text-slate-700">첨부 파일</p>
+
+          {/*
+            수정 중이고 아직 이번 세션에서 파일을 안 건드렸다면, 기존 첨부가 있다는 걸
+            알려준다 — 여기서 파일을 새로 올리면 그 순간 기존 첨부는 전부 대체된다
+            (attachments의 s3Key를 서버가 내려주지 않아 기존 파일과 합칠 방법이 없다).
+          */}
+          {notice && notice.attachments.length > 0 && attachments.length === 0 && (
+            <p className="mb-1.5 text-xs text-slate-500">
+              현재 첨부 {notice.attachments.length}개. 여기서 파일을 추가하면 기존 파일이
+              전부 새로 올린 파일로 바뀝니다.
+            </p>
+          )}
+
+          {attachments.length > 0 && (
+            <ul className="mb-1.5 space-y-1">
+              {attachments.map((file, index) => (
+                <li
+                  key={`${file.s3Key}-${index}`}
+                  className="flex items-center justify-between gap-2 rounded-lg bg-slate-50
+                             px-2.5 py-1.5 text-xs text-slate-700"
+                >
+                  <span className="min-w-0 truncate">{file.fileName}</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="tnum text-slate-400">{formatBytes(file.bytes)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(index)}
+                      aria-label="첨부 빼기"
+                      className="text-slate-400"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
+            className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs
+                       text-slate-600 disabled:opacity-50"
+          >
+            {uploading ? "올리는 중…" : "파일 추가"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => void addFiles(Array.from(e.target.files ?? []))}
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            파일은 최대 {MAX_ATTACHMENTS}개, 개당 50MB까지입니다.
+          </p>
+        </div>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={studentsOnly}
+            onChange={(e) => setStudentsOnly(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            학생만 보기
+            <span className="block text-xs text-brand-500">
+              켜면 학부모에게 이 공지가 보이지 않습니다.
+            </span>
+          </span>
+        </label>
+
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
@@ -311,7 +448,7 @@ function NoticeModal({
           </p>
         )}
 
-        <SubmitButton pending={save.isPending}>
+        <SubmitButton pending={save.isPending} disabled={uploading}>
           {notice ? "저장" : !scopeAll && selected.length > 1 ? `${selected.length}개 반에 작성` : "초안 저장"}
         </SubmitButton>
       </form>

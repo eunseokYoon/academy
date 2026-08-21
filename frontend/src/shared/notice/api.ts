@@ -1,4 +1,4 @@
-import { get } from "../api/client";
+import { get, post } from "../api/client";
 import type { PageResponse } from "../api/types";
 
 /**
@@ -37,3 +37,13 @@ export const listNotices = (params: { studentId?: number; page?: number } = {}) 
 
 export const getNotice = (noticeId: number, studentId?: number) =>
   get<NoticeDetail>(`/notices/${noticeId}`, studentId ? { studentId } : undefined);
+
+/**
+ * 공지 첨부 업로드 URL 발급. 확장자·용량 검사는 서버(MaterialKeys 재사용)가 한다.
+ * 응답의 contentType 그대로 PUT해야 서명이 맞는다.
+ */
+export const issueUploadUrl = (body: { fileName: string; bytes: number }) =>
+  post<{ uploadUrl: string; s3Key: string; contentType: string }>(
+    "/teacher/notices/attachments/upload-url",
+    body,
+  );
