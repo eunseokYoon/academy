@@ -34,12 +34,22 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
   /**
    * 다운로드 URL은 5분짜리다. 미리 받아 두지 말고 누를 때 받는다 —
    * 상세를 열어 두고 한참 뒤에 누르면 만료된 URL을 쓰게 된다.
+   *
+   * <p>새 탭 요청(window.open)은 URL을 fetch로 받아온 <b>뒤</b>에 일어나서 클릭의
+   * 사용자 제스처와 묶이지 않을 수 있다 — 그러면 브라우저가 팝업을 조용히 막는다.
+   * 이때 fetch 자체는 성공했으므로 isError는 그대로 false라 "받기"를 눌러도 아무
+   * 일도 안 일어난 것처럼 보인다. 사파리·카카오톡 인앱 브라우저가 특히 엄격하다.
+   * window.open이 null을 돌려주면(차단됨) 같은 탭 이동으로 떨어뜨려
+   * StudentMaterialPage.tsx의 다운로드와 같은 방식으로 사용자가 파일을 받게 한다.
    */
   const download = useMutation({
     mutationFn: (attachmentId: number) =>
       fetchAttachmentDownloadUrl(openId!, attachmentId, studentId),
     onSuccess: (data) => {
-      window.open(data.downloadUrl, "_blank", "noopener");
+      const win = window.open(data.downloadUrl, "_blank", "noopener");
+      if (!win) {
+        window.location.href = data.downloadUrl;
+      }
     },
   });
 
