@@ -8,10 +8,18 @@ import type { PageResponse } from "../api/types";
  */
 export type NoticeScope = "ALL" | "CLASS" | "STUDENT";
 
+/** s3Key는 내려주지 않는다 — 다운로드는 별도 엔드포인트가 권한을 다시 확인한다. */
+export interface NoticeAttachment {
+  attachmentId: number;
+  fileName: string;
+  bytes: number | null;
+}
+
 export interface NoticeSummary {
   noticeId: number;
   title: string;
   pinned: boolean;
+  hasAttachment: boolean;
   /** 여기 오는 공지는 전부 발행된 것이라 null이 아니다. */
   publishedAt: string;
 }
@@ -23,6 +31,7 @@ export interface NoticeDetail {
   content: string;
   pinned: boolean;
   publishedAt: string;
+  attachments: NoticeAttachment[];
 }
 
 /**
@@ -37,6 +46,21 @@ export const listNotices = (params: { studentId?: number; page?: number } = {}) 
 
 export const getNotice = (noticeId: number, studentId?: number) =>
   get<NoticeDetail>(`/notices/${noticeId}`, studentId ? { studentId } : undefined);
+
+/**
+ * 다운로드 URL은 5분짜리다. 미리 받아 두지 말고 누를 때 받는다 —
+ * 상세를 열어 두고 한참 뒤에 누르면 만료된 URL을 쓰게 된다.
+ * 대상이 아니면(학생만 보기 공지를 학부모가 요청 등) 목록·상세와 같은 조건으로 재확인해 404다.
+ */
+export const fetchAttachmentDownloadUrl = (
+  noticeId: number,
+  attachmentId: number,
+  studentId?: number,
+) =>
+  get<{ downloadUrl: string; fileName: string; expiresIn: number }>(
+    `/notices/${noticeId}/attachments/${attachmentId}/download-url`,
+    studentId ? { studentId } : undefined,
+  );
 
 /**
  * 공지 첨부 업로드 URL 발급. 확장자·용량 검사는 서버(MaterialKeys 재사용)가 한다.
