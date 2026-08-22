@@ -2,7 +2,7 @@ package com.njwenglish.controller.shared;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.common.response.PageResponse;
-import com.njwenglish.dto.material.DownloadUrlResponse;
+import com.njwenglish.dto.notice.DownloadUrlResponse;
 import com.njwenglish.dto.notice.NoticeDetailResponse;
 import com.njwenglish.dto.notice.NoticeSummaryResponse;
 import com.njwenglish.service.NoticeService;

@@ -10,7 +10,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * created_at만 가진 테이블용. School, Teacher, Parent, SignupCode, Enrollment,
- * SubmissionPhoto, Material, ClinicChangeRequest, Attendance가 이걸 상속한다.
+ * SubmissionPhoto, ClinicChangeRequest, Attendance가 이걸 상속한다.
  */
 @Getter
 @MappedSuperclass

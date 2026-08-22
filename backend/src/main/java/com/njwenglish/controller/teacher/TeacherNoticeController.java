@@ -2,8 +2,8 @@ package com.njwenglish.controller.teacher;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.common.response.PageResponse;
-import com.njwenglish.dto.material.MaterialUploadUrlRequest;
-import com.njwenglish.dto.material.MaterialUploadUrlResponse;
+import com.njwenglish.dto.notice.MaterialUploadUrlRequest;
+import com.njwenglish.dto.notice.MaterialUploadUrlResponse;
 import com.njwenglish.dto.notice.NoticeCreateRequest;
 import com.njwenglish.dto.notice.NoticeResponse;
 import com.njwenglish.dto.notice.NoticeUpdateRequest;

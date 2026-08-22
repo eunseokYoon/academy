@@ -14,7 +14,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.MaterialKeys;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.security.StudentAccessGuard;
-import com.njwenglish.dto.material.MaterialUploadUrlRequest;
+import com.njwenglish.dto.notice.MaterialUploadUrlRequest;
 import com.njwenglish.dto.notice.NoticeAttachmentRequest;
 import com.njwenglish.dto.notice.NoticeCreateRequest;
 import com.njwenglish.dto.notice.NoticeUpdateRequest;

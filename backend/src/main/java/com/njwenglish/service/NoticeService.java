@@ -7,9 +7,9 @@ import com.njwenglish.common.s3.MaterialKeys;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
-import com.njwenglish.dto.material.DownloadUrlResponse;
-import com.njwenglish.dto.material.MaterialUploadUrlRequest;
-import com.njwenglish.dto.material.MaterialUploadUrlResponse;
+import com.njwenglish.dto.notice.DownloadUrlResponse;
+import com.njwenglish.dto.notice.MaterialUploadUrlRequest;
+import com.njwenglish.dto.notice.MaterialUploadUrlResponse;
 import com.njwenglish.dto.notice.NoticeAttachmentRequest;
 import com.njwenglish.dto.notice.NoticeAttachmentResponse;
 import com.njwenglish.dto.notice.NoticeCreateRequest;
@@ -183,7 +183,7 @@ public class NoticeService {
     }
 
     /**
-     * 첨부 업로드 URL 발급. {@code MaterialService.issueUploadUrl}과 같은 순서다 —
+     * 첨부 업로드 URL 발급. 자료실 시절과 같은 순서다 —
      * 확장자 → 용량 → 발급. 등록 단계에서만 검사하면 이미 올라간 파일이 고아로 남는다.
      */
     @Transactional(readOnly = true)
