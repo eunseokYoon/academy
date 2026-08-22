@@ -7,7 +7,6 @@ import type {
   HomeworkResult,
   SubmissionStatus,
 } from "../../shared/homework/types";
-import type { MaterialCategory, MaterialVisibility } from "../../shared/material/types";
 import type { NoticeScope } from "../../shared/notice/api";
 import type { LessonChangeRequest } from "../../shared/lessonchange/types";
 import type { OnlineTestTakeStatus } from "../../shared/onlinetest/types";
@@ -928,74 +927,6 @@ export interface TeacherDashboard {
 }
 
 export const getDashboard = () => get<TeacherDashboard>("/teacher/dashboard");
-
-// ---------- 자료실 (T-9) ----------
-
-export interface Material {
-  materialId: number;
-  title: string;
-  category: MaterialCategory;
-  fileName: string;
-  bytes: number | null;
-  visibility: MaterialVisibility;
-  /** PUBLIC이면 null이다. */
-  classRoomId: number | null;
-  classRoomName: string | null;
-  year: number;
-  month: number;
-  week: number;
-  createdAt: string;
-}
-
-export const listMaterials = (params: {
-  year?: number;
-  month?: number;
-  week?: number;
-  category?: MaterialCategory;
-  page?: number;
-}) => get<PageResponse<Material>>("/teacher/materials", params);
-
-/**
- * 확장자 허용 목록과 50MB 상한을 서버가 여기서 검사한다.
- * 응답의 contentType으로 PUT해야 서명이 맞는다.
- */
-export const issueMaterialUploadUrl = (body: { fileName: string; bytes: number }) =>
-  post<{ uploadUrl: string; s3Key: string; contentType: string }>(
-    "/teacher/materials/upload-url",
-    body,
-  );
-
-/**
- * 같은 파일을 여러 반에 주려면 <b>s3Key를 공유해 반마다 호출</b>한다.
- * S3에는 한 번만 올린다.
- */
-export const createMaterial = (body: {
-  title: string;
-  category: MaterialCategory;
-  s3Key: string;
-  fileName: string;
-  bytes: number | null;
-  classRoomId: number | null;
-  visibility: MaterialVisibility;
-  year: number;
-  month: number;
-  week: number;
-}) => post<Material>("/teacher/materials", body);
-
-/** 공개 범위와 파일은 못 바꾼다. 대상을 바꾸려면 지우고 다시 올린다. */
-export const updateMaterial = (
-  materialId: number,
-  body: Partial<{
-    title: string;
-    category: MaterialCategory;
-    year: number;
-    month: number;
-    week: number;
-  }>,
-) => patch<Material>(`/teacher/materials/${materialId}`, body);
-
-export const deleteMaterial = (materialId: number) =>
-  del<void>(`/teacher/materials/${materialId}`);
 
 // ---------- 공지 (T-10) ----------
 

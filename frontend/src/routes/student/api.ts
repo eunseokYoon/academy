@@ -6,7 +6,6 @@ import type {
   HomeworkResult,
   SubmissionStatus,
 } from "../../shared/homework/types";
-import type { MaterialCategory } from "../../shared/material/types";
 import type { NoticeSummary } from "../../shared/notice/api";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
@@ -283,36 +282,6 @@ export const getMyScores = () => get<StudentScoreData>("/student/scores");
 
 export const listMyExamSchedules = () =>
   get<StudentExamSchedule[]>("/student/exam-schedules");
-
-// ---------- 자료실 (S-8) ----------
-
-/**
- * 자료실은 <b>학생 전용</b>이다. 학부모 화면에 같은 목록을 붙이지 마라.
- * s3Key는 내려오지 않는다 — 다운로드는 별도 호출로 presigned URL을 받는다.
- */
-export interface StudentMaterial {
-  materialId: number;
-  title: string;
-  category: MaterialCategory;
-  fileName: string;
-  bytes: number | null;
-  year: number;
-  month: number;
-  week: number;
-  createdAt: string;
-}
-
-export const listMyMaterials = (params: { category?: MaterialCategory; page?: number }) =>
-  get<PageResponse<StudentMaterial>>("/student/materials", params);
-
-/**
- * 유효기간이 5분이라 <b>받은 즉시 이동</b>시킨다. 목록에 미리 담아두면 전부 만료된다.
- * 목록에 없는 materialId로 호출하면 403이다.
- */
-export const getMaterialDownloadUrl = (materialId: number) =>
-  get<{ downloadUrl: string; fileName: string; expiresIn: number }>(
-    `/student/materials/${materialId}/download-url`,
-  );
 
 // ---------- 홈 (S-1) ----------
 

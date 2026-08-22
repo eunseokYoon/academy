@@ -4,7 +4,7 @@ import { errorMessage } from "../api/errors";
 import { FormError } from "../components/FormError";
 import { Modal } from "../components/Modal";
 import { PageTitle, SectionHead, TintBlock } from "../components/Section";
-import { formatBytes } from "../material/types";
+import { formatBytes } from "./attachmentUpload";
 import { fetchAttachmentDownloadUrl, getNotice, listNotices } from "./api";
 
 /**
@@ -40,7 +40,7 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
    * 이때 fetch 자체는 성공했으므로 isError는 그대로 false라 "받기"를 눌러도 아무
    * 일도 안 일어난 것처럼 보인다. 사파리·카카오톡 인앱 브라우저가 특히 엄격하다.
    * window.open이 null을 돌려주면(차단됨) 같은 탭 이동으로 떨어뜨려
-   * StudentMaterialPage.tsx의 다운로드와 같은 방식으로 사용자가 파일을 받게 한다.
+   * 사용자가 파일을 받게 한다.
    */
   const download = useMutation({
     mutationFn: (attachmentId: number) =>

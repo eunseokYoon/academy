@@ -10,7 +10,6 @@ import StudentLayout from "./routes/student/StudentLayout";
 import StudentAttendancePage from "./routes/student/StudentAttendancePage";
 import StudentClinicPage from "./routes/student/StudentClinicPage";
 import StudentHomePage from "./routes/student/StudentHomePage";
-import StudentMaterialPage from "./routes/student/StudentMaterialPage";
 import StudentNoticePage from "./routes/student/StudentNoticePage";
 import StudentHomeworkPage from "./routes/student/StudentHomeworkPage";
 import StudentHomeworkDetailPage from "./routes/student/StudentHomeworkDetailPage";
@@ -31,7 +30,6 @@ import ParentHomeworkPage from "./routes/parent/ParentHomeworkPage";
 import ParentScorePage from "./routes/parent/ParentScorePage";
 import TeacherLayout from "./routes/teacher/TeacherLayout";
 import DashboardPage from "./routes/teacher/DashboardPage";
-import MaterialPage from "./routes/teacher/materials/MaterialPage";
 import NoticePage from "./routes/teacher/notices/NoticePage";
 import AttendancePage from "./routes/teacher/attendance/AttendancePage";
 import ClinicPage from "./routes/teacher/clinics/ClinicPage";
@@ -85,7 +83,6 @@ export const router = createBrowserRouter([
       { path: "scores", element: <StudentScorePage /> },
       { path: "online-tests", element: <StudentOnlineTestPage /> },
       { path: "online-tests/:testId", element: <StudentOnlineTestTakePage /> },
-      { path: "materials", element: <StudentMaterialPage /> },
       { path: "notices", element: <StudentNoticePage /> },
       { path: "qna", element: <StudentQnaPage /> },
       { path: "qna/:postId", element: <StudentQnaDetailPage /> },
@@ -136,7 +133,6 @@ export const router = createBrowserRouter([
       { path: "exam-schedules", element: <ExamSchedulePage /> },
       { path: "online-tests", element: <OnlineTestListPage /> },
       { path: "online-tests/:testId", element: <OnlineTestDetailPage /> },
-      { path: "materials", element: <MaterialPage /> },
       { path: "notices", element: <NoticePage /> },
       { path: "qna", element: <QnaListPage /> },
       { path: "qna/:postId", element: <QnaDetailPage /> },

@@ -33,3 +33,10 @@ export async function uploadNoticeAttachment(file: File): Promise<AttachmentDraf
 
   return { s3Key, fileName: file.name, bytes: file.size };
 }
+
+export function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "";
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
