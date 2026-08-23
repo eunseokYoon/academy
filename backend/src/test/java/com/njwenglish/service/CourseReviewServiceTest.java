@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -131,6 +132,12 @@ class CourseReviewServiceTest {
             new CourseReviewSaveRequest(4.5, "설명이 이해하기 쉬워요"), true);
 
         assertThat(response.rating()).isEqualTo(4.5);
+
+        // 표시값 왕복(4.5 → 저장 → 4.5)만 보면 저장값이 뒤바뀌어도 대칭이면 통과한다.
+        // 실제로 DB에 들어가는 short 값을 직접 잡아 확인한다
+        ArgumentCaptor<CourseReview> captor = ArgumentCaptor.forClass(CourseReview.class);
+        verify(reviewRepository).save(captor.capture());
+        assertThat(captor.getValue().getRating()).isEqualTo((short) 9);
     }
 
     @Test
@@ -183,6 +190,41 @@ class CourseReviewServiceTest {
         given(reviewRepository.findByStudentId(88L)).willReturn(Optional.empty());
 
         assertThat(reviewService.myReview()).isNull();
+    }
+
+    @Test
+    @DisplayName("내 후기가 있으면 표시값으로 돌려준다")
+    void 내_후기가_있으면_표시값으로_돌려준다() {
+        given(reviewRepository.findByStudentId(88L))
+            .willReturn(Optional.of(review(1L, (short) 9)));
+
+        var response = reviewService.myReview();
+
+        assertThat(response.rating()).isEqualTo(4.5);
+        assertThat(response.content()).isEqualTo("설명이 이해하기 쉬워요");
+    }
+
+    @Test
+    @DisplayName("삭제는 내 후기를 지운다")
+    void 삭제는_내_후기를_지운다() {
+        CourseReview existing = review(1L, (short) 9);
+        given(reviewRepository.findByStudentId(88L)).willReturn(Optional.of(existing));
+
+        reviewService.delete();
+
+        verify(reviewRepository).delete(existing);
+    }
+
+    @Test
+    @DisplayName("삭제할 후기가 없으면 404다")
+    void 없는_후기를_삭제하면_404다() {
+        given(reviewRepository.findByStudentId(88L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reviewService.delete())
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
+
+        verify(reviewRepository, never()).delete(any());
     }
 
     // ---------- 선생님 목록 ----------
