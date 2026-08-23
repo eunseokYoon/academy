@@ -18,6 +18,7 @@ import type {
   WeeklyTestSaveBody,
 } from "../../shared/score/types";
 import type { QnaDetail, QnaSummary, QnaUploadUrl } from "../../shared/qna/types";
+import type { ReviewList } from "../../shared/review/types";
 
 export type StudentStatus = "ENROLLED" | "WITHDRAWN";
 export type ClassRoomStatus = "ACTIVE" | "CLOSED";
@@ -1021,3 +1022,8 @@ export const deleteTeacherQna = (id: number) => del<void>(`/teacher/qna/${id}`);
 
 export const issueTeacherQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
   post<QnaUploadUrl>("/teacher/qna/photos/upload-url", body);
+
+// ---------- 수강 후기 ----------
+
+export const fetchTeacherReviews = (params: { classRoomId?: number; page?: number }) =>
+  get<ReviewList>("/teacher/reviews", params);
