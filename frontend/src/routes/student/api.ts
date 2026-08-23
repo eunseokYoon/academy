@@ -6,6 +6,7 @@ import type {
   HomeworkResult,
   SubmissionStatus,
 } from "../../shared/homework/types";
+import type { MyReview } from "../../shared/review/types";
 import type { NoticeSummary } from "../../shared/notice/api";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
@@ -405,3 +406,16 @@ export const deleteQna = (id: number) => del<void>(`/student/qna/${id}`);
 
 export const issueQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
   post<QnaUploadUrl>("/student/qna/photos/upload-url", body);
+
+// ---------- 수강 후기 ----------
+
+/** 아직 후기를 안 썼으면 data가 null이다. 404가 아니다 */
+export const fetchMyReview = () => get<MyReview | null>("/student/reviews/me");
+
+export const createReview = (body: { rating: number; content: string }) =>
+  post<MyReview>("/student/reviews", body);
+
+export const updateReview = (body: { rating: number; content: string }) =>
+  patch<MyReview>("/student/reviews/me", body);
+
+export const deleteReview = () => del<void>("/student/reviews/me");

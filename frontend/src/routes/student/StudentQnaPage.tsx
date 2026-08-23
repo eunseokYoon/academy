@@ -1,9 +1,20 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { createQna, fetchQnaList, getMe } from "./api";
+import {
+  createQna,
+  createReview,
+  deleteReview,
+  fetchMyReview,
+  fetchQnaList,
+  getMe,
+  updateReview,
+} from "./api";
 import { PhotoPicker } from "../../shared/qna/PhotoPicker";
 import { PageTitle } from "../../shared/components/Section";
+import { StarRating } from "../../shared/review/StarRating";
+import type { MyReview } from "../../shared/review/types";
+import { errorMessage } from "../../shared/api/errors";
 
 /**
  * S-9 질의응답 목록.
@@ -17,10 +28,20 @@ import { PageTitle } from "../../shared/components/Section";
 export default function StudentQnaPage() {
   const queryClient = useQueryClient();
   const [writing, setWriting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   const { data: page, isLoading } = useQuery({
     queryKey: ["student", "qna"],
     queryFn: () => fetchQnaList({}),
+  });
+
+  /**
+   * 내 후기가 있으면 「내 후기」, 없으면 「후기 쓰기」다.
+   * 학생당 하나라 목록이 없다 — 다른 학생 후기는 보이지 않는다.
+   */
+  const { data: myReview } = useQuery({
+    queryKey: ["student", "review"],
+    queryFn: fetchMyReview,
   });
 
   /*
@@ -39,17 +60,37 @@ export default function StudentQnaPage() {
     <div className="space-y-4">
       <PageTitle
         action={
-          <button
-            type="button"
-            onClick={() => setWriting((v) => !v)}
-            className="shrink-0 rounded-lg bg-brand-900 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            {writing ? "닫기" : "질문하기"}
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => setReviewing((v) => !v)}
+              className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5
+                         text-sm font-medium text-brand-700"
+            >
+              {myReview ? "내 후기" : "후기 쓰기"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWriting((v) => !v)}
+              className="shrink-0 rounded-lg bg-brand-900 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              {writing ? "닫기" : "질문하기"}
+            </button>
+          </div>
         }
       >
         질의응답
       </PageTitle>
+
+      {reviewing && myReview !== undefined && (
+        <ReviewForm
+          myReview={myReview}
+          onDone={() => {
+            setReviewing(false);
+            queryClient.invalidateQueries({ queryKey: ["student", "review"] });
+          }}
+        />
+      )}
 
       {writing && classRooms && (
         <QuestionForm
@@ -184,6 +225,94 @@ function QuestionForm({
       {mutation.isError && (
         <p className="text-xs text-red-600">올리지 못했습니다. 다시 시도해 주세요.</p>
       )}
+    </form>
+  );
+}
+
+/**
+ * 수강 후기 폼. myReview가 있으면 그 값으로 채워진 수정 모드이고 「삭제」가 함께 뜬다 —
+ * 두 번 쓰려 해도 새 후기를 만드는 길은 없다. 학생당 하나다.
+ */
+function ReviewForm({
+  myReview,
+  onDone,
+}: {
+  myReview: MyReview | null;
+  onDone: () => void;
+}) {
+  const [rating, setRating] = useState(myReview?.rating ?? 0);
+  const [content, setContent] = useState(myReview?.content ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () =>
+      myReview ? updateReview({ rating, content }) : createReview({ rating, content }),
+    onSuccess: onDone,
+    onError: (e) => setError(errorMessage(e, "저장하지 못했습니다.")),
+  });
+
+  const remove = useMutation({
+    mutationFn: deleteReview,
+    onSuccess: onDone,
+    onError: (e) => setError(errorMessage(e, "삭제하지 못했습니다.")),
+  });
+
+  // 서버도 같은 조건으로 400을 내지만, 그 전에 화면에서 먼저 막고 이유를 보여준다
+  const ratingMissing = rating < 0.5;
+  const contentMissing = content.trim().length === 0;
+  const missing = ratingMissing && contentMissing
+    ? "별점과 내용을 모두 입력해 주세요."
+    : ratingMissing
+      ? "별점을 선택해 주세요."
+      : contentMissing
+        ? "내용을 적어 주세요."
+        : null;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (missing) return;
+        save.mutate();
+      }}
+      className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-brand-100"
+    >
+      <StarRating value={rating} onChange={setRating} />
+
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="수업은 어떠셨나요?"
+        rows={5}
+        className="w-full rounded-lg border border-brand-200 p-2 text-sm"
+      />
+
+      {missing && <p className="text-xs text-red-600">{missing}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={save.isPending || !!missing}
+          className="flex-1 rounded-lg bg-brand-900 py-2.5 text-sm font-medium text-white
+                     disabled:opacity-50"
+        >
+          {save.isPending ? "저장하는 중…" : "저장"}
+        </button>
+        {myReview && (
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm("삭제하면 되돌릴 수 없습니다. 삭제할까요?")) remove.mutate();
+            }}
+            disabled={remove.isPending}
+            className="shrink-0 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium
+                       text-red-600 disabled:opacity-50"
+          >
+            삭제
+          </button>
+        )}
+      </div>
     </form>
   );
 }
