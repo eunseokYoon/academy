@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createQna, fetchQnaList, getMe } from "./api";
 import { PhotoPicker } from "../../shared/qna/PhotoPicker";
+import { PageTitle } from "../../shared/components/Section";
 
 /**
  * S-9 질의응답 목록.
@@ -36,16 +37,19 @@ export default function StudentQnaPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-brand-900">질의응답</h1>
-        <button
-          type="button"
-          onClick={() => setWriting((v) => !v)}
-          className="rounded-lg bg-brand-900 px-3 py-1.5 text-sm font-medium text-white"
-        >
-          {writing ? "닫기" : "질문하기"}
-        </button>
-      </div>
+      <PageTitle
+        action={
+          <button
+            type="button"
+            onClick={() => setWriting((v) => !v)}
+            className="shrink-0 rounded-lg bg-brand-900 px-3 py-1.5 text-sm font-medium text-white"
+          >
+            {writing ? "닫기" : "질문하기"}
+          </button>
+        }
+      >
+        질의응답
+      </PageTitle>
 
       {writing && classRooms && (
         <QuestionForm

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { fetchTeacherQnaList, listClassRooms } from "../api";
+import { PageTitle } from "../../../shared/components/Section";
 
 /**
  * T-15 질의응답 목록. 비공개 질문도 전부 나온다.
@@ -24,23 +25,27 @@ export default function QnaListPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-bold text-brand-900">질의응답</h1>
-        <select
-          value={classRoomId ?? ""}
-          onChange={(e) =>
-            setClassRoomId(e.target.value === "" ? undefined : Number(e.target.value))
-          }
-          className="rounded-lg border border-brand-200 p-2 text-sm"
-        >
-          <option value="">전체 반</option>
-          {classRooms?.map((room) => (
-            <option key={room.classRoomId} value={room.classRoomId}>
-              {room.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <PageTitle
+        action={
+          <select
+            value={classRoomId ?? ""}
+            onChange={(e) =>
+              setClassRoomId(e.target.value === "" ? undefined : Number(e.target.value))
+            }
+            /* 360px에서 긴 반 이름이 제목을 밀어내지 않도록 폭을 묶는다 */
+            className="max-w-[45%] shrink rounded-lg border border-brand-200 p-2 text-sm"
+          >
+            <option value="">전체 반</option>
+            {classRooms?.map((room) => (
+              <option key={room.classRoomId} value={room.classRoomId}>
+                {room.name}
+              </option>
+            ))}
+          </select>
+        }
+      >
+        질의응답
+      </PageTitle>
 
       {isLoading && <p className="text-sm text-brand-500">불러오는 중…</p>}
 

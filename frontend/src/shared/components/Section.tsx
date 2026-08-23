@@ -37,28 +37,29 @@ const BLOCK: Record<SectionTone, string> = {
 };
 
 /**
- * 하위 화면의 제목. <b>남색 띠 안에 들어앉는다.</b>
+ * 하위 화면의 제목. <b>남색 띠 아래, 밝은 면 위에 앉는다.</b>
  *
- * <p>예전에는 회색 배경 위 검은 글씨였고, 그 위로 앱바의 pb-8(32px)이 아무것도 없는
- * 남색 띠로 남아 있었다. 화면마다 죽은 32px이 있었다는 뜻이다. 제목을 그 자리로
- * 끌어올리면 띠가 제목 줄이 되고, 홈의 지면과 같은 말을 하게 된다.
+ * <p>한동안 -mt-10으로 띠 안에 끌어올려 흰 글씨로 뒀었다. 그런데 제목 줄(26px)이
+ * 띠의 pb-8(32px)에 위아래 3px씩밖에 안 남아 결국 <b>2px 삐져나와 경계에 걸쳤다.</b>
+ * 띠를 키워 맞추는 대신 제목을 밝은 면으로 내리는 쪽을 골랐다(2026-08-18 확정).
  *
- * <p><b>-mt-10(hero-lift)이 정확히 그 자리다.</b> main의 pt-4(16px)에서 40px을 빼면
- * 띠 바닥에서 24px 위 — 32px 띠 안쪽 8px 여백이다. 앱바의 pb-8을 바꾸면 여기도 깨진다.
+ * <p>그래서 <b>음수 마진이 없다.</b> 화면의 첫 요소가 아니어도 되고, 앱바의 pb-8을
+ * 바꿔도 여기가 깨지지 않는다.
  *
- * <p>제목이 화면의 첫 요소여야 한다. 뒤에 두면 음수 마진이 앞 카드를 덮는다.
+ * <p>같은 자리를 채우는 BackLink도 같이 내려왔다. 한쪽만 흰 글씨로 남기면
+ * 밝은 배경에서 통째로 안 보인다.
  */
 export function PageTitle({
   children,
   action,
 }: {
   children: ReactNode;
-  /** 오른쪽 버튼·링크. 남색 위에 놓이므로 흰 계열로 그려라. */
+  /** 오른쪽 버튼·링크. 밝은 면 위에 놓이므로 남색 계열로 그려라. */
   action?: ReactNode;
 }) {
   return (
-    <div className="hero-lift mb-4 flex min-h-[26px] items-center justify-between gap-3">
-      <h2 className="min-w-0 truncate text-[19px] font-extrabold tracking-[-0.03em] text-white">
+    <div className="mb-4 flex min-h-[26px] items-center justify-between gap-3">
+      <h2 className="min-w-0 truncate text-[19px] font-extrabold tracking-[-0.03em] text-brand-900">
         {children}
       </h2>
       {action}
@@ -67,19 +68,19 @@ export function PageTitle({
 }
 
 /**
- * 상세 화면의 "← 목록" 줄. PageTitle과 같은 자리(남색 띠 안)에 앉는다.
+ * 상세 화면의 "← 목록" 줄. PageTitle과 같은 자리(밝은 면 위)에 앉는다.
  *
- * <p>목록 화면은 PageTitle이 띠를 채우고 상세 화면은 이게 채운다. 둘 중 하나가 빠지면
- * 그 화면만 위에 남색 공백이 뜬다 — 상세로 들어갔다 나올 때 화면이 덜컹거리는 원인이었다.
+ * <p><b>색이 brand-600인 이유.</b> 제목과 같은 brand-900으로 두면 제목처럼 읽혀서
+ * 눌러서 이동하는 곳으로 안 보인다. 이 앱에서 파랑은 "여기를 누르면 간다"는 뜻이다.
  */
 export function BackLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
-    <div className="hero-lift mb-4 flex min-h-[26px] items-center">
+    <div className="mb-4 flex min-h-[26px] items-center">
       <button
         type="button"
         onClick={onClick}
-        className="-ml-1 rounded-lg px-1 py-0.5 text-[13px] font-semibold text-white/85
-                   transition-colors hover:text-white"
+        className="-ml-1 rounded-lg px-1 py-0.5 text-[13px] font-semibold text-brand-600
+                   transition-colors hover:text-brand-800"
       >
         ← {children}
       </button>
