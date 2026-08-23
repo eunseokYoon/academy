@@ -56,10 +56,10 @@ function Star({
   const fill = Math.min(1, Math.max(0, value - (index - 1)));
 
   return (
-    <div className="relative h-11 w-11 shrink-0">
-      <StarGlyph className="absolute inset-0 h-11 w-11 text-slate-200" />
+    <div className="relative h-14 w-14 shrink-0">
+      <StarGlyph className="absolute inset-0 h-14 w-14 text-slate-200" />
       <div className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
-        <StarGlyph className="h-11 w-11 text-amber-400" />
+        <StarGlyph className="h-14 w-14 text-amber-400" />
       </div>
       <StarHalf
         side="left"
@@ -89,8 +89,10 @@ type StarRatingProps = StarRatingInputProps | StarRatingDisplayProps;
 /**
  * 0.5 단위 별점. 별 하나를 좌/우 절반으로 나눠 탭한다.
  *
- * 별을 44px로 키운 이유가 있다. 360px에서 반쪽 터치 타깃이 22px면 너무 작아
- * 학생이 4.5를 누르려다 5.0을 누른다. 옆에 숫자를 같이 띄우는 것도 같은 이유다 —
+ * 별이 56px인 이유가 있다. 반쪽 터치 타깃은 WCAG 2.5.8 AA 최소 24px를 넘어야
+ * 하고, 그 경계선(3.5와 4.0을 가르는 선)은 정확해야 해서 히트슬롭으로 옆 절반을
+ * 침범할 수 없다 — 그래서 별 자체를 키워야 하고, 56px가 절반 28px로 그 바닥선을
+ * 넘기는 최소치다. 옆에 숫자를 같이 띄우는 것도 같은 이유다 —
  * 숫자가 없으면 자기가 뭘 골랐는지 확신하지 못한다.
  *
  * readOnly면 표시 전용이고 반개는 좌측 절반만 칠한다.
