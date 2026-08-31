@@ -66,9 +66,6 @@ interface ReservationResult {
   status: ReservationStatus;
 }
 
-export const reserveClinic = (clinicId: number, arrivalTime: string) =>
-  post<ReservationResult>(`/student/clinics/${clinicId}/reservation`, { arrivalTime });
-
 /**
  * 도착 시각 변경 · 다른 클리닉으로 이동. <b>선생님 승인이 없다</b> — 즉시 반영된다.
  * targetClinicId를 null로 두면 같은 클리닉 안에서 시각만 바꾼다.
@@ -430,39 +427,3 @@ export const updateReview = (body: { rating: number; content: string }) =>
   patch<MyReview>("/student/reviews/me", body);
 
 export const deleteReview = () => del<void>("/student/reviews/me");
-
-// ---------- 클리닉 시리즈 (일괄 신청) ----------
-
-/**
- * 「매주 화요일 17:00~22:00 · 총 18회」 카드 하나.
- *
- * 시리즈에 id가 없다 — 서버가 오늘 이후 OPEN 클리닉을 (요일·시작·종료)로 묶은 결과라,
- * 신청할 때 그 세 값을 그대로 되돌려 보낸다. 프론트에서 새 키를 지어내지 마라.
- */
-export interface ClinicSeries {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  firstDate: string;
-  lastDate: string;
-  totalCount: number;
-  reservedCount: number;
-  slots: string[];
-}
-
-export interface SeriesReserveResult {
-  reserved: number;
-  skipped: number;
-  reservedDates: string[];
-  /** reason: ALREADY · CAPACITY · NO_SLOT */
-  skippedItems: { clinicDate: string; reason: string }[];
-}
-
-export const listClinicSeries = () => get<ClinicSeries[]>("/student/clinics/series");
-
-export const reserveClinicSeries = (body: {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  arrivalTime: string;
-}) => post<SeriesReserveResult>("/student/clinics/series/reservations", body);
