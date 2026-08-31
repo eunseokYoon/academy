@@ -3,8 +3,6 @@ package com.njwenglish.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -18,14 +16,11 @@ import com.njwenglish.dto.attendance.AttendanceExceptionRequest;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
-import com.njwenglish.dto.clinic.ClinicReservationCreateRequest;
-import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.AttendanceStatus;
-import com.njwenglish.entity.enums.ClinicStatus;
 import com.njwenglish.entity.enums.ReservationStatus;
 import com.njwenglish.entity.ClinicChangeLog;
 import com.njwenglish.repository.ClinicChangeLogRepository;
@@ -33,9 +28,6 @@ import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.TeacherRepository;
-import static org.mockito.Mockito.verifyNoInteractions;
-import com.njwenglish.dto.clinic.ClinicSeriesReserveRequest;
-import com.njwenglish.dto.clinic.ClinicSeriesReserveResponse;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -77,10 +69,6 @@ class ClinicReservationServiceTest {
     private final Student park = Fixtures.student(97L, "박서준");
     private final Teacher teacher = Fixtures.teacherEntity(1L);
 
-    /** Fixtures.clinic은 시작 + 1시간짜리라 고를 수 있는 슬롯이 시작 시각 하나뿐이다. */
-    private static final ClinicReservationCreateRequest AT_17 =
-        new ClinicReservationCreateRequest(LocalTime.of(17, 0));
-
     /** 정원 6, 넉넉히 미래 날짜. 17:00~18:00. */
     private Clinic clinic;
 
@@ -109,51 +97,6 @@ class ClinicReservationServiceTest {
     }
 
     @Test
-    @DisplayName("학생 신청은 클리닉 행을 FOR UPDATE로 잠근 뒤에 센다")
-    void 신청은_클리닉을_잠근_뒤_센다() {
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findById(41L)).willReturn(Optional.of(clinic));
-        givenLockedClinic(4);
-        givenSaveEchoes();
-
-        ClinicReservationCreateResponse response = clinicReservationService.reserve(41L, AT_17);
-
-        assertThat(response.status()).isEqualTo(ReservationStatus.RESERVED);
-        // 잠그지 않고 세면 동시 신청 시 두 트랜잭션이 같은 count를 읽어 정원을 넘긴다
-        verify(clinicRepository).findByIdForUpdate(41L);
-        // assigned_by는 null이어야 학생 본인 신청으로 구분된다
-        verify(reservationRepository).save(any(ClinicReservation.class));
-    }
-
-    @Test
-    @DisplayName("정원이 찬 클리닉에 신청하면 409 CLINIC_CAPACITY_EXCEEDED")
-    void 정원이_차면_거절된다() {
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findById(41L)).willReturn(Optional.of(clinic));
-        givenLockedClinic(6);
-
-        assertThatThrownBy(() -> clinicReservationService.reserve(41L, AT_17))
-            .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_CAPACITY_EXCEEDED);
-
-        verify(reservationRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("중복 신청은 정원 초과와 다른 코드다 — S-9 문구가 갈린다")
-    void 중복_신청은_DUPLICATE_RESOURCE다() {
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findById(41L)).willReturn(Optional.of(clinic));
-        given(clinicRepository.findByIdForUpdate(41L)).willReturn(Optional.of(clinic));
-        given(reservationRepository.existsByClinicIdAndStudentIdAndStatus(
-            41L, 88L, ReservationStatus.RESERVED)).willReturn(true);
-
-        assertThatThrownBy(() -> clinicReservationService.reserve(41L, AT_17))
-            .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DUPLICATE_RESOURCE);
-    }
-
-    @Test
     @DisplayName("capacity가 null이면 인원 제한이 없다")
     void 정원이_null이면_제한이_없다() {
         Clinic unlimited = Fixtures.clinic(42L, LocalDate.now().plusDays(7),
@@ -167,32 +110,6 @@ class ClinicReservationServiceTest {
             42L, List.of(seo), null, LocalTime.of(19, 0), true);
 
         assertThat(created).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("닫힌 시간대에는 신청할 수 없다")
-    void 닫힌_클리닉에는_신청할_수_없다() {
-        clinic.changeStatus(ClinicStatus.CLOSED);
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findById(41L)).willReturn(Optional.of(clinic));
-
-        assertThatThrownBy(() -> clinicReservationService.reserve(41L, AT_17))
-            .isInstanceOf(BusinessException.class);
-
-        verify(clinicRepository, never()).findByIdForUpdate(anyLong());
-    }
-
-    @Test
-    @DisplayName("지난 날짜 클리닉 신청은 400이다")
-    void 지난_날짜는_신청할_수_없다() {
-        Clinic past = Fixtures.clinic(43L, LocalDate.now().minusDays(1),
-            LocalTime.of(17, 0), (short) 6);
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findById(43L)).willReturn(Optional.of(past));
-
-        assertThatThrownBy(() -> clinicReservationService.reserve(43L, AT_17))
-            .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
     @Test
@@ -292,23 +209,6 @@ class ClinicReservationServiceTest {
     }
 
     @Test
-    @DisplayName("슬롯 목록에 없는 도착 시각은 400이다 — 화면이 막아 줄 거라고 믿지 않는다")
-    void arrivalTimeOutsideSlotsIsRejected() {
-        Clinic wide = wideClinic(50L);
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findById(50L)).willReturn(Optional.of(wide));
-        given(clinicRepository.findByIdForUpdate(50L)).willReturn(Optional.of(wide));
-
-        // 22:00은 마지막 슬롯(21:00) 다음이라 없는 값이다
-        assertThatThrownBy(() -> clinicReservationService.reserve(50L,
-            new ClinicReservationCreateRequest(LocalTime.of(22, 0))))
-            .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
-
-        verify(reservationRepository, never()).save(any());
-    }
-
-    @Test
     @DisplayName("같은 클리닉 안에서 시간을 바꾸면 즉시 반영되고 사유가 기록된다")
     void changingArrivalTimeAppliesImmediatelyAndLogs() {
         Clinic wide = wideClinic(50L);
@@ -385,135 +285,5 @@ class ClinicReservationServiceTest {
 
         verify(changeLogRepository, never()).save(any());
         verify(noticeService, never()).publishForStudent(any(), any(), any(), any());
-    }
-
-    // ---------- 시리즈 일괄 신청 ----------
-
-    /** 같은 요일·같은 시간의 클리닉 세 회차. Fixtures.clinic은 시작+1시간이라 슬롯이 하나다. */
-    private List<Clinic> threeTuesdays() {
-        LocalDate first = LocalDate.now().plusDays(7).with(java.time.DayOfWeek.TUESDAY);
-        List<Clinic> group = new java.util.ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            group.add(Fixtures.clinic(100L + i, first.plusWeeks(i), LocalTime.of(17, 0),
-                (short) 6));
-        }
-        return group;
-    }
-
-    private ClinicSeriesReserveRequest tuesdayAt17() {
-        return new ClinicSeriesReserveRequest((short) 2, LocalTime.of(17, 0),
-            LocalTime.of(18, 0), LocalTime.of(17, 0));
-    }
-
-    @Test
-    @DisplayName("시리즈를 신청하면 그 요일 회차가 전부 예약된다")
-    void 시리즈를_신청하면_전부_예약된다() {
-        List<Clinic> group = threeTuesdays();
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
-        for (Clinic clinic : group) {
-            given(clinicRepository.findByIdForUpdate(clinic.getId()))
-                .willReturn(Optional.of(clinic));
-        }
-        given(reservationRepository.save(any(ClinicReservation.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
-
-        ClinicSeriesReserveResponse response =
-            clinicReservationService.reserveSeries(tuesdayAt17());
-
-        assertThat(response.reserved()).isEqualTo(3);
-        assertThat(response.skipped()).isZero();
-    }
-
-    @Test
-    @DisplayName("이미 신청한 회차는 건너뛰고 나머지는 신청된다")
-    void 이미_신청한_회차는_건너뛴다() {
-        List<Clinic> group = threeTuesdays();
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
-        // 첫 회차만 이미 신청한 상태
-        given(reservationRepository.existsByClinicIdAndStudentIdAndStatus(
-            100L, 88L, ReservationStatus.RESERVED)).willReturn(true);
-        // 100L은 중복 검사에서 걸러져 reserveLocked까지 가지 않는다
-        for (Clinic clinic : group.subList(1, group.size())) {
-            given(clinicRepository.findByIdForUpdate(clinic.getId()))
-                .willReturn(Optional.of(clinic));
-        }
-        given(reservationRepository.save(any(ClinicReservation.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
-
-        ClinicSeriesReserveResponse response =
-            clinicReservationService.reserveSeries(tuesdayAt17());
-
-        assertThat(response.reserved()).isEqualTo(2);
-        assertThat(response.skippedItems()).extracting(
-            ClinicSeriesReserveResponse.Skipped::reason).containsExactly("ALREADY");
-    }
-
-    @Test
-    @DisplayName("정원이 찬 회차만 빠지고 전체가 되돌아가지 않는다")
-    void 정원이_찬_회차만_빠진다() {
-        // 18회 중 1회가 찼다고 17회를 못 넣으면 쓸 수 없는 기능이 된다
-        List<Clinic> group = threeTuesdays();
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
-        for (Clinic clinic : group) {
-            given(clinicRepository.findByIdForUpdate(clinic.getId()))
-                .willReturn(Optional.of(clinic));
-        }
-        // 두 번째 회차만 정원이 꽉 찼다
-        given(reservationRepository.countByClinicIdAndStatus(100L, ReservationStatus.RESERVED))
-            .willReturn(0L);
-        given(reservationRepository.countByClinicIdAndStatus(101L, ReservationStatus.RESERVED))
-            .willReturn(6L);
-        given(reservationRepository.countByClinicIdAndStatus(102L, ReservationStatus.RESERVED))
-            .willReturn(0L);
-        given(reservationRepository.save(any(ClinicReservation.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
-
-        ClinicSeriesReserveResponse response =
-            clinicReservationService.reserveSeries(tuesdayAt17());
-
-        assertThat(response.reserved()).isEqualTo(2);
-        assertThat(response.skippedItems()).extracting(
-            ClinicSeriesReserveResponse.Skipped::reason).containsExactly("CAPACITY");
-    }
-
-    @Test
-    @DisplayName("그 회차에 없는 도착 시각은 건너뛴다")
-    void 슬롯이_없는_회차는_건너뛴다() {
-        // 선생님이 그 주만 시간을 고쳤을 때 걸린다
-        List<Clinic> group = threeTuesdays();
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
-
-        ClinicSeriesReserveResponse response = clinicReservationService.reserveSeries(
-            new ClinicSeriesReserveRequest((short) 2, LocalTime.of(17, 0),
-                LocalTime.of(18, 0), LocalTime.of(21, 0)));
-
-        assertThat(response.reserved()).isZero();
-        assertThat(response.skippedItems()).extracting(
-            ClinicSeriesReserveResponse.Skipped::reason)
-            .containsExactly("NO_SLOT", "NO_SLOT", "NO_SLOT");
-    }
-
-    @Test
-    @DisplayName("일괄 신청은 변경 로그도 공지도 남기지 않는다")
-    void 일괄_신청은_변경_기록을_남기지_않는다() {
-        // 신규 신청은 변경이 아니다. change()만 로그와 공지를 쓴다
-        List<Clinic> group = threeTuesdays();
-        given(studentAccessGuard.requireSelf()).willReturn(seo);
-        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
-        for (Clinic clinic : group) {
-            given(clinicRepository.findByIdForUpdate(clinic.getId()))
-                .willReturn(Optional.of(clinic));
-        }
-        given(reservationRepository.save(any(ClinicReservation.class)))
-            .willAnswer(invocation -> invocation.getArgument(0));
-
-        clinicReservationService.reserveSeries(tuesdayAt17());
-
-        verify(changeLogRepository, never()).save(any());
-        verifyNoInteractions(noticeService);
     }
 }

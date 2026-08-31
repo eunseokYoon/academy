@@ -1,11 +1,7 @@
 package com.njwenglish.controller.student;
 
 import com.njwenglish.common.response.ApiResponse;
-import com.njwenglish.dto.clinic.ClinicSeriesResponse;
-import com.njwenglish.dto.clinic.ClinicSeriesReserveResponse;
-import com.njwenglish.dto.clinic.ClinicSeriesReserveRequest;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
-import com.njwenglish.dto.clinic.ClinicReservationCreateRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.dto.clinic.StudentClinicResponse;
 import com.njwenglish.service.ClinicReservationService;
@@ -18,7 +14,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,6 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p><b>학생 취소 엔드포인트는 없다</b>(2026-08-10 확정). 못 가면 다른 시각으로 옮기고,
  * 아예 빠져야 하면 선생님이 T-13에서 배정 해제한다. 다시 만들지 마라.
+ *
+ * <p><b>학생은 클리닉을 신청하지 못한다</b>(2026-09-01 확정). 배정은 선생님이 T-13에서 한다.
+ * 신청 엔드포인트를 되살리지 마라 — 화면에서 버튼을 안 그리는 것만으로는 막히지 않는다.
+ * 남은 것은 목록 조회와 <b>변경</b>뿐이고, 변경은 배정받은 예약이 있어야만 동작한다.
  */
 @RestController
 @RequestMapping("/api/student")
@@ -49,34 +48,11 @@ public class StudentClinicController {
         return ApiResponse.ok(clinicService.listForStudent(from, to));
     }
 
-    @PostMapping("/clinics/{clinicId}/reservation")
-    public ApiResponse<ClinicReservationCreateResponse> reserve(
-        @PathVariable Long clinicId,
-        @Valid @RequestBody ClinicReservationCreateRequest request) {
-        return ApiResponse.ok(clinicReservationService.reserve(clinicId, request));
-    }
-
     /** 도착 시각 변경 · 다른 클리닉으로 이동. 즉시 반영되고 사유가 남는다. */
     @PatchMapping("/clinics/{clinicId}/reservation")
     public ApiResponse<ClinicReservationCreateResponse> change(
         @PathVariable Long clinicId,
         @Valid @RequestBody ClinicReservationChangeRequest request) {
         return ApiResponse.ok(clinicReservationService.change(clinicId, request));
-    }
-
-    /**
-     * 시리즈 카드. 「매주 화요일 17:00~22:00 · 총 18회」 단위로 묶어 내려준다.
-     * 시리즈에 id가 없어서 신청은 이 응답의 (요일·시작·종료)를 그대로 되돌려 보낸다.
-     */
-    @GetMapping("/clinics/series")
-    public ApiResponse<List<ClinicSeriesResponse>> series() {
-        return ApiResponse.ok(clinicReservationService.series());
-    }
-
-    /** 시리즈 일괄 신청. 정원이 찬 회차만 빠지고 나머지는 신청된다. */
-    @PostMapping("/clinics/series/reservations")
-    public ApiResponse<ClinicSeriesReserveResponse> reserveSeries(
-        @Valid @RequestBody ClinicSeriesReserveRequest request) {
-        return ApiResponse.ok(clinicReservationService.reserveSeries(request));
     }
 }

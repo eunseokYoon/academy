@@ -43,15 +43,6 @@ public interface ClinicRepository extends JpaRepository<Clinic, Long> {
                                   @Param("to") LocalDate to,
                                   @Param("startTime") LocalTime startTime);
 
-    /** 학생 시리즈 카드. 오늘 이후의 OPEN 클리닉만 묶는다. */
-    @Query("""
-        SELECT c FROM Clinic c
-        WHERE c.clinicDate >= :from
-          AND c.status = com.njwenglish.entity.enums.ClinicStatus.OPEN
-        ORDER BY c.clinicDate, c.startTime
-        """)
-    List<Clinic> findOpenFrom(@Param("from") LocalDate from);
-
     @Query("""
         SELECT c FROM Clinic c
         WHERE c.clinicDate BETWEEN :from AND :to

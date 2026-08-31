@@ -103,14 +103,4 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
 
         long getReservedCount();
     }
-
-    /**
-     * 시리즈 카드의 "몇 회 신청함"용. 회차마다 exists를 부르면 18번 쿼리가 나간다.
-     */
-    @Query("""
-        SELECT r.clinic.id FROM ClinicReservation r
-        WHERE r.student.id = :studentId AND r.status = :status
-        """)
-    List<Long> findReservedClinicIds(@Param("studentId") Long studentId,
-                                     @Param("status") ReservationStatus status);
 }
