@@ -1,11 +1,25 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Badge } from "../../shared/components/Badge";
+import { LessonDayFilter } from "../../shared/components/LessonDayFilter";
 import { PageTitle, SectionHead, TintBlock } from "../../shared/components/Section";
 import { gradeLabel, gradeTone } from "../../shared/homework/grade";
+import { groupByLessonDay } from "../../shared/homework/lessonDay";
 import { SUBMISSION_LABELS, remainingLabel } from "../../shared/homework/types";
 import { listMyHomeworks } from "./api";
 import type { StudentHomeworkListItem } from "./api";
+
+const NOW = new Date();
+
+/*
+  "지금 낼 수 있고, 내야 하는 것"의 정의다. 축이 둘이라 한 줄로 못 쓴다 —
+  GRID는 선생님이 재제출을 열어 줘야만 낼 수 있고(status는 ⭕를 받아도
+  NOT_SUBMITTED로 남는다), ONLINE은 아직 안 낸 것이 그대로 할 일이다.
+  CLAUDE.md의 4-2·4-3이 근거다. 여기서 status로 GRID를 판정하지 마라.
+*/
+const isTodo = (item: StudentHomeworkListItem) =>
+  item.kind === "GRID" ? item.resubmitRequired : item.status === "NOT_SUBMITTED";
 
 /**
  * S-2 숙제 목록. 미제출이면서 마감이 가까운 것이 위로 온다(서버 정렬).
@@ -15,14 +29,46 @@ import type { StudentHomeworkListItem } from "./api";
  * <p><b>두 덩어리로 나눈다.</b> 예전에는 흰 카드 여섯 장이 세로로 쌓여서, "지금 내야 하는
  * 것"과 "이미 끝난 것"이 같은 무게로 보였다 — 학생이 목록을 처음부터 끝까지 읽어야
  * 할 일을 찾을 수 있었다는 뜻이다. 위 덩어리만 주황이다.
+ *
+ * <p>아래 덩어리는 다시 <b>수업일별</b>로 나뉜다. 날짜는 그룹 머리로 올라가므로 줄 안에는
+ * 반 이름만 남는다.
  */
 export default function StudentHomeworkPage() {
-  const homeworks = useQuery({
-    queryKey: ["student", "homeworks"],
-    queryFn: () => listMyHomeworks({}),
+  const [year, setYear] = useState(NOW.getFullYear());
+  const [month, setMonth] = useState<number | "">("");
+  const [day, setDay] = useState<string | null | undefined>(undefined);
+
+  /*
+    쿼리가 둘인 이유. 위 덩어리는 달 필터를 <b>따르지 않는다</b> — 8월을 보는 동안
+    7월 미제출이 숨으면 "지금 낼 것"이라는 이름이 거짓이 된다. 놓치지 말라고 만든
+    덩어리라 필터로 가려지면 존재 이유가 없다.
+
+    달을 안 고른 상태에서는 두 파라미터가 같아서 캐시 키도 같다 — 요청은 한 번만 나간다.
+    year를 홀로 보내지 않는 이유가 이것이다(서버도 연·월이 다 있어야 범위를 건다).
+  */
+  const todoParams = {};
+  const todoQuery = useQuery({
+    queryKey: ["student", "homeworks", todoParams],
+    queryFn: () => listMyHomeworks(todoParams),
   });
 
-  if (homeworks.isPending) {
+  const listParams = month === "" ? todoParams : { year, month };
+  const listQuery = useQuery({
+    queryKey: ["student", "homeworks", listParams],
+    queryFn: () => listMyHomeworks(listParams),
+  });
+
+  function changeMonth(value: number | "") {
+    setMonth(value);
+    setDay(undefined);
+  }
+
+  function changeYear(value: number) {
+    setYear(value);
+    setDay(undefined);
+  }
+
+  if (listQuery.isPending) {
     return (
       <>
         <PageTitle>숙제</PageTitle>
@@ -31,34 +77,30 @@ export default function StudentHomeworkPage() {
     );
   }
 
-  const items = homeworks.data?.items ?? [];
+  const todo = (todoQuery.data?.items ?? []).filter(isTodo);
 
   /*
-    "지금 낼 수 있고, 내야 하는 것"의 정의다. 축이 둘이라 한 줄로 못 쓴다 —
-    GRID는 선생님이 재제출을 열어 줘야만 낼 수 있고(status는 ⭕를 받아도
-    NOT_SUBMITTED로 남는다), ONLINE은 아직 안 낸 것이 그대로 할 일이다.
-    CLAUDE.md의 4-2·4-3이 근거다. 여기서 status로 GRID를 판정하지 마라.
+    지난 숙제만 날짜로 묶는다. 할 일은 위 주황 덩어리에 이미 있어서, 여기 또 넣으면
+    같은 줄이 화면에 두 번 나온다.
   */
-  const isTodo = (item: StudentHomeworkListItem) =>
-    item.kind === "GRID" ? item.resubmitRequired : item.status === "NOT_SUBMITTED";
-
-  const todo = items.filter(isTodo);
-  const done = items.filter((item) => !isTodo(item));
-
-  if (items.length === 0) {
-    return (
-      <>
-        <PageTitle>숙제</PageTitle>
-        <TintBlock tone="neutral">
-          <p className="px-4 py-6 text-center text-sm text-slate-500">받은 숙제가 없습니다.</p>
-        </TintBlock>
-      </>
-    );
-  }
+  const groups = groupByLessonDay((listQuery.data?.items ?? []).filter((item) => !isTodo(item)));
+  const shown = day === undefined ? groups : groups.filter((group) => group.lessonDate === day);
 
   return (
     <>
       <PageTitle>숙제</PageTitle>
+
+      <div className="mb-4">
+        <LessonDayFilter
+          year={year}
+          month={month}
+          selectedDay={day}
+          groups={groups}
+          onYearChange={changeYear}
+          onMonthChange={changeMonth}
+          onDayChange={setDay}
+        />
+      </div>
 
       {todo.length > 0 && (
         <section className="mb-5">
@@ -71,15 +113,23 @@ export default function StudentHomeworkPage() {
         </section>
       )}
 
-      {done.length > 0 && (
-        <section>
-          <SectionHead tone="neutral" title={todo.length > 0 ? "지난 숙제" : "숙제"} />
-          <TintBlock tone="neutral">
-            {done.map((item) => (
-              <HomeworkRow key={item.homeworkId} item={item} tone="neutral" />
-            ))}
-          </TintBlock>
-        </section>
+      {shown.length === 0 ? (
+        <TintBlock tone="neutral">
+          <p className="px-4 py-6 text-center text-sm text-slate-500">
+            {todo.length > 0 ? "지난 숙제가 없습니다." : "받은 숙제가 없습니다."}
+          </p>
+        </TintBlock>
+      ) : (
+        shown.map((group) => (
+          <section key={group.lessonDate ?? "none"} className="mb-4 last:mb-0">
+            <SectionHead tone="neutral" title={group.label} />
+            <TintBlock tone="neutral">
+              {group.items.map((item) => (
+                <HomeworkRow key={item.homeworkId} item={item} tone="neutral" />
+              ))}
+            </TintBlock>
+          </section>
+        ))
       )}
     </>
   );
@@ -88,6 +138,9 @@ export default function StudentHomeworkPage() {
 /**
  * 목록의 한 줄. 두 덩어리가 같은 줄 모양을 쓰고 <b>배경만 다르다</b> —
  * 줄 구조까지 달라지면 같은 것을 두 가지로 그린 꼴이 된다.
+ *
+ * <p>주황 덩어리는 날짜 그룹 밖에 있어서 줄 안에 수업일이 남는다. 회색 덩어리는
+ * 그룹 머리가 이미 날짜라 반 이름만 있으면 된다.
  */
 function HomeworkRow({
   item,
@@ -134,7 +187,7 @@ function HomeworkRow({
         }`}
       >
         {item.classRoomName}
-        {item.lessonDate !== null && ` · ${item.lessonDate} 수업`}
+        {tone === "accent" && item.lessonDate !== null && ` · ${item.lessonDate} 수업`}
       </p>
 
       {/* ONLINE의 남은 시간은 위 배지가 이미 보여준다. GRID는 재제출을 연 열에만

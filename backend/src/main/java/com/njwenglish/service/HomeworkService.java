@@ -404,12 +404,6 @@ public class HomeworkService {
         return homeworkId + ":" + studentId;
     }
 
-    /** 재제출 마감 기본 시각. 다음 수업일 밤 9시다. */
-    private static final LocalTime DEFAULT_RESUBMIT_TIME = LocalTime.of(21, 0);
-
-    /** 다음 수업이 없을 때의 여유. 방학이나 학기 말이면 수업일이 안 잡혀 있다. */
-    private static final int FALLBACK_RESUBMIT_DAYS = 7;
-
     /**
      * 재제출 열기. 이 순간부터 🔺·❌를 받은 학생만 온라인으로 낼 수 있다.
      *
@@ -431,13 +425,17 @@ public class HomeworkService {
             throw new BusinessException(ErrorCode.NO_RESUBMIT_TARGET);
         }
 
-        OffsetDateTime resolved = dueAt != null ? dueAt : defaultDueAt(homework);
-        if (homework.isResubmitOpen() && !homework.canExtendTo(resolved)) {
+        // 마감은 선생님이 정한다. 기본값을 되살리지 마라 — 화면에서만 필수면
+        // API를 직접 치는 경로에 기본값이 남아 규칙이 두 곳으로 갈라진다
+        if (dueAt == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        homework.openResubmit(resolved);
+        if (homework.isResubmitOpen() && !homework.canExtendTo(dueAt)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        homework.openResubmit(dueAt);
 
-        return new ResubmitOpenResponse(targets.size(), resolved);
+        return new ResubmitOpenResponse(targets.size(), dueAt);
     }
 
     /**
@@ -455,19 +453,6 @@ public class HomeworkService {
             throw new BusinessException(ErrorCode.SUBMISSION_EXISTS);
         }
         homework.closeResubmit();
-    }
-
-    /**
-     * 마감 기본값은 <b>오늘 이후</b> 그 반의 다음 수업일이다.
-     * 열이 붙은 수업일 기준이 아니다 — 지난 수업 숙제를 뒤늦게 채점하는 경우가 있다.
-     */
-    private OffsetDateTime defaultDueAt(Homework homework) {
-        LocalDate today = LocalDate.now(KST);
-        LocalDate target = lessonRepository
-            .findNextLessonDates(homework.getClassRoom().getId(), today)
-            .stream().findFirst()
-            .orElse(today.plusDays(FALLBACK_RESUBMIT_DAYS));
-        return target.atTime(DEFAULT_RESUBMIT_TIME).atZone(KST).toOffsetDateTime();
     }
 
     // ---------- 내부 ----------

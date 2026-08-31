@@ -142,10 +142,18 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
                 {detail.data.content}
               </p>
 
-              {detail.data.attachments.length > 0 && (
+              {/*
+                ?? []가 방어하는 것은 <b>배포 스큐</b>다. 프론트가 백엔드보다 먼저 나가면
+                옛 응답에 attachments가 없어 .length가 던지고, 그러면 첨부 한 줄 때문에
+                공지 화면 전체가 "Unexpected Application Error"로 죽는다.
+                실제로 2026-08-24에 그렇게 터졌다 — 화면만 배포하고 API를 안 올렸을 때다.
+                응답 계약상으로는 항상 배열이지만, 계약을 어긴 쪽이 화면을 통째로 무너뜨리게
+                두지는 않는다. 배포 순서는 backend → web이다(deploy/README.md 3장).
+              */}
+              {(detail.data.attachments ?? []).length > 0 && (
                 <div className="space-y-1.5 border-t border-slate-100 pt-3">
                   {download.isError && <FormError message={errorMessage(download.error)} />}
-                  {detail.data.attachments.map((attachment) => (
+                  {(detail.data.attachments ?? []).map((attachment) => (
                     <button
                       key={attachment.attachmentId}
                       type="button"

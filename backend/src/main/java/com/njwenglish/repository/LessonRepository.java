@@ -125,12 +125,18 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         """)
     long countUnwrittenUntil(@Param("today") LocalDate today);
 
-    /** T-4 목록. 반·기간·주차가 전부 선택이라 null이면 조건을 통과시킨다. */
+    /**
+     * T-4 목록. 반·기간·주차가 전부 선택이라 null이면 조건을 통과시킨다.
+     *
+     * <p>from·to의 {@code CAST(... AS date)}를 빼지 마라. Hibernate가 파라미터를 둘로 전개해
+     * {@code $1 is null} 쪽에 타입 단서가 없어지고, PostgreSQL이 42P18로 거부한다.
+     * <b>날짜를 실제로 고를 때만 터져서</b> 파라미터 없이 열어 보면 멀쩡해 보인다.
+     */
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c
         WHERE (:classRoomId IS NULL OR c.id = :classRoomId)
-          AND (:from IS NULL OR l.lessonDate >= :from)
-          AND (:to IS NULL OR l.lessonDate <= :to)
+          AND (CAST(:from AS date) IS NULL OR l.lessonDate >= :from)
+          AND (CAST(:to AS date) IS NULL OR l.lessonDate <= :to)
           AND (:year IS NULL OR l.year = :year)
           AND (:month IS NULL OR l.month = :month)
           AND (:week IS NULL OR l.week = :week)

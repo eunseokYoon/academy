@@ -102,9 +102,14 @@
    *
    * -mt-10은 .hero-lift와 같은 값이고 이유도 같다. 앱바 pb-8(32px)을 24px 파고들어야
    * 두 남색이 한 덩어리로 읽힌다.
+   *
+   * <p><b>pt는 0이다.</b> -mt-10이 이미 로고 줄 바로 아래(8px)까지 끌어올려 놓아서,
+   * 여기 패딩을 주면 그만큼 로고와 인사말이 벌어진다. 예전 pt-11(44px)은 그 간격을
+   * 52px로 만들었고, 같은 자리인 하위 탭 제목(8px)과 6배 어긋났다.
+   * 더 붙이려면 여기가 아니라 -mt 값을 키워야 한다.
    */
   .field {
-    @apply -mt-10 pb-16 pt-11 text-white;
+    @apply -mt-10 pb-16 pt-0 text-white;
     margin-left: calc(50% - 50vw);
     margin-right: calc(50% - 50vw);
     padding-left: calc(50vw - 50%);

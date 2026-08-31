@@ -151,8 +151,11 @@ export default function QnaListPage() {
           <ul className="space-y-2">
             {reviews?.reviews.items.map((review) => (
               <li key={review.reviewId} className="rounded-xl bg-white p-4 ring-1 ring-brand-100">
+                {/* 별은 곁다리다. 카드의 주인공은 본문이라 별을 작게 두고 본문을 키운다 */}
                 <StarRating value={review.rating} readOnly />
-                <p className="mt-2 whitespace-pre-wrap text-sm text-brand-900">{review.content}</p>
+                <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed text-brand-900">
+                  {review.content}
+                </p>
                 <p className="mt-1 text-xs text-brand-500">
                   {review.studentName} · {review.classRoomName ?? "반 미배정"}
                 </p>

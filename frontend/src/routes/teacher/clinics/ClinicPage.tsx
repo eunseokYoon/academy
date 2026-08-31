@@ -10,6 +10,7 @@ import { TextField } from "../../../shared/components/TextField";
 import {
   assignClinicStudents,
   confirmClinicAttendance,
+  bulkCreateClinics,
   createClinic,
   decideLessonChangeRequest,
   deleteClinic,
@@ -255,6 +256,12 @@ function groupByWeek(clinics: Clinic[]): [string, Clinic[]][] {
 
 function CreateClinicModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
+  /** 켜면 날짜 하나가 기간+요일로 바뀐다. 9~12월 매주 화요일을 18번 만들게 할 수 없다 */
+  const [repeat, setRepeat] = useState(false);
+  const [dayOfWeek, setDayOfWeek] = useState(2);
+  const [from, setFrom] = useState(today());
+  const [to, setTo] = useState(today());
+  const [bulkResult, setBulkResult] = useState<{ created: number; skipped: number } | null>(null);
   const [clinicDate, setClinicDate] = useState(today());
   const [startTime, setStartTime] = useState("17:00");
   const [endTime, setEndTime] = useState("18:00");
@@ -262,18 +269,31 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
   const [memo, setMemo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: () =>
-      createClinic({
-        clinicDate,
+  /** 반환을 정규화한다 — 일괄이면 결과, 단건이면 null. 둘을 그대로 두면 타입이 갈라진다 */
+  const mutation = useMutation<{ created: number; skipped: number } | null>({
+    mutationFn: async () => {
+      // 비워 두면 인원 제한 없음이다. 임의의 기본값을 넣지 않는다
+      const capacityValue = capacity.trim() === "" ? null : Number(capacity);
+      const common = {
         startTime,
         endTime,
-        // 비워 두면 인원 제한 없음이다. 임의의 기본값을 넣지 않는다
-        capacity: capacity.trim() === "" ? null : Number(capacity),
+        capacity: capacityValue,
         memo: memo.trim() || null,
-      }),
-    onSuccess: async () => {
+      };
+      if (repeat) {
+        const result = await bulkCreateClinics({ dayOfWeek, from, to, ...common });
+        return { created: result.created, skipped: result.skipped };
+      }
+      await createClinic({ clinicDate, ...common });
+      return null;
+    },
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["teacher", "clinics"] });
+      // 일괄은 건너뛴 날짜가 있을 수 있어 결과를 보여주고 모달을 남긴다
+      if (data) {
+        setBulkResult(data);
+        return;
+      }
       onClose();
     },
     onError: (e) => setError(errorMessage(e, "시간대를 만들지 못했습니다.")),
@@ -287,13 +307,51 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="클리닉 시간대 개설" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <TextField
-          label="날짜"
-          type="date"
-          value={clinicDate}
-          onChange={(e) => setClinicDate(e.target.value)}
-          required
-        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={repeat}
+            onChange={(e) => { setRepeat(e.target.checked); setBulkResult(null); }}
+          />
+          <span>
+            매주 반복
+            <span className="block text-xs text-slate-500">
+              기간 안의 그 요일에 한꺼번에 만듭니다. 이미 열려 있는 날은 건너뜁니다.
+            </span>
+          </span>
+        </label>
+
+        {repeat ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <TextField label="시작일" type="date" value={from}
+                onChange={(e) => setFrom(e.target.value)} required />
+              <TextField label="종료일" type="date" value={to}
+                onChange={(e) => setTo(e.target.value)} required />
+            </div>
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-600">요일</span>
+              <select
+                value={dayOfWeek}
+                onChange={(e) => setDayOfWeek(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                {[["1","월"],["2","화"],["3","수"],["4","목"],["5","금"],["6","토"],["7","일"]]
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>{label}요일</option>
+                  ))}
+              </select>
+            </label>
+          </>
+        ) : (
+          <TextField
+            label="날짜"
+            type="date"
+            value={clinicDate}
+            onChange={(e) => setClinicDate(e.target.value)}
+            required
+          />
+        )}
         <div className="grid grid-cols-2 gap-2">
           <TextField
             label="시작"
@@ -321,6 +379,12 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
         />
         <TextField label="메모" value={memo} onChange={(e) => setMemo(e.target.value)} />
         <FormError message={error} />
+        {bulkResult && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {bulkResult.created}개 생성
+            {bulkResult.skipped > 0 && ` · ${bulkResult.skipped}개 건너뜀(이미 열려 있음)`}
+          </p>
+        )}
         <SubmitButton pending={mutation.isPending}>개설</SubmitButton>
       </form>
     </Modal>

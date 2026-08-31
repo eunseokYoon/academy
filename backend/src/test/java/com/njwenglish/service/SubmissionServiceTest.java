@@ -497,12 +497,12 @@ class SubmissionServiceTest {
         given(studentAccessGuard.requireAccessible(999L))
             .willThrow(new BusinessException(ErrorCode.STUDENT_NOT_ACCESSIBLE));
 
-        assertThatThrownBy(() -> submissionService.childHomeworks(999L, null, null))
+        assertThatThrownBy(() -> submissionService.childHomeworks(999L, null, null, null, null))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.STUDENT_NOT_ACCESSIBLE);
 
         // 권한 검증이 첫 줄이라 조회 자체가 일어나지 않는다
-        verify(submissionRepository, never()).findByStudent(anyLong(), any(), any());
+        verify(submissionRepository, never()).findByStudent(anyLong(), any(), any(), any(), any());
     }
 
     @Test
@@ -529,11 +529,11 @@ class SubmissionServiceTest {
 
         given(studentAccessGuard.requireAccessible(88L))
             .willReturn(Fixtures.student(88L, "고연준"));
-        given(submissionRepository.findByStudent(eq(88L), any(), any()))
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
             .willReturn(new PageImpl<>(List.of(cell)));
 
         PageResponse<ParentHomeworkResponse> response =
-            submissionService.childHomeworks(88L, null, PageRequest.of(0, 20));
+            submissionService.childHomeworks(88L, null, null, null, PageRequest.of(0, 20));
 
         ParentHomeworkResponse item = response.items().get(0);
         assertThat(item.title()).isEqualTo("독해 5-8");
@@ -544,6 +544,76 @@ class SubmissionServiceTest {
         assertThat(ParentHomeworkResponse.class.getRecordComponents())
             .extracting(RecordComponent::getName)
             .doesNotContain("photos", "photoCount", "thumbnailUrl", "feedback", "description");
+    }
+
+
+    // ---------- 달 필터 (S-2 · P-3) ----------
+
+    @Test
+    @DisplayName("연·월을 주면 그 달 1일~말일의 수업일 범위로 조회한다")
+    void 연월을_주면_그_달_범위로_조회한다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        submissionService.myHomeworks(null, 2026, 2, PageRequest.of(0, 20));
+
+        // 말일은 달마다 다르다. 28을 박아 두면 31일 수업의 숙제가 사라진다
+        verify(submissionRepository).findByStudent(eq(88L), eq(null),
+            eq(LocalDate.of(2026, 2, 1)), eq(LocalDate.of(2026, 2, 28)), any());
+    }
+
+    @Test
+    @DisplayName("연·월이 없으면 수업일 범위를 걸지 않는다")
+    void 연월이_없으면_범위를_걸지_않는다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        submissionService.myHomeworks(null, null, null, PageRequest.of(0, 20));
+
+        // null이면 지금까지와 똑같이 전부 내려온다 — 수업이 없는 ONLINE 숙제도 포함이다
+        verify(submissionRepository).findByStudent(eq(88L), eq(null), eq(null), eq(null), any());
+    }
+
+    @Test
+    @DisplayName("연·월 중 하나만 오면 범위를 걸지 않는다")
+    void 연월_중_하나만_오면_범위를_걸지_않는다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        // 화면이 연도만 바꾸는 순간이 있다. 여기서 달을 1월로 가정해 버리면
+        // 학생이 고르지 않은 달의 숙제만 보인다
+        submissionService.myHomeworks(null, 2026, null, PageRequest.of(0, 20));
+
+        verify(submissionRepository).findByStudent(eq(88L), eq(null), eq(null), eq(null), any());
+    }
+
+    @Test
+    @DisplayName("범위 밖 월은 400이다")
+    void 범위_밖_월은_400이다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+
+        // YearMonth.of가 DateTimeException을 던지면 500이 된다. 잘못 만든 URL은 400이어야 한다
+        assertThatThrownBy(() -> submissionService.myHomeworks(null, 2026, 99, PageRequest.of(0, 20)))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        verify(submissionRepository, never()).findByStudent(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("학부모 조회도 같은 달 범위를 쓴다")
+    void 학부모_조회도_같은_달_범위를_쓴다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        submissionService.childHomeworks(88L, null, 2026, 8, PageRequest.of(0, 20));
+
+        verify(submissionRepository).findByStudent(eq(88L), eq(null),
+            eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 31)), any());
     }
 
     // ---------- 헬퍼 ----------

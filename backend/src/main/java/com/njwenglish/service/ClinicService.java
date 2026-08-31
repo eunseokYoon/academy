@@ -6,6 +6,8 @@ import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.dto.attendance.PendingClinicResponse;
+import com.njwenglish.dto.clinic.ClinicBulkCreateRequest;
+import com.njwenglish.dto.clinic.ClinicBulkCreateResponse;
 import com.njwenglish.dto.clinic.ClinicCreateRequest;
 import com.njwenglish.dto.clinic.ClinicCreateResponse;
 import com.njwenglish.dto.clinic.ClinicListItemResponse;
@@ -23,6 +25,7 @@ import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.ClinicReservationRepository.ClinicCount;
 import com.njwenglish.repository.TeacherRepository;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -66,6 +69,56 @@ public class ClinicService {
             request.clinicDate(), request.startTime(), request.endTime(),
             validCapacity(request.capacity()), request.memo()));
         return ClinicCreateResponse.of(clinic, 0);
+    }
+
+    /**
+     * 기간 안의 특정 요일에 클리닉을 한꺼번에 연다. {@code LessonService.bulkCreate}와 같은 규칙이다 —
+     * <b>충돌하는 날짜는 건너뛰고 계속한다.</b> 전부 실패시키면 선생님이 걸린 날짜를 찾아
+     * 지우고 다시 눌러야 한다.
+     *
+     * <p>슬롯이 하나도 안 나오는 시간대는 거절한다. ck_clinics_time은 end &gt; start만 보므로
+     * 17:00~17:30 같은 값이 통과하는데, 그러면 학생이 고를 도착 시각이 없는 클리닉이 생긴다.
+     */
+    @Transactional
+    public ClinicBulkCreateResponse bulkCreate(ClinicBulkCreateRequest request) {
+        if (request.to().isBefore(request.from())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (!request.endTime().isAfter(request.startTime())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        Teacher teacher = currentTeacher();
+        Short capacity = validCapacity(request.capacity());
+        DayOfWeek day = DayOfWeek.of(request.dayOfWeek());
+
+        // 슬롯 판정은 Clinic.slots()가 정본이다. 여기서 시각 산술을 다시 하지 마라
+        if (Clinic.open(teacher, request.from(), request.startTime(), request.endTime(),
+            capacity, null).slots().isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        Set<LocalDate> skip = new HashSet<>(
+            request.skipDates() == null ? List.<LocalDate>of() : request.skipDates());
+        skip.addAll(clinicRepository.findOpenDates(
+            request.from(), request.to(), request.startTime()));
+
+        List<LocalDate> created = new ArrayList<>();
+        int skipped = 0;
+        for (LocalDate date = request.from();
+             !date.isAfter(request.to());
+             date = date.plusDays(1)) {
+            if (date.getDayOfWeek() != day) {
+                continue;
+            }
+            if (skip.contains(date)) {
+                skipped++;
+                continue;
+            }
+            clinicRepository.save(Clinic.open(teacher, date, request.startTime(),
+                request.endTime(), capacity, request.memo()));
+            created.add(date);
+        }
+        return new ClinicBulkCreateResponse(created.size(), skipped, created);
     }
 
     @Transactional

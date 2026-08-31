@@ -495,42 +495,39 @@ class HomeworkGridServiceTest {
     }
 
     @Test
-    @DisplayName("마감을 생략하면 다음 수업일 21시로 잡는다")
-    void openResubmitDefaultsToNextLesson() {
+    @DisplayName("마감을 생략하면 400이다")
+    void openResubmitRequiresDueAt() {
+        // 기본값(다음 수업일 21:00)을 없앴다. 화면에서만 필수로 두면 이 경로를 직접 치는
+        // 쪽에 기본값이 남아 규칙이 두 곳으로 갈라진다
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
         Submission partial = Fixtures.submission(2L, column, kwonTaeHo);
         partial.grade(HomeworkResult.PARTIAL, (short) 50);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of(partial));
-        given(lessonRepository.findNextLessonDates(eq(3L), any(LocalDate.class)))
-            .willReturn(List.of(LocalDate.of(2026, 8, 5)));
 
-        ResubmitOpenResponse response = homeworkService.openResubmit(720L, null);
-
-        assertThat(response.dueAt().toLocalDate()).isEqualTo(LocalDate.of(2026, 8, 5));
-        assertThat(response.dueAt().toLocalTime().getHour()).isEqualTo(21);
+        assertThatThrownBy(() -> homeworkService.openResubmit(720L, null))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
     @Test
-    @DisplayName("다음 수업이 없으면 7일 뒤 21시로 잡는다")
-    void openResubmitFallsBackToSevenDaysWhenNoNextLesson() {
+    @DisplayName("선생님이 정한 마감이 그대로 저장된다")
+    void openResubmitUsesGivenDueAt() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
         Submission partial = Fixtures.submission(2L, column, kwonTaeHo);
         partial.grade(HomeworkResult.PARTIAL, (short) 50);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of(partial));
-        // 방학·학기 말처럼 앞으로 잡힌 수업일이 하나도 없는 경우 — FALLBACK_RESUBMIT_DAYS로 빠진다.
-        given(lessonRepository.findNextLessonDates(eq(3L), any(LocalDate.class)))
-            .willReturn(List.of());
 
-        ResubmitOpenResponse response = homeworkService.openResubmit(720L, null);
+        OffsetDateTime dueAt = LocalDate.of(2026, 8, 28)
+            .atTime(21, 0).atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime();
 
-        // 오늘 날짜를 테스트 안에서 계산한다. 달력 날짜를 박아 두면 해가 바뀌며 테스트가 썩는다.
-        LocalDate expected = LocalDate.now(ZoneId.of("Asia/Seoul")).plusDays(7);
-        assertThat(response.dueAt().toLocalDate()).isEqualTo(expected);
-        assertThat(response.dueAt().toLocalTime().getHour()).isEqualTo(21);
+        ResubmitOpenResponse response = homeworkService.openResubmit(720L, dueAt);
+
+        assertThat(response.dueAt()).isEqualTo(dueAt);
+        assertThat(response.targetCount()).isEqualTo(1);
     }
 
     @Test

@@ -10,6 +10,9 @@ import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
+import com.njwenglish.dto.clinic.ClinicSeriesReserveRequest;
+import com.njwenglish.dto.clinic.ClinicSeriesReserveResponse;
+import com.njwenglish.dto.clinic.ClinicSeriesResponse;
 import com.njwenglish.dto.clinic.ClinicReservationCreateRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
@@ -26,6 +29,7 @@ import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.TeacherRepository;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -33,6 +37,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -133,6 +140,97 @@ public class ClinicReservationService {
         List<ClinicReservation> created = reserveLocked(
             clinicId, List.of(student), null, request.arrivalTime(), true);
         return ClinicReservationCreateResponse.from(created.get(0));
+    }
+
+    /**
+     * S-9 시리즈 목록. 오늘 이후 OPEN 클리닉을 (요일, 시작, 종료)로 묶는다.
+     *
+     * <p><b>시리즈는 조회지 테이블이 아니다.</b> 선생님이 특정 회차를 지우거나 시간을
+     * 고치면 그 회차가 그룹에서 빠질 뿐, 맞춰 줄 시리즈 행이 없어 어긋날 것도 없다.
+     */
+    @Transactional(readOnly = true)
+    public List<ClinicSeriesResponse> series() {
+        Student me = studentAccessGuard.requireSelf();
+        List<Clinic> clinics = clinicRepository.findOpenFrom(LocalDate.now());
+        if (clinics.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> mine = new HashSet<>(reservationRepository.findReservedClinicIds(
+            me.getId(), ReservationStatus.RESERVED));
+
+        // LinkedHashMap이라 findOpenFrom의 날짜순이 그대로 카드 순서가 된다
+        Map<List<Object>, List<Clinic>> grouped = new LinkedHashMap<>();
+        for (Clinic clinic : clinics) {
+            grouped.computeIfAbsent(
+                List.of((short) clinic.getClinicDate().getDayOfWeek().getValue(),
+                    clinic.getStartTime(), clinic.getEndTime()),
+                key -> new ArrayList<>()).add(clinic);
+        }
+
+        List<ClinicSeriesResponse> result = new ArrayList<>();
+        for (List<Clinic> group : grouped.values()) {
+            Clinic head = group.get(0);
+            int reserved = (int) group.stream()
+                .filter(clinic -> mine.contains(clinic.getId())).count();
+            result.add(new ClinicSeriesResponse(
+                (short) head.getClinicDate().getDayOfWeek().getValue(),
+                head.getStartTime(), head.getEndTime(),
+                head.getClinicDate(), group.get(group.size() - 1).getClinicDate(),
+                group.size(), reserved, head.slots()));
+        }
+        return result;
+    }
+
+    /**
+     * S-9 시리즈 일괄 신청. 회차마다 {@link #reserveLocked}를 그대로 탄다 —
+     * 정원 잠금·중복 검사·슬롯 검증이 전부 거기 있고, 갈라놓으면 단건 신청과 규칙이 어긋난다.
+     *
+     * <p><b>건너뛴 회차가 있어도 전체를 되돌리지 않는다.</b> 사유를 날짜와 함께 돌려주고
+     * 나머지는 신청된 채로 둔다.
+     *
+     * <p>변경 로그도 공지도 남기지 않는다. 신규 신청은 변경이 아니다 —
+     * clinic_change_logs와 공지는 {@link #change}만 쓴다.
+     */
+    @Transactional
+    public ClinicSeriesReserveResponse reserveSeries(ClinicSeriesReserveRequest request) {
+        Student me = studentAccessGuard.requireSelf();
+        DayOfWeek day = DayOfWeek.of(request.dayOfWeek());
+
+        List<Clinic> group = clinicRepository.findOpenFrom(LocalDate.now()).stream()
+            .filter(clinic -> clinic.getClinicDate().getDayOfWeek() == day
+                && clinic.getStartTime().equals(request.startTime())
+                && clinic.getEndTime().equals(request.endTime()))
+            .toList();
+
+        List<LocalDate> reserved = new ArrayList<>();
+        List<ClinicSeriesReserveResponse.Skipped> skipped = new ArrayList<>();
+
+        for (Clinic clinic : group) {
+            if (!clinic.hasSlot(request.arrivalTime())) {
+                // 선생님이 그 주만 시간을 고쳤을 때 여기 걸린다
+                skipped.add(new ClinicSeriesReserveResponse.Skipped(
+                    clinic.getClinicDate(), "NO_SLOT"));
+                continue;
+            }
+            if (reservationRepository.existsByClinicIdAndStudentIdAndStatus(
+                clinic.getId(), me.getId(), ReservationStatus.RESERVED)) {
+                skipped.add(new ClinicSeriesReserveResponse.Skipped(
+                    clinic.getClinicDate(), "ALREADY"));
+                continue;
+            }
+            try {
+                reserveLocked(clinic.getId(), List.of(me), null, request.arrivalTime(), false);
+                reserved.add(clinic.getClinicDate());
+            } catch (BusinessException e) {
+                if (e.getErrorCode() != ErrorCode.CLINIC_CAPACITY_EXCEEDED) {
+                    throw e;
+                }
+                skipped.add(new ClinicSeriesReserveResponse.Skipped(
+                    clinic.getClinicDate(), "CAPACITY"));
+            }
+        }
+        return new ClinicSeriesReserveResponse(
+            reserved.size(), skipped.size(), reserved, skipped);
     }
 
     /**

@@ -2,6 +2,10 @@
 .env
 .env.*
 !.env.example
+# 예외. 시크릿이 아니라 빌드 상수 하나뿐이고, 반드시 커밋돼야 한다 —
+# 이 파일이 없으면 `npm run build`가 frontend/.env(개발용 localhost:8080)를 집어서
+# 운영 번들이 localhost를 때린다. frontend/.env.production 주석을 봐라.
+!.env.production
 
 # backend
 backend/build/

@@ -39,11 +39,19 @@ public class StudentHomeworkController {
 
     private final SubmissionService submissionService;
 
+    /**
+     * year·month는 화면의 달 필터다. 둘 다 있어야 걸린다 — 안 보내면 전부 내려간다.
+     *
+     * <p>필터를 프론트에서 하지 마라. 한 페이지(20건) 안에서만 걸러져서
+     * 지난 달 숙제가 조용히 사라진다.
+     */
     @GetMapping
     public ApiResponse<PageResponse<StudentHomeworkListItemResponse>> list(
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) Integer year,
+        @RequestParam(required = false) Integer month,
         @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.ok(submissionService.myHomeworks(status, pageable));
+        return ApiResponse.ok(submissionService.myHomeworks(status, year, month, pageable));
     }
 
     @GetMapping("/{homeworkId}")

@@ -35,6 +35,7 @@ import com.njwenglish.repository.SubmissionRepository;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -78,12 +79,18 @@ public class SubmissionService {
 
     // ---------- 학생 (S-2 · S-3 · S-4) ----------
 
-    /** 미제출이면서 마감 임박한 것이 위로 온다. 남은 시간은 서버가 계산한다. */
+    /**
+     * 미제출이면서 마감 임박한 것이 위로 온다. 남은 시간은 서버가 계산한다.
+     *
+     * <p>year·month는 화면의 달 필터다. 걸면 <b>그 달에 수업이 있는 숙제만</b> 내려간다.
+     */
     @Transactional(readOnly = true)
     public PageResponse<StudentHomeworkListItemResponse> myHomeworks(String status,
+                                                                     Integer year, Integer month,
                                                                      Pageable pageable) {
         Student me = studentAccessGuard.requireSelf();
-        Page<Submission> page = submissionRepository.findByStudent(me.getId(), status, pageable);
+        Page<Submission> page = submissionRepository.findByStudent(
+            me.getId(), status, monthStart(year, month), monthEnd(year, month), pageable);
 
         List<Long> ids = page.getContent().stream().map(Submission::getId).toList();
         Map<Long, Integer> photoCounts = photoCountsOf(ids);
@@ -318,10 +325,11 @@ public class SubmissionService {
      */
     @Transactional(readOnly = true)
     public PageResponse<ParentHomeworkResponse> childHomeworks(Long studentId, String status,
+                                                               Integer year, Integer month,
                                                                Pageable pageable) {
         Student child = studentAccessGuard.requireAccessible(studentId);
-        Page<Submission> page = submissionRepository
-            .findByStudent(child.getId(), status, pageable);
+        Page<Submission> page = submissionRepository.findByStudent(
+            child.getId(), status, monthStart(year, month), monthEnd(year, month), pageable);
 
         return PageResponse.from(page.map(submission -> {
             Homework homework = submission.getHomework();
@@ -336,6 +344,36 @@ public class SubmissionService {
     }
 
     // ---------- 내부 ----------
+
+    /**
+     * 화면이 고른 달. <b>연·월 중 하나라도 없으면 null</b>이고 그러면 범위를 안 건다 —
+     * 화면이 연도만 바꾸는 순간이 있어서, 빠진 쪽을 1월이나 올해로 채우면 학생이 고르지도
+     * 않은 달의 숙제만 보인다.
+     *
+     * <p>값을 검사하는 이유는 YearMonth.of가 DateTimeException을 던져 <b>500이 되기</b>
+     * 때문이다. 잘못 만든 URL은 400이어야 한다. AttendanceService.validMonth와 같은 기준이다.
+     */
+    private static YearMonth filterMonth(Integer year, Integer month) {
+        if (year == null || month == null) {
+            return null;
+        }
+        if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return YearMonth.of(year, month);
+    }
+
+    /** 달 필터의 시작일. 안 걸었으면 null이다. */
+    private static LocalDate monthStart(Integer year, Integer month) {
+        YearMonth filter = filterMonth(year, month);
+        return filter == null ? null : filter.atDay(1);
+    }
+
+    /** 달 필터의 마지막 날. 말일은 달마다 다르므로 YearMonth가 계산한다. */
+    private static LocalDate monthEnd(Integer year, Integer month) {
+        YearMonth filter = filterMonth(year, month);
+        return filter == null ? null : filter.atEndOfMonth();
+    }
 
     /** 이 숙제의 대상이 아니면 애초에 행이 없다. 그때는 404다. */
     private Submission findMySubmission(Long homeworkId) {

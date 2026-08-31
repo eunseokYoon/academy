@@ -669,11 +669,14 @@ export const getHomeworkGrid = (lessonId: number) =>
 export const saveHomeworkGrid = (body: HomeworkGridSaveBody) =>
   put<HomeworkGrid>("/teacher/homework-grid", body);
 
-/** 재제출 열기. dueAt을 생략하면 서버가 그 반의 다음 수업일 21:00으로 잡는다. */
-export const openResubmit = (homeworkId: number, dueAt: string | null) =>
+/**
+ * 재제출 열기. <b>dueAt은 필수다</b> — 서버 기본값(다음 수업일 21:00)을 없앴다.
+ * 화면에서만 필수로 두면 이 경로를 직접 치는 쪽에 기본값이 남아 규칙이 갈라진다.
+ */
+export const openResubmit = (homeworkId: number, dueAt: string) =>
   post<{ targetCount: number; dueAt: string }>(
     `/teacher/homeworks/${homeworkId}/resubmit-request`,
-    dueAt === null ? {} : { dueAt },
+    { dueAt },
   );
 
 /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */
@@ -1027,3 +1030,22 @@ export const issueTeacherQnaUploadUrl = (body: { contentType: string; bytes: num
 
 export const fetchTeacherReviews = (params: { classRoomId?: number; page?: number }) =>
   get<ReviewList>("/teacher/reviews", params);
+
+/**
+ * 기간 안의 특정 요일에 클리닉을 한꺼번에 연다. dayOfWeek는 1=월 … 7=일이다.
+ * 이미 열려 있는 날짜와 skipDates는 건너뛰고 몇 건 만들었는지 돌려준다.
+ */
+export const bulkCreateClinics = (body: {
+  dayOfWeek: number;
+  from: string;
+  to: string;
+  startTime: string;
+  endTime: string;
+  capacity?: number | null;
+  memo?: string | null;
+  skipDates?: string[];
+}) =>
+  post<{ created: number; skipped: number; createdDates: string[] }>(
+    "/teacher/clinics/bulk",
+    body,
+  );

@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * 정기고사 그리드 한 장. <b>선생님 전용이다.</b>
  *
- * <p>이 DTO를 학생·학부모 응답에 재사용하지 마라. 슬롯 7개는 서버가 고정으로 알기 때문에
+ * <p>이 DTO를 학생·학부모 응답에 재사용하지 마라. 슬롯 8개는 서버가 고정으로 알기 때문에
  * 열 목록을 내려주지 않는다 — 프론트가 enum 순서대로 그린다.
  */
 public record RegularExamGridResponse(
@@ -20,6 +20,11 @@ public record RegularExamGridResponse(
     public record StudentRow(Long studentId, String name, boolean enrolled) {
     }
 
-    public record ScoreItem(Long studentId, RegularExamSlot examSlot, BigDecimal rawScore) {
+    /**
+     * 세 값 모두 null일 수 있다. schoolRank는 내신 슬롯에서만 값이 온다.
+     * <b>이 타입을 학생·학부모 응답에 재사용하지 마라.</b>
+     */
+    public record ScoreItem(Long studentId, RegularExamSlot examSlot,
+                            BigDecimal rawScore, Short grade, Short schoolRank) {
     }
 }

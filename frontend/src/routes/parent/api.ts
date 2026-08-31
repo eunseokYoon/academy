@@ -57,9 +57,10 @@ export interface ParentHomework {
   isLate: boolean;
 }
 
+/** year·month는 둘 다 보내야 걸린다. 학생 쪽(listMyHomeworks)과 같은 규칙이다. */
 export const getChildHomeworks = (
   studentId: number,
-  params: { status?: SubmissionStatus; page?: number },
+  params: { status?: SubmissionStatus; year?: number; month?: number; page?: number },
 ) => get<PageResponse<ParentHomework>>(`/parent/children/${studentId}/homeworks`, params);
 
 // ---------- 주간 레포트 (P-6) ----------

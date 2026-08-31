@@ -1,5 +1,7 @@
 package com.njwenglish.service;
 
+import com.njwenglish.common.error.BusinessException;
+import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.regularexam.RegularExamGridResponse;
 import com.njwenglish.dto.regularexam.RegularExamSaveRequest;
@@ -55,16 +57,20 @@ public class RegularExamService {
             : regularExamScoreRepository
                 .findByStudentIdInAndYear(List.copyOf(rows.keySet()), year).stream()
                 .map(score -> new RegularExamGridResponse.ScoreItem(
-                    score.getStudent().getId(), score.getExamSlot(), score.getRawScore()))
+                    score.getStudent().getId(), score.getExamSlot(),
+                    score.getRawScore(), score.getGrade(), score.getSchoolRank()))
                 .toList();
 
         return new RegularExamGridResponse(classRoomId, year, List.copyOf(rows.values()), scores);
     }
 
     /**
-     * rawScore가 null이면 그 칸의 행을 삭제한다. 요청에 없는 칸은 건드리지 않는다.
+     * <b>세 값이 모두 null이면 그 칸의 행을 삭제한다.</b> 요청에 없는 칸은 건드리지 않는다.
      *
      * <p>같은 칸을 다시 저장하는 건 오타 수정이라는 정상 흐름이다. 409를 던지지 마라.
+     *
+     * <p>모의고사에 등수를 실어 보내면 400이다. 화면이 그 칸을 안 그리는 것은 안내일 뿐이라
+     * API를 직접 치면 뚫린다 — 막는 곳은 여기와 DB의 ck_res_rank_slot 둘이다.
      */
     @Transactional
     public void save(RegularExamSaveRequest request) {
@@ -77,16 +83,19 @@ public class RegularExamService {
                 .findByStudentIdAndYearAndExamSlot(item.studentId(), request.year(),
                     item.examSlot());
 
-            if (item.rawScore() == null) {
+            if (item.schoolRank() != null && !item.examSlot().hasSchoolRank()) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            if (item.isEmpty()) {
                 found.ifPresent(regularExamScoreRepository::delete);
                 continue;
             }
             if (found.isPresent()) {
-                found.get().changeScore(item.rawScore());
+                found.get().change(item.rawScore(), item.grade(), item.schoolRank());
                 continue;
             }
             regularExamScoreRepository.save(RegularExamScore.create(student, request.year(),
-                item.examSlot(), item.rawScore()));
+                item.examSlot(), item.rawScore(), item.grade(), item.schoolRank()));
         }
     }
 }

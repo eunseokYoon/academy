@@ -13,10 +13,12 @@ import {
   listMyClinics,
   listMyLessonChanges,
   requestLessonChange,
+  listClinicSeries,
   reserveClinic,
+  reserveClinicSeries,
 } from "./api";
 import { formatLessonSlot } from "../../shared/lessonchange/types";
-import type { StudentClinic } from "./api";
+import type { SeriesReserveResult, StudentClinic } from "./api";
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -94,6 +96,8 @@ export default function StudentClinicPage() {
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <LessonChangeSection />
+
+      <ClinicSeriesSection />
 
       <section>
         <SectionHead tone="brand" title="내 클리닉" count={mine.length} />
@@ -576,4 +580,123 @@ function ChangeModal({
     </Modal>
   );
 }
+
+/**
+ * 시리즈 일괄 신청. 「매주 화요일 17:00~22:00 · 총 18회」를 카드 하나로 보여주고
+ * 도착 시각만 고르면 남은 회차를 한 번에 신청한다.
+ *
+ * <p><b>시리즈에는 id가 없다.</b> 서버가 오늘 이후 OPEN 클리닉을 (요일·시작·종료)로
+ * 묶은 결과라, 신청할 때 그 세 값을 그대로 되돌려 보낸다.
+ *
+ * <p>정원이 찬 회차는 서버가 건너뛰고 사유를 돌려준다 — 전체가 실패하지 않는다.
+ * 못 가는 날은 신청 후 기존 변경 흐름(사유 적고 옮기기)으로 처리한다.
+ */
+function ClinicSeriesSection() {
+  const queryClient = useQueryClient();
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<SeriesReserveResult | null>(null);
+
+  const series = useQuery({
+    queryKey: ["student", "clinic-series"],
+    queryFn: listClinicSeries,
+  });
+
+  const reserve = useMutation({
+    mutationFn: reserveClinicSeries,
+    onSuccess: (data) => {
+      setResult(data);
+      void queryClient.invalidateQueries({ queryKey: ["student", "clinic-series"] });
+      void queryClient.invalidateQueries({ queryKey: ["student", "clinics"] });
+    },
+  });
+
+  const items = series.data ?? [];
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <section>
+      <SectionHead tone="brand" title="정기 클리닉 일괄 신청" count={items.length} />
+      <ul className="space-y-2">
+        {items.map((item) => {
+          const key = `${item.dayOfWeek}-${item.startTime}-${item.endTime}`;
+          const remaining = item.totalCount - item.reservedCount;
+          const arrivalTime = picked[key] ?? item.slots[0];
+          return (
+            <li key={key} className="rounded-2xl bg-white p-3.5 shadow-card">
+              <p className="font-medium text-slate-900">
+                매주 {DAY_LABELS[item.dayOfWeek]}요일 · {item.startTime}~{item.endTime}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {item.firstDate.slice(5)} ~ {item.lastDate.slice(5)} · 총 {item.totalCount}회
+                {item.reservedCount > 0 && ` (${item.reservedCount}회 신청함)`}
+              </p>
+              {remaining === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">전부 신청했습니다.</p>
+              ) : (
+                <div className="mt-2 flex items-center gap-2">
+                  <select
+                    value={arrivalTime}
+                    onChange={(e) => setPicked((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                  >
+                    {item.slots.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot} 도착
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={reserve.isPending}
+                    onClick={() =>
+                      reserve.mutate({
+                        dayOfWeek: item.dayOfWeek,
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        arrivalTime,
+                      })
+                    }
+                    className="rounded-lg bg-brand-900 px-3 py-1.5 text-sm font-medium text-white
+                               disabled:opacity-50"
+                  >
+                    {reserve.isPending ? "신청 중…" : `${remaining}회 신청하기`}
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* 건너뛴 회차를 사후 통보한다. 정원이 있는 경우에만 생긴다 */}
+      {result && (
+        <TintBlock tone="neutral">
+          <div className="px-4 py-3 text-sm">
+            <p className="text-slate-900">{result.reserved}회 신청되었습니다.</p>
+            {result.skipped > 0 && (
+              <p className="mt-1 text-slate-500">
+                {result.skipped}회는 빠졌습니다 —{" "}
+                {result.skippedItems
+                  .map((item) => `${item.clinicDate.slice(5)} (${SKIP_REASONS[item.reason] ?? item.reason})`)
+                  .join(", ")}
+              </p>
+            )}
+          </div>
+        </TintBlock>
+      )}
+    </section>
+  );
+}
+
+const DAY_LABELS: Record<number, string> = {
+  1: "월", 2: "화", 3: "수", 4: "목", 5: "금", 6: "토", 7: "일",
+};
+
+const SKIP_REASONS: Record<string, string> = {
+  ALREADY: "이미 신청함",
+  CAPACITY: "정원 초과",
+  NO_SLOT: "그날은 시간이 다름",
+};
 

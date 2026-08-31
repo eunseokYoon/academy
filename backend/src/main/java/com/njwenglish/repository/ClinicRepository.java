@@ -29,6 +29,29 @@ public interface ClinicRepository extends JpaRepository<Clinic, Long> {
     boolean existsByClinicDateAndStartTimeAndStatus(LocalDate clinicDate, LocalTime startTime,
                                                     ClinicStatus status);
 
+    /**
+     * 일괄 개설에서 건너뛸 날짜. 같은 시작 시각으로 이미 열려 있는 날들이다.
+     * 하루씩 exists를 부르면 기간만큼 쿼리가 나가서 한 번에 뽑는다.
+     */
+    @Query("""
+        SELECT c.clinicDate FROM Clinic c
+        WHERE c.clinicDate BETWEEN :from AND :to
+          AND c.startTime = :startTime
+          AND c.status = com.njwenglish.entity.enums.ClinicStatus.OPEN
+        """)
+    List<LocalDate> findOpenDates(@Param("from") LocalDate from,
+                                  @Param("to") LocalDate to,
+                                  @Param("startTime") LocalTime startTime);
+
+    /** 학생 시리즈 카드. 오늘 이후의 OPEN 클리닉만 묶는다. */
+    @Query("""
+        SELECT c FROM Clinic c
+        WHERE c.clinicDate >= :from
+          AND c.status = com.njwenglish.entity.enums.ClinicStatus.OPEN
+        ORDER BY c.clinicDate, c.startTime
+        """)
+    List<Clinic> findOpenFrom(@Param("from") LocalDate from);
+
     @Query("""
         SELECT c FROM Clinic c
         WHERE c.clinicDate BETWEEN :from AND :to

@@ -2,7 +2,7 @@ export type WeeklyTestType = "WORD" | "REVIEW" | "PRACTICE" | "CLINIC";
 export type TestResult = "PASS" | "FAIL";
 export type RegularExamSlot =
   | "S1_MIDTERM" | "S1_FINAL" | "S2_MIDTERM" | "S2_FINAL"
-  | "MOCK_MAR" | "MOCK_JUN" | "MOCK_SEP";
+  | "MOCK_MAR" | "MOCK_JUN" | "MOCK_SEP" | "MOCK_NOV";
 export type ExamType = "MIDTERM" | "FINAL";
 
 /**
@@ -21,17 +21,25 @@ export const WEEKLY_TEST_LABELS: Record<WeeklyTestType, string> = {
 /** 정기고사 열 순서. <b>선생님만 보는 화면에서만 쓴다.</b> */
 export const REGULAR_EXAM_SLOTS: RegularExamSlot[] = [
   "S1_MIDTERM", "S1_FINAL", "S2_MIDTERM", "S2_FINAL",
-  "MOCK_MAR", "MOCK_JUN", "MOCK_SEP",
+  "MOCK_MAR", "MOCK_JUN", "MOCK_SEP", "MOCK_NOV",
 ];
+
+/**
+ * 등수를 받는 슬롯. <b>내신만 학교 석차가 나온다</b> — 모의고사에는 칸을 그리지 마라.
+ * 서버가 `RegularExamSlot.hasSchoolRank()`로 같은 판정을 하고 DB의 ck_res_rank_slot이
+ * 한 번 더 막는다. 셋이 갈라지면 화면에만 있는 칸이 저장에서 400으로 튕긴다.
+ */
+export const hasSchoolRank = (slot: RegularExamSlot) => !slot.startsWith("MOCK_");
 
 export const REGULAR_EXAM_LABELS: Record<RegularExamSlot, string> = {
   S1_MIDTERM: "1학기 중간",
   S1_FINAL: "1학기 기말",
   S2_MIDTERM: "2학기 중간",
   S2_FINAL: "2학기 기말",
-  MOCK_MAR: "3월 모의",
-  MOCK_JUN: "6월 모의",
-  MOCK_SEP: "9월 모의",
+  MOCK_MAR: "3월 모의고사",
+  MOCK_JUN: "6월 모의고사",
+  MOCK_SEP: "9월 모의고사",
+  MOCK_NOV: "11월 모의고사",
 };
 
 export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
@@ -103,14 +111,28 @@ export interface RegularExamGrid {
   classRoomId: number;
   year: number;
   students: WeeklyTestStudentRow[];
-  scores: { studentId: number; examSlot: RegularExamSlot; rawScore: number }[];
+  scores: {
+    studentId: number;
+    examSlot: RegularExamSlot;
+    rawScore: number | null;
+    grade: number | null;
+    /** 내신 슬롯에만 값이 온다. */
+    schoolRank: number | null;
+  }[];
 }
 
 export interface RegularExamSaveBody {
   classRoomId: number;
   year: number;
-  /** rawScore가 null이면 그 칸의 행을 삭제한다. */
-  scores: { studentId: number; examSlot: RegularExamSlot; rawScore: number | null }[];
+  /** <b>셋 다 null이면</b> 그 칸의 행을 삭제한다. */
+  scores: {
+    studentId: number;
+    examSlot: RegularExamSlot;
+    rawScore: number | null;
+    grade: number | null;
+    /** 모의고사에 값을 실어 보내면 400이다. hasSchoolRank로 걸러라. */
+    schoolRank: number | null;
+  }[];
 }
 
 // ── 학생 · 학부모 (같은 응답을 쓴다) ────────────────────────

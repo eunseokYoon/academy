@@ -160,8 +160,19 @@ export interface StudentHomeworkDetail {
   resubmitRequired: boolean;
 }
 
-export const listMyHomeworks = (params: { status?: SubmissionStatus; page?: number }) =>
-  get<PageResponse<StudentHomeworkListItem>>("/student/homeworks", params);
+/**
+ * year·month는 <b>둘 다 보내야</b> 달 필터가 걸린다. 서버가 수업일 기준으로 거른다 —
+ * 받아 온 뒤 프론트에서 거르면 한 페이지(20건) 안에서만 걸러져 지난 달 숙제가 사라진다.
+ *
+ * <p>달을 걸면 수업에 안 붙은 ONLINE 숙제(방학 과제)는 빠진다. 어느 달에도 속하지 않는다.
+ */
+export const listMyHomeworks = (params: {
+  status?: SubmissionStatus;
+  year?: number;
+  month?: number;
+  page?: number;
+}) => get<PageResponse<StudentHomeworkListItem>>("/student/homeworks", params);
+
 
 export const getMyHomework = (homeworkId: number) =>
   get<StudentHomeworkDetail>(`/student/homeworks/${homeworkId}`);
@@ -419,3 +430,39 @@ export const updateReview = (body: { rating: number; content: string }) =>
   patch<MyReview>("/student/reviews/me", body);
 
 export const deleteReview = () => del<void>("/student/reviews/me");
+
+// ---------- 클리닉 시리즈 (일괄 신청) ----------
+
+/**
+ * 「매주 화요일 17:00~22:00 · 총 18회」 카드 하나.
+ *
+ * 시리즈에 id가 없다 — 서버가 오늘 이후 OPEN 클리닉을 (요일·시작·종료)로 묶은 결과라,
+ * 신청할 때 그 세 값을 그대로 되돌려 보낸다. 프론트에서 새 키를 지어내지 마라.
+ */
+export interface ClinicSeries {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  firstDate: string;
+  lastDate: string;
+  totalCount: number;
+  reservedCount: number;
+  slots: string[];
+}
+
+export interface SeriesReserveResult {
+  reserved: number;
+  skipped: number;
+  reservedDates: string[];
+  /** reason: ALREADY · CAPACITY · NO_SLOT */
+  skippedItems: { clinicDate: string; reason: string }[];
+}
+
+export const listClinicSeries = () => get<ClinicSeries[]>("/student/clinics/series");
+
+export const reserveClinicSeries = (body: {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  arrivalTime: string;
+}) => post<SeriesReserveResult>("/student/clinics/series/reservations", body);

@@ -99,8 +99,11 @@ public class ParentChildController {
     public ApiResponse<PageResponse<ParentHomeworkResponse>> homeworks(
         @PathVariable Long studentId,
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) Integer year,
+        @RequestParam(required = false) Integer month,
         @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.ok(submissionService.childHomeworks(studentId, status, pageable));
+        return ApiResponse.ok(
+            submissionService.childHomeworks(studentId, status, year, month, pageable));
     }
 
     /**

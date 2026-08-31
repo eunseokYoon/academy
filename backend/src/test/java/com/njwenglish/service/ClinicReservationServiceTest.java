@@ -33,6 +33,9 @@ import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.TeacherRepository;
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.njwenglish.dto.clinic.ClinicSeriesReserveRequest;
+import com.njwenglish.dto.clinic.ClinicSeriesReserveResponse;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -382,5 +385,135 @@ class ClinicReservationServiceTest {
 
         verify(changeLogRepository, never()).save(any());
         verify(noticeService, never()).publishForStudent(any(), any(), any(), any());
+    }
+
+    // ---------- 시리즈 일괄 신청 ----------
+
+    /** 같은 요일·같은 시간의 클리닉 세 회차. Fixtures.clinic은 시작+1시간이라 슬롯이 하나다. */
+    private List<Clinic> threeTuesdays() {
+        LocalDate first = LocalDate.now().plusDays(7).with(java.time.DayOfWeek.TUESDAY);
+        List<Clinic> group = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            group.add(Fixtures.clinic(100L + i, first.plusWeeks(i), LocalTime.of(17, 0),
+                (short) 6));
+        }
+        return group;
+    }
+
+    private ClinicSeriesReserveRequest tuesdayAt17() {
+        return new ClinicSeriesReserveRequest((short) 2, LocalTime.of(17, 0),
+            LocalTime.of(18, 0), LocalTime.of(17, 0));
+    }
+
+    @Test
+    @DisplayName("시리즈를 신청하면 그 요일 회차가 전부 예약된다")
+    void 시리즈를_신청하면_전부_예약된다() {
+        List<Clinic> group = threeTuesdays();
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
+        for (Clinic clinic : group) {
+            given(clinicRepository.findByIdForUpdate(clinic.getId()))
+                .willReturn(Optional.of(clinic));
+        }
+        given(reservationRepository.save(any(ClinicReservation.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        ClinicSeriesReserveResponse response =
+            clinicReservationService.reserveSeries(tuesdayAt17());
+
+        assertThat(response.reserved()).isEqualTo(3);
+        assertThat(response.skipped()).isZero();
+    }
+
+    @Test
+    @DisplayName("이미 신청한 회차는 건너뛰고 나머지는 신청된다")
+    void 이미_신청한_회차는_건너뛴다() {
+        List<Clinic> group = threeTuesdays();
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
+        // 첫 회차만 이미 신청한 상태
+        given(reservationRepository.existsByClinicIdAndStudentIdAndStatus(
+            100L, 88L, ReservationStatus.RESERVED)).willReturn(true);
+        // 100L은 중복 검사에서 걸러져 reserveLocked까지 가지 않는다
+        for (Clinic clinic : group.subList(1, group.size())) {
+            given(clinicRepository.findByIdForUpdate(clinic.getId()))
+                .willReturn(Optional.of(clinic));
+        }
+        given(reservationRepository.save(any(ClinicReservation.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        ClinicSeriesReserveResponse response =
+            clinicReservationService.reserveSeries(tuesdayAt17());
+
+        assertThat(response.reserved()).isEqualTo(2);
+        assertThat(response.skippedItems()).extracting(
+            ClinicSeriesReserveResponse.Skipped::reason).containsExactly("ALREADY");
+    }
+
+    @Test
+    @DisplayName("정원이 찬 회차만 빠지고 전체가 되돌아가지 않는다")
+    void 정원이_찬_회차만_빠진다() {
+        // 18회 중 1회가 찼다고 17회를 못 넣으면 쓸 수 없는 기능이 된다
+        List<Clinic> group = threeTuesdays();
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
+        for (Clinic clinic : group) {
+            given(clinicRepository.findByIdForUpdate(clinic.getId()))
+                .willReturn(Optional.of(clinic));
+        }
+        // 두 번째 회차만 정원이 꽉 찼다
+        given(reservationRepository.countByClinicIdAndStatus(100L, ReservationStatus.RESERVED))
+            .willReturn(0L);
+        given(reservationRepository.countByClinicIdAndStatus(101L, ReservationStatus.RESERVED))
+            .willReturn(6L);
+        given(reservationRepository.countByClinicIdAndStatus(102L, ReservationStatus.RESERVED))
+            .willReturn(0L);
+        given(reservationRepository.save(any(ClinicReservation.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        ClinicSeriesReserveResponse response =
+            clinicReservationService.reserveSeries(tuesdayAt17());
+
+        assertThat(response.reserved()).isEqualTo(2);
+        assertThat(response.skippedItems()).extracting(
+            ClinicSeriesReserveResponse.Skipped::reason).containsExactly("CAPACITY");
+    }
+
+    @Test
+    @DisplayName("그 회차에 없는 도착 시각은 건너뛴다")
+    void 슬롯이_없는_회차는_건너뛴다() {
+        // 선생님이 그 주만 시간을 고쳤을 때 걸린다
+        List<Clinic> group = threeTuesdays();
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
+
+        ClinicSeriesReserveResponse response = clinicReservationService.reserveSeries(
+            new ClinicSeriesReserveRequest((short) 2, LocalTime.of(17, 0),
+                LocalTime.of(18, 0), LocalTime.of(21, 0)));
+
+        assertThat(response.reserved()).isZero();
+        assertThat(response.skippedItems()).extracting(
+            ClinicSeriesReserveResponse.Skipped::reason)
+            .containsExactly("NO_SLOT", "NO_SLOT", "NO_SLOT");
+    }
+
+    @Test
+    @DisplayName("일괄 신청은 변경 로그도 공지도 남기지 않는다")
+    void 일괄_신청은_변경_기록을_남기지_않는다() {
+        // 신규 신청은 변경이 아니다. change()만 로그와 공지를 쓴다
+        List<Clinic> group = threeTuesdays();
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(clinicRepository.findOpenFrom(any(LocalDate.class))).willReturn(group);
+        for (Clinic clinic : group) {
+            given(clinicRepository.findByIdForUpdate(clinic.getId()))
+                .willReturn(Optional.of(clinic));
+        }
+        given(reservationRepository.save(any(ClinicReservation.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        clinicReservationService.reserveSeries(tuesdayAt17());
+
+        verify(changeLogRepository, never()).save(any());
+        verifyNoInteractions(noticeService);
     }
 }

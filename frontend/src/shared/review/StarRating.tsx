@@ -46,20 +46,22 @@ function Star({
   index,
   value,
   readOnly,
+  size,
   onSelect,
 }: {
   index: number;
   value: number;
   readOnly: boolean;
+  size: string;
   onSelect: (value: number) => void;
 }) {
   const fill = Math.min(1, Math.max(0, value - (index - 1)));
 
   return (
-    <div className="relative h-14 w-14 shrink-0">
-      <StarGlyph className="absolute inset-0 h-14 w-14 text-slate-200" />
+    <div className={`relative shrink-0 ${size}`}>
+      <StarGlyph className={`absolute inset-0 text-slate-200 ${size}`} />
       <div className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
-        <StarGlyph className="h-14 w-14 text-amber-400" />
+        <StarGlyph className={`text-amber-400 ${size}`} />
       </div>
       <StarHalf
         side="left"
@@ -89,31 +91,45 @@ type StarRatingProps = StarRatingInputProps | StarRatingDisplayProps;
 /**
  * 0.5 단위 별점. 별 하나를 좌/우 절반으로 나눠 탭한다.
  *
- * 별이 56px인 이유가 있다. 반쪽 터치 타깃은 WCAG 2.5.8 AA 최소 24px를 넘어야
- * 하고, 그 경계선(3.5와 4.0을 가르는 선)은 정확해야 해서 히트슬롭으로 옆 절반을
- * 침범할 수 없다 — 그래서 별 자체를 키워야 하고, 56px가 절반 28px로 그 바닥선을
- * 넘기는 최소치다. 옆에 숫자를 같이 띄우는 것도 같은 이유다 —
- * 숫자가 없으면 자기가 뭘 골랐는지 확신하지 못한다.
+ * <b>크기가 두 가지고, 둘을 같이 움직이지 마라.</b>
  *
- * readOnly면 표시 전용이고 반개는 좌측 절반만 칠한다.
+ * 입력 모드는 56px다. 반쪽 터치 타깃이 WCAG 2.5.8 AA 최소 24px를 넘어야 하고,
+ * 3.5와 4.0을 가르는 경계선은 정확해야 해서 히트슬롭으로 옆 절반을 침범할 수 없다 —
+ * 그래서 별 자체를 키우는 수밖에 없고 56px가 절반 28px로 그 바닥선을 넘기는 최소치다.
+ * 옆에 숫자를 같이 띄우는 것도 같은 이유다. 숫자가 없으면 자기가 뭘 골랐는지 확신하지 못한다.
+ * <b>입력 모드를 줄이지 마라.</b>
+ *
+ * 표시 모드는 20px다. 누를 곳이 없으니(반쪽이 span이다) 터치 타깃 규칙이 아예 적용되지
+ * 않는다. 선생님 후기 목록에서는 <b>본문이 주인공</b>이라, 별이 크면 텍스트를 눌러 버린다.
  */
 export function StarRating(props: StarRatingProps) {
   const { value } = props;
   const readOnly = props.readOnly === true;
   const onSelect = props.readOnly ? () => {} : props.onChange;
+  const size = readOnly ? "h-5 w-5" : "h-14 w-14";
 
   return (
     <div
-      className="flex items-center gap-2"
+      className={`flex items-center ${readOnly ? "gap-1.5" : "gap-2"}`}
       role={readOnly ? "img" : undefined}
       aria-label={readOnly ? `${value.toFixed(1)}점` : undefined}
     >
       <div className="flex">
         {STAR_INDEXES.map((index) => (
-          <Star key={index} index={index} value={value} readOnly={readOnly} onSelect={onSelect} />
+          <Star
+            key={index}
+            index={index}
+            value={value}
+            readOnly={readOnly}
+            size={size}
+            onSelect={onSelect}
+          />
         ))}
       </div>
-      <span aria-hidden={readOnly || undefined} className="tnum text-[15px] font-bold text-brand-900">
+      <span
+        aria-hidden={readOnly || undefined}
+        className={`tnum font-bold text-brand-900 ${readOnly ? "text-xs" : "text-[15px]"}`}
+      >
         {value.toFixed(1)}
       </span>
     </div>

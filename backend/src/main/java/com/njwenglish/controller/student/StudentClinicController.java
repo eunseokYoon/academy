@@ -1,6 +1,9 @@
 package com.njwenglish.controller.student;
 
 import com.njwenglish.common.response.ApiResponse;
+import com.njwenglish.dto.clinic.ClinicSeriesResponse;
+import com.njwenglish.dto.clinic.ClinicSeriesReserveResponse;
+import com.njwenglish.dto.clinic.ClinicSeriesReserveRequest;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
@@ -59,5 +62,21 @@ public class StudentClinicController {
         @PathVariable Long clinicId,
         @Valid @RequestBody ClinicReservationChangeRequest request) {
         return ApiResponse.ok(clinicReservationService.change(clinicId, request));
+    }
+
+    /**
+     * 시리즈 카드. 「매주 화요일 17:00~22:00 · 총 18회」 단위로 묶어 내려준다.
+     * 시리즈에 id가 없어서 신청은 이 응답의 (요일·시작·종료)를 그대로 되돌려 보낸다.
+     */
+    @GetMapping("/clinics/series")
+    public ApiResponse<List<ClinicSeriesResponse>> series() {
+        return ApiResponse.ok(clinicReservationService.series());
+    }
+
+    /** 시리즈 일괄 신청. 정원이 찬 회차만 빠지고 나머지는 신청된다. */
+    @PostMapping("/clinics/series/reservations")
+    public ApiResponse<ClinicSeriesReserveResponse> reserveSeries(
+        @Valid @RequestBody ClinicSeriesReserveRequest request) {
+        return ApiResponse.ok(clinicReservationService.reserveSeries(request));
     }
 }

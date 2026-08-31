@@ -15,6 +15,19 @@ k8s·ECS·로드밸런서·오토스케일링·CDN·모니터링 스택을 넣�
                                  PostgreSQL (관리형) · S3
 ```
 
+## 배포 경로가 둘이다
+
+| | 무엇 | 어떻게 | 롤백 |
+|---|---|---|---|
+| **backend** | 도커 이미지 | 로컬 빌드 → 레지스트리 push → 서버 pull | `.env`의 `TAG` 되돌리기 |
+| **web(화면)** | 이미지 없음 | 로컬 `npm run build` → `dist`를 rsync → 심볼릭 링크 전환 | `current` 링크 되돌리기 |
+
+**화면만 고쳤으면 `deploy/deploy-web.sh` 하나면 끝난다.** 이미지도 레지스트리도 안 거치고
+`docker compose`도 안 건드린다. nginx는 요청마다 `current` 링크를 다시 풀기 때문에 reload도 없다.
+
+`web` 컨테이너는 공식 `nginx:1.27-alpine`을 그대로 쓴다. 설정(`nginx/templates`)과
+화면(`web/`)이 전부 마운트라 굽는 이미지가 없다.
+
 ---
 
 ## 1. 최초 1회 — AWS 콘솔 작업
@@ -163,7 +176,9 @@ A 레코드 → EC2 퍼블릭 IP(가능하면 Elastic IP). 인증서 발급 전�
 
 ### 1-7. 이미지 레지스트리
 
-ECR 또는 GHCR에 `academy-backend`, `academy-frontend` 리포지토리를 만든다.
+ECR 또는 GHCR에 **`academy-backend` 하나만** 만든다. 화면은 이미지가 아니라 rsync라
+`academy-frontend` 리포지토리는 필요 없다.
+
 **t3.small에서 빌드하면 메모리 부족으로 자주 실패한다.** 로컬/CI에서 빌드해 올린다.
 
 ---
@@ -171,15 +186,20 @@ ECR 또는 GHCR에 `academy-backend`, `academy-frontend` 리포지토리를 만�
 ## 2. 최초 1회 — 서버 설정
 
 ```bash
-sudo mkdir -p /opt/academy /etc/academy
-# 리포에서 docker-compose.prod.yml 을 /opt/academy 로 복사
+# 호스트 시간대. 컨테이너는 각자 TZ를 갖고 있어서 이게 없어도 서비스는 정상이지만,
+# `docker ps`나 dmesg를 볼 때 시각이 UTC로 나와 사고 조사 때 헷갈린다.
+sudo timedatectl set-timezone Asia/Seoul
+
+sudo mkdir -p /opt/academy/{nginx/templates,web/releases} /etc/academy
+# 배포 계정이 web/ 아래에 rsync 할 수 있어야 한다
+sudo chown -R "$USER":"$USER" /opt/academy
 
 # 시크릿
 sudo cp deploy/academy.env.example /etc/academy/env
 sudo vi /etc/academy/env          # 값 채우기
 sudo chmod 600 /etc/academy/env
 
-# compose 변수
+# compose 변수. TAG는 backend 전용이다 — 화면은 TAG를 쓰지 않는다.
 cd /opt/academy
 cat > .env <<'EOF'
 DOMAIN=academy.example.com
@@ -187,6 +207,17 @@ REGISTRY=ghcr.io/your-account
 TAG=20260730-1420
 EOF
 ```
+
+리포에서 서버로 올릴 파일 둘 (로컬에서):
+
+```bash
+scp docker-compose.prod.yml {user}@{host}:/opt/academy/
+scp deploy/nginx/templates/default.conf.template \
+    {user}@{host}:/opt/academy/nginx/templates/
+```
+
+**`nginx/templates/`가 비어 있으면 nginx가 기본 환영 페이지를 띄운다.** 인증서도 프록시도
+없는 상태라 `/api`가 통째로 404다 — 첫 배포에서 가장 흔한 사고다.
 
 ### HTTPS 최초 발급 (닭과 달걀)
 
@@ -217,21 +248,43 @@ docker compose -f docker-compose.prod.yml exec certbot certbot renew --dry-run
 
 ## 3. 배포
 
+**둘은 서로 독립이다.** 화면만 고쳤으면 3-1만, API만 고쳤으면 3-2만 돌린다.
+둘 다 바뀌었으면 **3-2(backend) 먼저**다 — 새 화면이 아직 없는 API를 부르는 것보다
+옛 화면이 이미 있는 API를 부르는 쪽이 안전하다.
+
+### 3-1. 화면 (web)
+
+```bash
+deploy/deploy-web.sh {user}@{host}
+# 키 파일이 필요하면:  deploy/deploy-web.sh {user}@{host} -i ~/.ssh/academy.pem
+```
+
+스크립트가 빌드 → `releases/{타임스탬프}/`로 rsync → `current` 링크 전환 → 오래된 릴리스 정리
+순으로 돈다. 링크를 바꾸는 순간부터 새 화면이고, **반쯤 복사된 상태가 서비스되는 구간이 없다.**
+`docker compose`도 nginx reload도 필요 없다.
+
+`VITE_API_BASE_URL`을 손으로 넘기지 마라. `frontend/.env.production`이 `/api`로 고정한다.
+그 파일이 없으면 개발용 `frontend/.env`가 이겨서 **번들에 `http://localhost:8080/api`가 박힌다** —
+빌드도 배포도 성공하고 학부모 폰에서만 빈 화면이 뜬다.
+
+nginx 설정(`deploy/nginx/templates/`)을 고쳤으면 그건 별개다. 서버에 다시 올린 뒤
+`docker compose -f docker-compose.prod.yml up -d --force-recreate web`으로 **재생성**해야 한다.
+`${DOMAIN}` 치환이 컨테이너 시작 때 한 번만 일어나므로 reload로는 반영되지 않는다.
+
+### 3-2. API (backend)
+
 **`--platform linux/amd64`를 반드시 붙여라.** 서버가 t2(x86_64)인데 Apple Silicon 맥의
 기본 빌드 결과물은 arm64다. 빼먹으면 서버의 `docker pull`이 `no matching manifest`로 실패한다.
 
-맥에서는 QEMU 에뮬레이션으로 빌드되므로 네이티브보다 느리다(특히 backend의 Gradle 단계).
+맥에서는 QEMU 에뮬레이션으로 빌드되므로 네이티브보다 느리다(Gradle 단계가 특히 그렇다).
 빌드가 오래 걸리는 것은 정상이며, 서버 성능과는 무관하다.
 
 ```bash
 # 로컬
 TAG=$(date +%Y%m%d-%H%M)
 REGISTRY=ghcr.io/your-account
-docker build --platform linux/amd64 -t $REGISTRY/academy-backend:$TAG  ./backend
-docker build --platform linux/amd64 -t $REGISTRY/academy-frontend:$TAG ./frontend \
-  --build-arg VITE_API_BASE_URL=/api
+docker build --platform linux/amd64 -t $REGISTRY/academy-backend:$TAG ./backend
 docker push $REGISTRY/academy-backend:$TAG
-docker push $REGISTRY/academy-frontend:$TAG
 
 # 서버 — 배포 전 DB 백업부터. Flyway 마이그레이션은 롤백되지 않는다.
 cd /opt/academy
@@ -243,6 +296,19 @@ docker image prune -f        # dangling만. -a 를 붙이면 롤백 대상까지
 ```
 
 ### 롤백
+
+**화면** — 서버에서 링크만 되돌린다. 재빌드도 재시작도 없다.
+
+```bash
+cd /opt/academy/web
+ls -1dt releases/*/                 # 최근 5개가 남아 있다
+ln -sfn releases/{이전} current.tmp && mv -Tf current.tmp current
+```
+
+`ln -sfn` 하나로 끝내지 마라. 기존 링크를 지웠다가 다시 만드는 사이에 들어온 요청이 404가 된다.
+임시 이름으로 만든 뒤 `mv -Tf`로 갈아끼우는 것이 원자적이다.
+
+**API** — 태그를 되돌린다.
 
 ```bash
 sed -i "s/^TAG=.*/TAG={이전값}/" .env
@@ -262,6 +328,25 @@ docker compose -f docker-compose.prod.yml exec backend date          # KST
 docker compose -f docker-compose.prod.yml exec backend id            # app (비루트)
 docker stats --no-stream
 df -h && docker system df
+```
+
+화면이 제대로 물렸는지 (web은 마운트로 도니까 이 셋이 전부다):
+
+```bash
+# 컨테이너가 보는 릴리스 = 서버의 current 와 같아야 한다
+readlink /opt/academy/web/current
+docker compose -f docker-compose.prod.yml exec web ls /srv/web/current/index.html
+
+# 설정이 치환됐는지. ${DOMAIN}이 글자 그대로 남아 있으면 .env를 안 읽은 것이다
+docker compose -f docker-compose.prod.yml exec web \
+  grep -m2 server_name /etc/nginx/conf.d/default.conf
+```
+
+**배포한 화면이 실제로 떴는지는 브라우저 캐시 때문에 헷갈린다.** `index.html`은 캐시하지
+않지만 `/assets/`는 1년 immutable이라, 파일명 해시가 바뀐 새 번들을 받는지로 확인하는 게 확실하다.
+
+```bash
+curl -s https://{도메인} | grep -o '/assets/index-[^"]*\.js'
 ```
 
 **t2는 CPU 크레딧을 봐라.** CloudWatch의 `CPUCreditBalance`가 0에 붙어 있으면

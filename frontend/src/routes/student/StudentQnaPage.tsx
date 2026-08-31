@@ -36,7 +36,7 @@ export default function StudentQnaPage() {
   });
 
   /**
-   * 내 후기가 있으면 「내 후기」, 없으면 「후기 쓰기」다.
+   * 내 후기가 있으면 「내 후기」, 없으면 「수강 후기」다.
    * 학생당 하나라 목록이 없다 — 다른 학생 후기는 보이지 않는다.
    */
   const { data: myReview } = useQuery({
@@ -67,7 +67,7 @@ export default function StudentQnaPage() {
               className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5
                          text-sm font-medium text-brand-700"
             >
-              {myReview ? "내 후기" : "후기 쓰기"}
+              {myReview ? "내 후기" : "수강 후기"}
             </button>
             <button
               type="button"
