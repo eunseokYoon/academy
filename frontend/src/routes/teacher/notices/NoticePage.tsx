@@ -39,6 +39,7 @@ function formatBytes(bytes: number): string {
 export default function NoticePage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<TeacherNotice | "new" | null>(null);
+  const [viewing, setViewing] = useState<TeacherNotice | null>(null);
 
   const notices = useQuery({
     queryKey: ["teacher", "notices"],
@@ -83,7 +84,11 @@ export default function NoticePage() {
           {items.map((notice) => (
             <li key={notice.noticeId} className="px-3 py-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setViewing(notice)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <div className="flex flex-wrap items-center gap-1.5">
                     {notice.pinned && <Badge tone="warn">고정</Badge>}
                     {/* 초안이 눈에 띄어야 "썼는데 안 나간" 공지를 찾는다 */}
@@ -110,12 +115,15 @@ export default function NoticePage() {
                   <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-slate-500">
                     {notice.content}
                   </p>
-                </div>
+                </button>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   {notice.publishedAt === null && (
                     <button
                       type="button"
-                      onClick={() => publish.mutate(notice.noticeId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        publish.mutate(notice.noticeId);
+                      }}
                       className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium
                                  text-white"
                     >
@@ -125,14 +133,18 @@ export default function NoticePage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setEditing(notice)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(notice);
+                      }}
                       className="text-xs text-slate-500 underline"
                     >
                       수정
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (
                           window.confirm(
                             notice.publishedAt === null
@@ -164,6 +176,32 @@ export default function NoticePage() {
             setEditing(null);
           }}
         />
+      )}
+
+      {viewing && (
+        <Modal title={viewing.title} onClose={() => setViewing(null)}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {viewing.pinned && <Badge tone="warn">고정</Badge>}
+            {viewing.publishedAt === null ? (
+              <Badge tone="danger">초안</Badge>
+            ) : (
+              <Badge tone="ok">발행</Badge>
+            )}
+            <Badge tone="neutral">
+              {viewing.scope === "ALL"
+                ? "전체"
+                : viewing.scope === "STUDENT"
+                  ? `${viewing.studentName} 개인`
+                  : viewing.classRoomName}
+            </Badge>
+          </div>
+          <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{viewing.content}</p>
+          {(viewing.attachments ?? []).map((attachment) => (
+            <p key={attachment.attachmentId} className="mt-2 text-[13px] text-slate-600">
+              📎 {attachment.fileName}
+            </p>
+          ))}
+        </Modal>
       )}
     </div>
   );
