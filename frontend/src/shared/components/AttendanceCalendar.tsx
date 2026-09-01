@@ -150,7 +150,9 @@ function SummaryGrid({ data }: { data: CalendarData }) {
     // 어느 날이 대체 등원이었는지는 캘린더 칸이 라벨로 그대로 보여준다
     {
       label: "출석",
-      value: data.summary.present + data.summary.makeup,
+      // 배포 순서가 backend → web이지만, 옛 응답에 makeup이 없으면 NaN이 찍힌다.
+      // 계약상 항상 있어도 어긴 쪽이 화면을 망가뜨리게 두지 않는다(7-3)
+      value: data.summary.present + (data.summary.makeup ?? 0),
       color: "text-emerald-600",
     },
     { label: "지각", value: data.summary.late, color: "text-amber-600" },
