@@ -82,8 +82,16 @@ export default function DashboardPage() {
                     {!lesson.contentWritten && <Badge tone="warn">내용 미작성</Badge>}
                   </div>
                 </div>
+                {/*
+                  미확정이면 출석 화면으로 보낸다. 수업 상세에는 출석을 확정하는 기능이
+                  없어서, 예전에는 "출석 확정하기"를 눌러도 확정할 수 없는 화면이 열렸다.
+                */}
                 <Link
-                  to={`/teacher/lessons/${lesson.lessonId}`}
+                  to={
+                    lesson.attendanceStatus === "PENDING"
+                      ? `/teacher/attendance?lessonId=${lesson.lessonId}`
+                      : `/teacher/lessons/${lesson.lessonId}`
+                  }
                   className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium
                              text-white"
                 >

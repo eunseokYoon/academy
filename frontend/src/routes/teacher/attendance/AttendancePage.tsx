@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "../../../shared/api/errors";
 import { Badge } from "../../../shared/components/Badge";
@@ -26,9 +27,32 @@ import { CLINIC_EXCEPTION_STATUSES } from "../../../shared/attendance/types";
  * 여기 하나</b>여야 한다.
  */
 export default function AttendancePage() {
+  /*
+    T-1에서 "출석 확정하기"를 누르면 그 수업이 바로 열려야 한다. 목록으로 한 번 더
+    들여보내면 선생님이 방금 본 수업을 다시 찾아야 한다.
+
+    쿼리 파라미터는 첫 렌더에서 한 번만 읽는다. 뒤로 가기로 목록에 돌아갈 때
+    파라미터를 지우므로, 계속 읽으면 목록이 다시 상세로 튕긴다.
+  */
+  const [searchParams, setSearchParams] = useSearchParams();
   // 수업과 클리닉은 확정 API가 달라서 선택 상태도 따로 둔다
-  const [lessonId, setLessonId] = useState<number | null>(null);
-  const [clinicId, setClinicId] = useState<number | null>(null);
+  const [lessonId, setLessonId] = useState<number | null>(() => {
+    const value = searchParams.get("lessonId");
+    return value === null ? null : Number(value);
+  });
+  const [clinicId, setClinicId] = useState<number | null>(() => {
+    const value = searchParams.get("clinicId");
+    return value === null ? null : Number(value);
+  });
+
+  /** 목록으로 돌아갈 때 파라미터를 지운다. 안 지우면 새로고침에서 다시 상세가 열린다. */
+  function backToList() {
+    setLessonId(null);
+    setClinicId(null);
+    if (searchParams.has("lessonId") || searchParams.has("clinicId")) {
+      setSearchParams({}, { replace: true });
+    }
+  }
 
   const pending = useQuery({
     queryKey: ["teacher", "attendance", "pending"],
@@ -36,10 +60,10 @@ export default function AttendancePage() {
   });
 
   if (lessonId !== null) {
-    return <LessonConfirmPanel lessonId={lessonId} onBack={() => setLessonId(null)} />;
+    return <LessonConfirmPanel lessonId={lessonId} onBack={backToList} />;
   }
   if (clinicId !== null) {
-    return <ClinicConfirmPanel clinicId={clinicId} onBack={() => setClinicId(null)} />;
+    return <ClinicConfirmPanel clinicId={clinicId} onBack={backToList} />;
   }
 
   const lessons = pending.data?.lessons ?? [];
