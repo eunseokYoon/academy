@@ -525,11 +525,11 @@ function RosterTab({
                   >
                     <span className="flex flex-wrap items-center gap-2 text-sm text-slate-900">
                       {student.name}
-                      /*
+                      {/*
                         선생님 배정과 학생 이동을 구분해야 "왜 여기 있냐"는 문의에 답한다.
                         학생 신청이 없어진 뒤(2026-09-01) assigned_by가 null인 경로는
                         학생이 다른 클리닉에서 옮겨 온 것 하나뿐이다.
-                      */
+                      */}
                       <Badge tone={student.assignedByTeacher ? "neutral" : "ok"}>
                         {student.assignedByTeacher ? "배정" : "이동"}
                       </Badge>
