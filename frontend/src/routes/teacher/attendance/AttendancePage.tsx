@@ -114,7 +114,7 @@ export default function AttendancePage() {
                       </div>
                       {/* 클리닉엔 반 이름이 없다. 시각이 그 시간대를 가리키는 유일한 표시다 */}
                       <p className="mt-0.5 text-sm text-slate-500">
-                        {clinic.startTime}~{clinic.endTime} · 신청 {clinic.studentCount}명
+                        {clinic.startTime}~{clinic.endTime} · {clinic.studentCount}명
                       </p>
                     </button>
                   </li>
@@ -265,7 +265,7 @@ function ClinicConfirmPanel({ clinicId, onBack }: { clinicId: number; onBack: ()
             </p>
           </div>
 
-          {slotStates.length === 0 ? (
+          {slotStates.every((s) => s.reservedCount === 0) ? (
             <p className="text-sm text-slate-400">배정된 학생이 없습니다.</p>
           ) : (
             <div className="flex flex-wrap gap-1">

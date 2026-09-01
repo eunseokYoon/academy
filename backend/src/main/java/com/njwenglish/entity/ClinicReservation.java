@@ -42,7 +42,10 @@ public class ClinicReservation extends BaseTimeEntity {
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
 
-    /** null이면 학생 본인 신청(S-9), 값이 있으면 선생님 배정(T-13). */
+    /**
+     * 값이 있으면 선생님 배정(T-13), null이면 학생이 다른 클리닉에서 옮겨 온 예약이다.
+     * 학생 본인 신청 경로가 없어졌으므로(2026-09-01) null은 더 이상 「신청」을 뜻하지 않는다.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_by")
     private Teacher assignedBy;
@@ -74,8 +77,10 @@ public class ClinicReservation extends BaseTimeEntity {
     private OffsetDateTime checkedAt;
 
     /**
-     * assignedBy가 null이면 학생 본인 신청(S-9), 값이 있으면 선생님 배정(T-13)이다.
+     * assignedBy가 값이면 선생님 배정(T-13), null이면 학생이 다른 클리닉에서 옮겨 온 것이다.
      * 명단에서 "왜 여기 있냐"는 문의에 답하려면 이 구분이 남아야 한다.
+     *
+     * <p>학생 본인 신청 경로는 2026-09-01에 없어졌다. null을 「신청」으로 읽지 마라.
      */
     public static ClinicReservation reserve(Clinic clinic, Student student, Teacher assignedBy,
                                             LocalTime arrivalTime) {

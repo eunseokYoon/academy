@@ -412,7 +412,7 @@ function ClinicDetailModal({ clinic, onClose }: { clinic: Clinic; onClose: () =>
         {(
           [
             ["roster", "명단"],
-            ["attendance", "출석 확정"],
+            ["attendance", "출결 확정"],
           ] as [DetailTab, string][]
         ).map(([value, label]) => (
           <button
@@ -488,8 +488,8 @@ function RosterTab({
       await refresh();
       onClose();
     },
-    // 신청자가 있으면 지우지 못한다. 마감(CLOSED)으로 닫아야 한다
-    onError: (e) => setError(errorMessage(e, "신청자가 있어 삭제할 수 없습니다. 마감을 쓰세요.")),
+    // 배정된 학생이 있으면 지우지 못한다. 마감(CLOSED)으로 닫아야 한다
+    onError: (e) => setError(errorMessage(e, "배정된 학생이 있어 삭제할 수 없습니다. 마감을 쓰세요.")),
   });
 
   const close = useMutation({
@@ -505,11 +505,11 @@ function RosterTab({
     <div className="space-y-3">
       <p className="text-sm text-slate-600">
         {students.length}
-        {clinic.capacity === null ? "" : `/${clinic.capacity}`}명 신청
+        {clinic.capacity === null ? "" : `/${clinic.capacity}`}명
       </p>
 
       {students.length === 0 ? (
-        <p className="text-sm text-slate-400">아직 신청한 학생이 없습니다.</p>
+        <p className="text-sm text-slate-400">아직 배정된 학생이 없습니다.</p>
       ) : (
         <div className="space-y-3">
           {groupByArrival(students).map(([arrivalTime, rows]) => (
@@ -525,9 +525,13 @@ function RosterTab({
                   >
                     <span className="flex flex-wrap items-center gap-2 text-sm text-slate-900">
                       {student.name}
-                      {/* 신청과 배정을 구분해야 "왜 여기 있냐"는 문의에 답할 수 있다 */}
+                      /*
+                        선생님 배정과 학생 이동을 구분해야 "왜 여기 있냐"는 문의에 답한다.
+                        학생 신청이 없어진 뒤(2026-09-01) assigned_by가 null인 경로는
+                        학생이 다른 클리닉에서 옮겨 온 것 하나뿐이다.
+                      */
                       <Badge tone={student.assignedByTeacher ? "neutral" : "ok"}>
-                        {student.assignedByTeacher ? "배정" : "신청"}
+                        {student.assignedByTeacher ? "배정" : "이동"}
                       </Badge>
                       {/* 시간대를 좁힌 뒤 남은 예약. 서버가 말없이 옮기지 않는다 */}
                       {student.outOfRange && <Badge tone="danger">시간대 밖</Badge>}
@@ -562,7 +566,7 @@ function RosterTab({
           onClick={() => close.mutate()}
           className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
         >
-          {clinic.status === "OPEN" ? "신청 마감" : "다시 열기"}
+          {clinic.status === "OPEN" ? "마감" : "다시 열기"}
         </button>
       </div>
       {students.length === 0 && (
@@ -748,7 +752,7 @@ function ClinicAttendanceTab({
 
   return (
     <div className="space-y-3">
-      {slotStates.length === 0 ? (
+      {slotStates.every((s) => s.reservedCount === 0) ? (
         <p className="text-sm text-slate-400">배정된 학생이 없습니다.</p>
       ) : (
         <div className="flex flex-wrap gap-1">

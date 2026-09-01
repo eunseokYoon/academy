@@ -17,7 +17,7 @@ export type ReservationStatus = "RESERVED" | "CANCELED" | "MOVED";
 export interface MyReservation {
   reservationId: number;
   status: ReservationStatus;
-  /** 내가 고른 도착 시각. "17:00" 형식이다. */
+  /** 배정받은 도착 시각. "17:00" 형식이고 변경으로 바꿀 수 있다. */
   arrivalTime: string;
   /**
    * null이면 결석이 아니라 <b>아직 출석 확정 전</b>이다.

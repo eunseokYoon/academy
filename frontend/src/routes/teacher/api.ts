@@ -320,7 +320,7 @@ export interface PendingClinic {
   clinicDate: string;
   startTime: string;
   endTime: string;
-  /** 신청 인원. 수업의 재원 인원과 뜻이 다르다. */
+  /** 배정된 인원. 수업의 재원 인원과 뜻이 다르다. */
   studentCount: number;
 }
 
@@ -390,7 +390,10 @@ export interface ClinicReservationRow {
    * 이미 약속된 시각을 말없이 바꾸면 학생이 헛걸음한다. 선생님이 보고 직접 처리한다.
    */
   outOfRange: boolean;
-  /** 학생 본인 신청인지 선생님 배정인지. "왜 여기 있냐"는 문의에 답하려면 필요하다. */
+  /**
+   * 선생님 배정인지 학생이 옮겨 온 것인지. "왜 여기 있냐"는 문의에 답하려면 필요하다.
+   * 학생 신청이 없어진 뒤(2026-09-01) false인 경로는 클리닉 이동 하나뿐이다.
+   */
   assignedByTeacher: boolean;
   attendStatus: AttendanceStatus | null;
   memo: string | null;

@@ -83,8 +83,9 @@ public class ClinicReservationService {
      * 두 트랜잭션이 같은 count를 읽고 둘 다 통과한다. 저부하에서는 통과하다가
      * 신청이 몰리는 순간 깨져서 테스트로 잡기도 어렵다.
      *
-     * <p>failOnDuplicate는 경로마다 다르다. 학생 신청은 "이미 신청하셨습니다"를 보여줘야 해서
-     * 409지만, 선생님 일괄 배정은 멱등이라 이미 있는 학생을 건너뛴다.
+     * <p>failOnDuplicate는 경로마다 다르다. 학생이 다른 클리닉에서 옮겨 올 때는
+     * "이미 그 시간대에 있습니다"를 보여줘야 해서 409지만, 선생님 일괄 배정은 멱등이라
+     * 이미 있는 학생을 건너뛴다.
      *
      * <p>arrivalTime이 null이면 클리닉 시작 시각이다(선생님 배정의 기본값).
      * <b>정원은 클리닉 전체 기준이다</b> — 슬롯별 정원은 만들지 않기로 확정했다.
@@ -134,7 +135,8 @@ public class ClinicReservationService {
      * <p>targetClinicId가 없거나 지금 클리닉과 같으면 arrival_time만 UPDATE한다.
      * 다르면 기존 예약을 MOVED로 비우고 목표 클리닉에 새 RESERVED를 만든다 —
      * <b>먼저 비워야</b> 같은 학생이 두 시간대에 RESERVED로 남지 않는다.
-     * 정원 재확인은 학생 신청과 같은 reserveLocked를 탄다.
+     * 정원 재확인은 선생님 배정과 같은 reserveLocked를 탄다 — 정원 잠금·중복 검사·
+     * 슬롯 검증이 전부 거기 있다. 이동 전용 경로를 따로 만들지 마라.
      */
     @Transactional
     public ClinicReservationCreateResponse change(Long clinicId,
