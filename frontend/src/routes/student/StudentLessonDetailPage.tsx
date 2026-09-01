@@ -53,13 +53,14 @@ export default function StudentLessonDetailPage() {
         </h2>
       </div>
 
-      {/* videoId가 null이면 영상이 등록되지 않은 수업이다. 영역을 통째로 숨긴다 */}
+      {/* embedUrl이 null이면 영상이 등록되지 않은 수업이다. 영역을 통째로 숨긴다.
+          재생목록이면 videoId는 null이지만 embedUrl은 채워진다 */}
       {data.embedUrl && (
         <section className="space-y-2">
           {playing ? (
             <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
               <iframe
-                src={`${data.embedUrl}?rel=0&modestbranding=1&autoplay=1`}
+                src={`${data.embedUrl}${data.embedUrl.includes("?") ? "&" : "?"}rel=0&modestbranding=1&autoplay=1`}
                 title="수업 영상"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media;
                        picture-in-picture"

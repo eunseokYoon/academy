@@ -30,8 +30,10 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
         </h3>
       </div>
 
-      {/* videoId가 null이면 영상이 등록되지 않은 수업이다. 영역을 통째로 숨긴다 */}
-      {lesson.videoId && (
+      {/* embedUrl이 null이면 영상이 등록되지 않은 수업이다. 영역을 통째로 숨긴다.
+          재생목록은 videoId가 없어 썸네일을 못 그린다 — 아래 img를 건너뛰면
+          이미 만들어 둔 404 대비 화면(남색 블록 + 재생 버튼)이 그대로 남는다 */}
+      {lesson.embedUrl && (
         <Link
           to={`/student/lessons/${lesson.lessonId}`}
           className="group relative mx-4 flex aspect-video items-center justify-center
@@ -39,7 +41,7 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
         >
           {/*
             YouTube가 videoId만으로 주는 정적 썸네일이다. iframe이 아니라 이미지 한 장이라
-            홈이 무거워지지 않는다.
+            홈이 무거워지지 않는다. 재생목록은 videoId가 없으므로 그리지 않는다.
 
             hqdefault는 480×360(4:3)이라 16:9 칸에 넣으면 위아래 검은 띠가 생긴다.
             object-cover로 그 띠를 잘라 낸다 — mqdefault(320×180)는 비율이 맞는 대신
@@ -48,15 +50,17 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
             영상이 지워졌거나 비공개면 404다. 그때는 이미지를 숨겨 원래의 남색 블록이
             그대로 남는다 — 깨진 이미지 아이콘이 뜨는 것보다 낫다.
           */}
-          <img
-            src={`https://i.ytimg.com/vi/${lesson.videoId}/hqdefault.jpg`}
-            alt=""
-            loading="lazy"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+          {lesson.videoId && (
+            <img
+              src={`https://i.ytimg.com/vi/${lesson.videoId}/hqdefault.jpg`}
+              alt=""
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
           {/* 썸네일 위 재생 버튼이 묻히지 않게 살짝 어둡게 깐다 */}
           <span aria-hidden="true" className="absolute inset-0 bg-brand-950/35" />
           <span
