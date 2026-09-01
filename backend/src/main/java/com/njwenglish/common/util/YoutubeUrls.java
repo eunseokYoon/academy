@@ -20,10 +20,19 @@ public final class YoutubeUrls {
             + "|youtube\\.com/embed/([\\w-]{11})"
             + ")(?:[?&#].*)?$");
 
-    /** youtube.com/playlist?list={id} · watch?v={vid}&list={id} */
+    /**
+     * youtube.com/playlist?list={id} · watch?v={vid}&list={id} · youtu.be/{vid}?list={id}
+     *
+     * <p><b>youtu.be 단축 링크도 받아야 한다.</b> YouTube 모바일 앱 공유 시트가 재생목록 안의
+     * 영상을 {@code youtu.be/VIDEOID?list=PLxxx&index=2}로 준다. 이 형식을 빼면 VIDEO_ID
+     * 패턴에 걸려 <b>영상 하나만</b> 임베드되는데, 저장도 재생도 되므로 아무도 모르는 채
+     * 학생이 그날 수업 영상 중 하나만 본다.
+     */
     private static final Pattern PLAYLIST_ID = Pattern.compile(
-        "^(?:https?://)?(?:www\\.|m\\.)?youtube\\.com/(?:playlist|watch|embed/videoseries)\\?"
-            + "(?:[^&]*&)*list=([\\w-]+)(?:[&#].*)?$");
+        "^(?:https?://)?(?:www\\.|m\\.)?(?:"
+            + "youtube\\.com/(?:playlist|watch|embed/videoseries)"
+            + "|youtu\\.be/[\\w-]{11}"
+            + ")\\?(?:[^&]*&)*list=([\\w-]+)(?:[&#].*)?$");
 
     private static final String EMBED_PREFIX = "https://www.youtube.com/embed/";
     private static final String PLAYLIST_PREFIX = "https://www.youtube.com/embed/videoseries?list=";

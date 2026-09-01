@@ -85,4 +85,21 @@ class YoutubeUrlsTest {
         assertThat(YoutubeUrls.embedUrlOf(null)).isNull();
         assertThat(YoutubeUrls.embedUrlOf("  ")).isNull();
     }
+
+    @Test
+    @DisplayName("youtu.be 단축 링크의 list도 재생목록으로 읽는다 — 모바일 공유 시트가 주는 형식이다")
+    void shortLinkWithPlaylistIsPlaylist() {
+        String url = "https://youtu.be/dQw4w9WgXcQ?list=PLabc123DEF&index=2";
+        assertThat(YoutubeUrls.playlistId(url)).isEqualTo("PLabc123DEF");
+        assertThat(YoutubeUrls.embedUrlOf(url))
+            .isEqualTo("https://www.youtube.com/embed/videoseries?list=PLabc123DEF");
+    }
+
+    @Test
+    @DisplayName("list가 없는 youtu.be 링크는 그대로 단일 영상이다")
+    void shortLinkWithoutPlaylistStaysVideo() {
+        assertThat(YoutubeUrls.playlistId("https://youtu.be/dQw4w9WgXcQ")).isNull();
+        assertThat(YoutubeUrls.embedUrlOf("https://youtu.be/dQw4w9WgXcQ"))
+            .isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ");
+    }
 }

@@ -204,6 +204,32 @@ class ClinicReservationServiceTest {
         assertThat(response.summary().absent()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("확정된 예약이 시각을 옮기면 출결이 비워진다 — 선생님이 못 본 학생이 확정에 섞이면 안 된다")
+    void changingArrivalTimeClearsAttendance() {
+        Fixtures.login(Fixtures.studentUser(880L));
+        Clinic wide = Clinic.open(teacher, LocalDate.now().plusDays(7),
+            LocalTime.of(17, 0), LocalTime.of(22, 0), (short) 6, null);
+        ReflectionTestUtils.setField(wide, "id", 50L);
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+
+        // 선생님이 17시 슬롯을 확정하며 결석 처리한 예약
+        ClinicReservation reserved =
+            Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
+        reserved.checkAttendance(AttendanceStatus.ABSENT, "무단", teacher, OffsetDateTime.now());
+        given(reservationRepository.findByClinicIdAndStudentIdAndStatus(
+            50L, seo.getId(), ReservationStatus.RESERVED)).willReturn(Optional.of(reserved));
+
+        clinicReservationService.change(50L, new ClinicReservationChangeRequest(
+            null, LocalTime.of(20, 0), "학원 셔틀 시간이 바뀌었습니다"));
+
+        assertThat(reserved.getArrivalTime()).isEqualTo(LocalTime.of(20, 0));
+        assertThat(reserved.getAttendStatus()).isNull();
+        assertThat(reserved.getMemo()).isNull();
+        assertThat(reserved.getCheckedBy()).isNull();
+        assertThat(reserved.getCheckedAt()).isNull();
+    }
+
     // ---------- 시간대별 출결 (2026-09-01) ----------
 
     /** 17:00~22:00. 슬롯이 17·18·19·20·21시 다섯 개다. */

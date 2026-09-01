@@ -92,9 +92,21 @@ public class ClinicReservation extends BaseTimeEntity {
      * 같은 클리닉 안에서 도착 시각만 옮긴다. 선생님 승인은 없다(2026-08-10 확정) —
      * 대신 호출부가 사유와 함께 ClinicChangeLog를 남긴다. 그 기록이 유일한 대응책이므로
      * 이 메서드를 로그 없이 부르지 마라.
+     *
+     * <p><b>출결 기록을 함께 비운다</b>(2026-09-01). 출결 확정이 슬롯 단위가 되면서
+     * 필요해졌다 — 17시 슬롯을 확정하며 결석 처리된 학생이 20시로 옮기면, 그 학생의
+     * attend_status가 따라가 20시 슬롯이 <b>선생님이 확인한 적도 없는 학생을 포함한 채</b>
+     * 「확정」으로 뜬다(슬롯 확정 판정이 「전원 attend_status가 채워짐」이라서다).
+     * 옮긴 시각에 대해서는 아직 아무 판정도 받지 않은 상태가 맞다.
+     *
+     * <p>비우는 것을 되돌리지 마라. 되돌리면 선생님이 못 본 학생이 확정 명단에 섞인다.
      */
     public void changeArrivalTime(LocalTime arrivalTime) {
         this.arrivalTime = arrivalTime;
+        this.attendStatus = null;
+        this.memo = null;
+        this.checkedBy = null;
+        this.checkedAt = null;
     }
 
     /** 행을 지우지 않는다. 부분 유니크 인덱스가 RESERVED만 보므로 나중에 다시 신청할 수 있다. */
