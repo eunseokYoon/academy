@@ -16,6 +16,8 @@ import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
+import com.njwenglish.dto.clinic.ClinicReservationListResponse;
+import com.njwenglish.dto.clinic.ClinicSlotState;
 import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.Student;
@@ -33,7 +35,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -317,6 +321,57 @@ class ClinicReservationServiceTest {
 
         assertThat(response.summary().present()).isZero();
         assertThat(response.summary().absent()).isZero();
+    }
+
+    // ---------- 명단 attendanceConfirmed (2026-09-01) ----------
+
+    @Test
+    @DisplayName("한 슬롯만 전원 확정하면 attendanceConfirmed는 false다 — 다른 슬롯이 남아 있다")
+    void attendanceConfirmedIsFalseWhenAnotherSlotIsStillPending() {
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+
+        ClinicReservation seoAt17 = Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
+        ClinicReservation kimAt17 = Fixtures.reservationAt(903L, wide, kim, null, LocalTime.of(17, 0));
+        seoAt17.checkAttendance(AttendanceStatus.PRESENT, null, teacher, OffsetDateTime.now());
+        kimAt17.checkAttendance(AttendanceStatus.PRESENT, null, teacher, OffsetDateTime.now());
+        // 18시 박서준은 아직 미확정 — attendStatus가 null로 남는다
+        ClinicReservation parkAt18 = Fixtures.reservationAt(904L, wide, park, null, LocalTime.of(18, 0));
+        given(reservationRepository.findReservedWithStudent(41L))
+            .willReturn(List.of(seoAt17, kimAt17, parkAt18));
+
+        ClinicReservationListResponse response = clinicReservationService.reservations(41L);
+
+        // 목록 쪽 findAttendanceConfirmedClinicIds와 같은 뜻이어야 한다 — 하나라도 남으면 false
+        assertThat(response.attendanceConfirmed()).isFalse();
+        Map<LocalTime, ClinicSlotState> byTime = response.slotStates().stream()
+            .collect(Collectors.toMap(ClinicSlotState::arrivalTime, s -> s));
+        assertThat(byTime.get(LocalTime.of(17, 0)).confirmed()).isTrue();
+        assertThat(byTime.get(LocalTime.of(18, 0)).confirmed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("배정된 슬롯이 전부 확정되면 attendanceConfirmed는 true다")
+    void attendanceConfirmedIsTrueWhenEveryAssignedSlotIsDone() {
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+
+        ClinicReservation seoAt17 = Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
+        ClinicReservation kimAt18 = Fixtures.reservationAt(903L, wide, kim, null, LocalTime.of(18, 0));
+        seoAt17.checkAttendance(AttendanceStatus.PRESENT, null, teacher, OffsetDateTime.now());
+        kimAt18.checkAttendance(AttendanceStatus.ABSENT, "무단", teacher, OffsetDateTime.now());
+        given(reservationRepository.findReservedWithStudent(41L))
+            .willReturn(List.of(seoAt17, kimAt18));
+
+        ClinicReservationListResponse response = clinicReservationService.reservations(41L);
+
+        assertThat(response.attendanceConfirmed()).isTrue();
+        Map<LocalTime, ClinicSlotState> byTime = response.slotStates().stream()
+            .collect(Collectors.toMap(ClinicSlotState::arrivalTime, s -> s));
+        assertThat(byTime.get(LocalTime.of(17, 0)).confirmed()).isTrue();
+        assertThat(byTime.get(LocalTime.of(18, 0)).confirmed()).isTrue();
+        // 배정 없는 19·20·21시는 슬롯 목록엔 있어도 확정 대상이 아니다
+        assertThat(byTime.get(LocalTime.of(19, 0)).confirmed()).isFalse();
     }
 
     // ---------- 도착 시각 · 변경 (2026-08-10) ----------

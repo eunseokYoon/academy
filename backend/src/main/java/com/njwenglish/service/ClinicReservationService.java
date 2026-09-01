@@ -196,8 +196,18 @@ public class ClinicReservationService {
 
         return new ClinicReservationListResponse(clinic.getId(), clinic.getClinicDate(),
             clinic.getStartTime(), clinic.getEndTime(), clinic.slots(), clinic.getCapacity(),
-            reservations.stream().anyMatch(r -> r.getAttendStatus() != null),
+            isAttendanceConfirmed(reservations),
             students, slotStates(clinic, reservations));
+    }
+
+    /**
+     * 「학생이 있는 슬롯 전부 확정」(2026-09-01) — 목록 쪽 {@code findAttendanceConfirmedClinicIds}와
+     * 정확히 같은 뜻이어야 한다. RESERVED 예약이 1건도 없으면 확정할 학생이 없으므로 false다
+     * (allMatch는 빈 스트림에 vacuously true를 주므로 반드시 먼저 비어있는지 본다).
+     */
+    private boolean isAttendanceConfirmed(List<ClinicReservation> reservations) {
+        return !reservations.isEmpty()
+            && reservations.stream().allMatch(r -> r.getAttendStatus() != null);
     }
 
     /**
