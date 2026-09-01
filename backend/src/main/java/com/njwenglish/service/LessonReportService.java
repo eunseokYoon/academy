@@ -76,7 +76,7 @@ public class LessonReportService {
                 lesson.getLessonDate(),
                 lesson.getTitle(),
                 lesson.getClassRoom().getName(),
-                YoutubeUrls.videoId(lesson.getVideoUrl()) != null,
+                YoutubeUrls.embedUrlOf(lesson.getVideoUrl()) != null,
                 lesson.getPublishedAt().isAfter(newSince),
                 homework == null ? null : homework.getTitle());
         }));
@@ -96,7 +96,7 @@ public class LessonReportService {
             lesson.getTitle(),
             lesson.getClassRoom().getName(),
             videoId,
-            YoutubeUrls.embedUrl(videoId),
+            YoutubeUrls.embedUrlOf(lesson.getVideoUrl()),
             lesson.getContent(),
             lesson.getKeyPoints(),
             lesson.getNextPreview(),

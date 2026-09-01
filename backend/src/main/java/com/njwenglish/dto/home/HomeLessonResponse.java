@@ -27,7 +27,7 @@ public record HomeLessonResponse(Long lessonId,
         String videoId = YoutubeUrls.videoId(lesson.getVideoUrl());
         return new HomeLessonResponse(
             lesson.getId(), lesson.getLessonDate(), lesson.getTitle(),
-            videoId, YoutubeUrls.embedUrl(videoId),
+            videoId, YoutubeUrls.embedUrlOf(lesson.getVideoUrl()),
             lesson.getContent(), lesson.getNextPreview());
     }
 }

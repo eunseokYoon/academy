@@ -30,7 +30,8 @@ public record LessonDetailResponse(
         return new LessonDetailResponse(
             lesson.getId(), lesson.getClassRoom().getId(), lesson.getClassRoom().getName(),
             lesson.getLessonDate(), lesson.getYear(), lesson.getMonth(), lesson.getWeek(),
-            lesson.getTitle(), lesson.getVideoUrl(), videoId, YoutubeUrls.embedUrl(videoId),
+            lesson.getTitle(), lesson.getVideoUrl(), videoId,
+            YoutubeUrls.embedUrlOf(lesson.getVideoUrl()),
             lesson.getContent(), lesson.getKeyPoints(), lesson.getNextPreview(),
             lesson.getAttendanceStatus(), lesson.getPublishedAt());
     }

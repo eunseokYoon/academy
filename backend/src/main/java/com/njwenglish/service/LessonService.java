@@ -168,7 +168,7 @@ public class LessonService {
         if (videoUrl == null || videoUrl.isBlank()) {
             return null;
         }
-        if (YoutubeUrls.videoId(videoUrl) == null) {
+        if (YoutubeUrls.embedUrlOf(videoUrl) == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         return videoUrl.trim();
