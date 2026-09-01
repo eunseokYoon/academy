@@ -49,6 +49,22 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     List<Lesson> findPendingUntil(@Param("today") LocalDate today);
 
     /**
+     * T-5 주차 조회. <b>확정된 수업도 함께</b> 내려준다 — 지난 출석을 고치려면 들어갈
+     * 입구가 있어야 한다(2026-09-01 확정).
+     *
+     * <p><b>오늘까지로 자르는 것은 findPendingUntil과 같다.</b> 이번 주를 열면 아직 오지
+     * 않은 날이 섞이는데, 실수로 미리 확정하면 학부모 캘린더가 초록색이 된다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l JOIN FETCH l.classRoom c
+        WHERE l.lessonDate BETWEEN :from AND :to AND l.lessonDate <= :today
+        ORDER BY l.lessonDate DESC, c.name ASC
+        """)
+    List<Lesson> findForAttendanceWeek(@Param("from") LocalDate from,
+                                       @Param("to") LocalDate to,
+                                       @Param("today") LocalDate today);
+
+    /**
      * T-1 대시보드의 오늘 수업. 시작 시각은 lessons에 없고 반의 요일 슬롯에 있다.
      *
      * <p>시각으로 정렬하지 않는다. 반이 주 2회면 요일마다 시각이 달라서 반 하나로 값을

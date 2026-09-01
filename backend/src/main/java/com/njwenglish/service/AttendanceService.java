@@ -2,6 +2,7 @@ package com.njwenglish.service;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.attendance.AttendanceCalendarResponse;
@@ -15,6 +16,7 @@ import com.njwenglish.dto.attendance.AttendanceRosterResponse;
 import com.njwenglish.dto.attendance.AttendanceStudentResponse;
 import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.attendance.PendingLessonResponse;
+import com.njwenglish.dto.attendance.WeekLessonResponse;
 import com.njwenglish.entity.Attendance;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
@@ -156,6 +158,30 @@ public class AttendanceService {
                 lesson.getLessonDate(),
                 enrollmentRepository.countActiveStudentsOn(
                     lesson.getClassRoom().getId(), lesson.getLessonDate())))
+            .toList();
+    }
+
+    /**
+     * T-5 주차 조회. 확정된 수업도 함께 내려준다(2026-09-01 확정) —
+     * 지난 출석을 고치려면 들어갈 입구가 있어야 한다.
+     *
+     * <p>날짜 범위는 {@link MonthWeeks}가 만든다. 프론트에서 주차를 날짜로 바꾸지 마라 —
+     * 수업·성적·클리닉이 서로 다른 주를 가리키게 된다.
+     */
+    @Transactional(readOnly = true)
+    public List<WeekLessonResponse> week(int year, int month, int week) {
+        return lessonRepository.findForAttendanceWeek(
+                MonthWeeks.startOf(year, month, week),
+                MonthWeeks.endOf(year, month, week),
+                LocalDate.now()).stream()
+            .map(lesson -> new WeekLessonResponse(
+                lesson.getId(),
+                lesson.getClassRoom().getId(),
+                lesson.getClassRoom().getName(),
+                lesson.getLessonDate(),
+                enrollmentRepository.countActiveStudentsOn(
+                    lesson.getClassRoom().getId(), lesson.getLessonDate()),
+                lesson.isAttendanceConfirmed()))
             .toList();
     }
 

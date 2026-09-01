@@ -8,9 +8,10 @@ import {
   getAttendanceRoster,
   listClinicReservations,
   listPendingAttendance,
+  listWeekAttendance,
 } from "../api";
 import type { AttendanceException } from "../api";
-import { dayLabel } from "../../../shared/date";
+import { currentWeekOfMonth, dayLabel } from "../../../shared/date";
 import { RosterEditor } from "./RosterEditor";
 import { CLINIC_EXCEPTION_STATUSES } from "../../../shared/attendance/types";
 
@@ -125,7 +126,150 @@ export default function AttendancePage() {
           </section>
         </>
       )}
+
+      <WeekSection onLesson={setLessonId} onClinic={setClinicId} />
     </div>
+  );
+}
+
+/**
+ * 지난 출석. <b>확정된 것도 보여준다</b>(2026-09-01 확정) — 고치려면 들어갈 입구가 있어야 한다.
+ *
+ * <p>위의 미확정 목록을 이걸로 대체하지 마라. 선생님이 매일 여는 화면이라 "무엇이
+ * 남았는지"가 첫 줄이어야 하고, 주차를 골라야만 보이면 확정을 빠뜨린다.
+ *
+ * <p>누르면 미확정과 같은 확정 화면으로 간다. 이미 확정된 건이면 RosterEditor가 저장된
+ * 상태를 채우고 버튼이 「수정 저장」으로 바뀐다 — 수정용 화면을 따로 만들지 마라.
+ */
+function WeekSection({
+  onLesson,
+  onClinic,
+}: {
+  onLesson: (id: number) => void;
+  onClinic: (id: number) => void;
+}) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [week, setWeek] = useState(currentWeekOfMonth(now));
+
+  const data = useQuery({
+    queryKey: ["teacher", "attendance", "week", year, month, week],
+    queryFn: () => listWeekAttendance(year, month, week),
+  });
+
+  const lessons = data.data?.lessons ?? [];
+  const clinics = data.data?.clinics ?? [];
+  const empty = lessons.length === 0 && clinics.length === 0;
+
+  return (
+    <section className="space-y-3 border-t border-slate-200 pt-5">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">지난 출석</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          확정한 출석도 눌러서 고칠 수 있습니다. 아직 오지 않은 날은 나오지 않습니다.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+        >
+          {[now.getFullYear() - 1, now.getFullYear()].map((y) => (
+            <option key={y} value={y}>
+              {y}년
+            </option>
+          ))}
+        </select>
+        <select
+          value={month}
+          onChange={(e) => setMonth(Number(e.target.value))}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+        >
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>
+              {m}월
+            </option>
+          ))}
+        </select>
+        <select
+          value={week}
+          onChange={(e) => setWeek(Number(e.target.value))}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+        >
+          {[1, 2, 3, 4, 5].map((w) => (
+            <option key={w} value={w}>
+              {w}주차
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {data.isPending ? (
+        <p className="text-sm text-slate-400">불러오는 중…</p>
+      ) : empty ? (
+        <p className="rounded-xl bg-white p-4 text-center text-sm text-slate-500 shadow-sm">
+          그 주에는 지난 수업·클리닉이 없습니다.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {lessons.map((lesson) => (
+            <li key={`lesson-${lesson.lessonId}`}>
+              <button
+                type="button"
+                onClick={() => onLesson(lesson.lessonId)}
+                className="block w-full rounded-xl bg-white p-3 text-left shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-slate-900">
+                    {lesson.lessonDate} ({dayLabel(lesson.lessonDate)})
+                  </span>
+                  {lesson.confirmed ? (
+                    <Badge tone="ok">확정</Badge>
+                  ) : (
+                    <Badge tone="warn">미확정</Badge>
+                  )}
+                </div>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {lesson.classRoomName} · {lesson.studentCount}명
+                </p>
+              </button>
+            </li>
+          ))}
+          {clinics.map((clinic) => (
+            <li key={`clinic-${clinic.clinicId}`}>
+              <button
+                type="button"
+                onClick={() => onClinic(clinic.clinicId)}
+                className="block w-full rounded-xl bg-white p-3 text-left shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-slate-900">
+                    {clinic.clinicDate} ({dayLabel(clinic.clinicDate)})
+                  </span>
+                  {/*
+                    분모는 학생이 배정된 슬롯 수다. 전부 확정이면 「확정」, 일부면 「2/5 확정」,
+                    아무도 없으면 확정할 것이 없어 배지를 안 그린다
+                  */}
+                  {clinic.studentSlotCount === 0 ? null : clinic.attendanceConfirmed ? (
+                    <Badge tone="ok">확정</Badge>
+                  ) : (
+                    <Badge tone="warn">
+                      {clinic.confirmedSlotCount}/{clinic.studentSlotCount} 확정
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  클리닉 {clinic.startTime}~{clinic.endTime} · {clinic.reservedCount}명
+                </p>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

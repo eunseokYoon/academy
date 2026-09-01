@@ -351,6 +351,28 @@ export const confirmAttendance = (lessonId: number, exceptions: AttendanceExcept
 export const listPendingAttendance = () =>
   get<PendingAttendance>("/teacher/attendance/pending");
 
+/** 주차 조회의 수업 한 줄. 확정된 것도 담긴다 — confirmed로 구분한다. */
+export interface WeekLesson {
+  lessonId: number;
+  classRoomId: number;
+  classRoomName: string;
+  lessonDate: string;
+  studentCount: number;
+  confirmed: boolean;
+}
+
+/**
+ * T-5 주차 조회. 클리닉은 T-13 목록(Clinic)과 같은 타입이다 —
+ * 같은 주차·같은 확정 판정이라 서버가 그대로 재사용한다.
+ */
+export interface WeekAttendance {
+  lessons: WeekLesson[];
+  clinics: Clinic[];
+}
+
+export const listWeekAttendance = (year: number, month: number, week: number) =>
+  get<WeekAttendance>("/teacher/attendance/week", { year, month, week });
+
 // ---------- 클리닉 (T-13) ----------
 
 export type ClinicStatus = "OPEN" | "CLOSED";

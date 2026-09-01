@@ -27,6 +27,7 @@ import { dayLabel } from "../../../shared/date";
 import { today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
 import { CLINIC_EXCEPTION_STATUSES } from "../../../shared/attendance/types";
+import { currentWeekOfMonth } from "../../../shared/date";
 
 const NOW = new Date();
 
@@ -44,7 +45,7 @@ const NOW = new Date();
 export default function ClinicPage() {
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth() + 1);
-  const [week, setWeek] = useState(Math.floor((NOW.getDate() - 1) / 7) + 1);
+  const [week, setWeek] = useState(currentWeekOfMonth(NOW));
   const [creating, setCreating] = useState(false);
   const [detailOf, setDetailOf] = useState<Clinic | null>(null);
 
