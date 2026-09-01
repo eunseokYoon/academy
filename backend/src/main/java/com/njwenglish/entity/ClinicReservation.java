@@ -114,7 +114,7 @@ public class ClinicReservation extends BaseTimeEntity {
         this.checkedAt = null;
     }
 
-    /** 행을 지우지 않는다. 부분 유니크 인덱스가 RESERVED만 보므로 나중에 다시 신청할 수 있다. */
+    /** 행을 지우지 않는다. 부분 유니크 인덱스가 RESERVED만 보므로 나중에 다시 배정할 수 있다. */
     public void cancel() {
         this.status = ReservationStatus.CANCELED;
     }

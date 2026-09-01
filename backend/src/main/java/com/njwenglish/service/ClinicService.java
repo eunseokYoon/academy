@@ -44,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 클리닉 시간대(T-13) 개설·수정·조회. 정규 수업과 별개인 보충 수업이고,
  * 한 시간대에 학생이 여러 명이라 clinics에 student_id가 없다.
  *
- * <p>신청·배정·출석은 ClinicReservationService, 변경 요청은
+ * <p>배정·이동·출결은 ClinicReservationService, 변경 요청은
  * ClinicChangeRequestService가 맡는다.
  */
 @Service
@@ -155,7 +155,7 @@ public class ClinicService {
     }
 
     /**
-     * 시간대 삭제. 신청자가 한 명이라도 있으면 지우지 말고 CLOSED로 닫아야 한다 —
+     * 시간대 삭제. 배정된 학생이 한 명이라도 있으면 지우지 말고 CLOSED로 닫아야 한다 —
      * 예약 행이 FK로 남아 있어 물리 삭제가 안 되고, 지워지면 학생 기록이 사라진다.
      */
     @Transactional
@@ -172,7 +172,7 @@ public class ClinicService {
      * T-5 미확정 클리닉. 출석 확정 화면에서 수업과 나란히 보여준다.
      *
      * <p>수업과 판정 기준이 다르다 — clinics에는 확정 컬럼이 없어서 예약의
-     * attend_status가 비었는지로 본다. 신청자가 없는 시간대는 확정할 것이 없어 빠진다.
+     * attend_status가 비었는지로 본다. 배정된 학생이 없는 시간대는 확정할 것이 없어 빠진다.
      */
     @Transactional(readOnly = true)
     public List<PendingClinicResponse> pendingAttendance() {
@@ -259,7 +259,7 @@ public class ClinicService {
     }
 
     /**
-     * P-2 캘린더(한 달) · P-6 주간 레포트(한 주). 신청·변경 경로는 학부모에게 열지 않는다.
+     * P-2 캘린더(한 달) · P-6 주간 레포트(한 주). 변경 경로는 학부모에게 열지 않는다.
      *
      * <p>week가 null이면 그 달 전체다. <b>주차 → 날짜 변환은 여기서만 한다</b> —
      * 프론트에서 계산해 from·to로 보내게 두면 "달 안에서 1일부터 7일씩" 규칙이
