@@ -24,6 +24,7 @@ import com.njwenglish.entity.enums.ReservationStatus;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.ClinicReservationRepository.ClinicCount;
+import com.njwenglish.repository.ClinicReservationRepository.SlotCount;
 import com.njwenglish.repository.TeacherRepository;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -34,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,8 +148,10 @@ public class ClinicService {
 
         long reservedCount = reservationRepository.countByClinicIdAndStatus(
             clinicId, ReservationStatus.RESERVED);
+        List<SlotCount> slots = reservationRepository.countBySlot(List.of(clinicId));
         return ClinicListItemResponse.of(clinic, reservedCount,
-            isAttendanceConfirmed(List.of(clinicId)).contains(clinicId));
+            isAttendanceConfirmed(List.of(clinicId)).contains(clinicId),
+            slots.size(), confirmedSlotCount(slots));
     }
 
     /**
@@ -196,11 +200,16 @@ public class ClinicService {
             MonthWeeks.startOf(year, month, week), MonthWeeks.endOf(year, month, week), status);
         Map<Long, Long> counts = reservedCounts(clinics);
         Set<Long> confirmed = isAttendanceConfirmed(ids(clinics));
+        Map<Long, List<SlotCount>> slots = slotCountsByClinic(ids(clinics));
 
         return clinics.stream()
-            .map(clinic -> ClinicListItemResponse.of(clinic,
-                counts.getOrDefault(clinic.getId(), 0L),
-                confirmed.contains(clinic.getId())))
+            .map(clinic -> {
+                List<SlotCount> clinicSlots = slots.getOrDefault(clinic.getId(), List.of());
+                return ClinicListItemResponse.of(clinic,
+                    counts.getOrDefault(clinic.getId(), 0L),
+                    confirmed.contains(clinic.getId()),
+                    clinicSlots.size(), confirmedSlotCount(clinicSlots));
+            })
             .toList();
     }
 
@@ -299,6 +308,20 @@ public class ClinicService {
             return Set.of();
         }
         return new HashSet<>(reservationRepository.findAttendanceConfirmedClinicIds(clinicIds));
+    }
+
+    /** 배지의 분모·분자 계산용. 클리닉별 슬롯 행을 묶어 둔다. */
+    private Map<Long, List<SlotCount>> slotCountsByClinic(Collection<Long> clinicIds) {
+        if (clinicIds.isEmpty()) {
+            return Map.of();
+        }
+        return reservationRepository.countBySlot(clinicIds).stream()
+            .collect(Collectors.groupingBy(SlotCount::getClinicId));
+    }
+
+    /** 배지의 분자. 슬롯 행 중 미확정 인원이 0인(전원 확정) 행 수다. */
+    private int confirmedSlotCount(List<SlotCount> slots) {
+        return (int) slots.stream().filter(slot -> slot.getPendingCount() == 0).count();
     }
 
     private List<Long> ids(List<Clinic> clinics) {

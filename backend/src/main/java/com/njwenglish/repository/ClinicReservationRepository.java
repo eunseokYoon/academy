@@ -59,11 +59,29 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
         """)
     List<ClinicCount> countReservedByClinicIds(@Param("clinicIds") Collection<Long> clinicIds);
 
-    /** 출석 확정 여부. clinics에 컬럼이 없어 예약 쪽 attend_status로 판정한다. */
+    /** 목록 화면에서 클리닉별 슬롯 인원과 미확정 인원을 한 번에 채운다. */
+    @Query("""
+        SELECT r.clinic.id AS clinicId, r.arrivalTime AS arrivalTime,
+               COUNT(r) AS reservedCount,
+               SUM(CASE WHEN r.attendStatus IS NULL THEN 1 ELSE 0 END) AS pendingCount
+        FROM ClinicReservation r
+        WHERE r.clinic.id IN :clinicIds AND r.status = 'RESERVED'
+        GROUP BY r.clinic.id, r.arrivalTime
+        """)
+    List<SlotCount> countBySlot(@Param("clinicIds") Collection<Long> clinicIds);
+
+    /**
+     * 출석 확정 여부. clinics에 컬럼이 없어 예약 쪽 attend_status로 판정한다.
+     *
+     * <p><b>RESERVED 예약이 전부 채워진 클리닉만 반환한다</b>(2026-09-01). 하나라도
+     * 있으면 확정으로 보던 예전 방식은 슬롯 단위 확정에서 깨진다 — 17시만 확정해도
+     * 클리닉 전체가 확정으로 떠서 선생님이 21시 명단을 놓친다.
+     */
     @Query("""
         SELECT r.clinic.id FROM ClinicReservation r
-        WHERE r.clinic.id IN :clinicIds AND r.attendStatus IS NOT NULL
+        WHERE r.clinic.id IN :clinicIds AND r.status = 'RESERVED'
         GROUP BY r.clinic.id
+        HAVING SUM(CASE WHEN r.attendStatus IS NULL THEN 1 ELSE 0 END) = 0
         """)
     List<Long> findAttendanceConfirmedClinicIds(@Param("clinicIds") Collection<Long> clinicIds);
 
@@ -121,5 +139,15 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
         Long getClinicId();
 
         long getReservedCount();
+    }
+
+    interface SlotCount {
+        Long getClinicId();
+
+        LocalTime getArrivalTime();
+
+        long getReservedCount();
+
+        long getPendingCount();
     }
 }

@@ -13,6 +13,7 @@ import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
 import com.njwenglish.dto.clinic.ClinicReservationStudentResponse;
+import com.njwenglish.dto.clinic.ClinicSlotState;
 import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicChangeLog;
 import com.njwenglish.entity.ClinicReservation;
@@ -35,6 +36,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -194,7 +197,29 @@ public class ClinicReservationService {
         return new ClinicReservationListResponse(clinic.getId(), clinic.getClinicDate(),
             clinic.getStartTime(), clinic.getEndTime(), clinic.slots(), clinic.getCapacity(),
             reservations.stream().anyMatch(r -> r.getAttendStatus() != null),
-            students);
+            students, slotStates(clinic, reservations));
+    }
+
+    /**
+     * 도착 시각별 상태. <b>Clinic.slots()와 실제 예약 시각의 합집합</b>이다(2026-09-01) —
+     * 선생님이 시간대를 좁혀 범위 밖으로 남은 예약(outOfRange)도 줄에 없으면 확정할 방법이
+     * 없어져 클리닉이 영영 미확정으로 남는다. 시각 오름차순으로 돌린다.
+     */
+    private List<ClinicSlotState> slotStates(Clinic clinic, List<ClinicReservation> reservations) {
+        Map<LocalTime, List<ClinicReservation>> byArrival = reservations.stream()
+            .collect(Collectors.groupingBy(ClinicReservation::getArrivalTime));
+
+        TreeSet<LocalTime> times = new TreeSet<>(clinic.slots());
+        times.addAll(byArrival.keySet());
+
+        return times.stream()
+            .map(time -> {
+                List<ClinicReservation> atTime = byArrival.getOrDefault(time, List.of());
+                boolean confirmed = !atTime.isEmpty()
+                    && atTime.stream().allMatch(r -> r.getAttendStatus() != null);
+                return new ClinicSlotState(time, atTime.size(), confirmed);
+            })
+            .toList();
     }
 
     /**

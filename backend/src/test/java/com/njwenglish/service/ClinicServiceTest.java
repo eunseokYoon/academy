@@ -12,6 +12,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.clinic.ClinicBulkCreateRequest;
 import com.njwenglish.dto.clinic.ClinicBulkCreateResponse;
+import com.njwenglish.dto.clinic.ClinicListItemResponse;
 import com.njwenglish.entity.Clinic;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
@@ -31,6 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 클리닉 일괄 개설. LessonService.bulkCreate와 같은 규칙이다 —
@@ -149,5 +151,40 @@ class ClinicServiceTest {
             request(SEP_1, SEP_30, LocalTime.of(22, 0), LocalTime.of(17, 0), null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    /** 프로젝션 인터페이스는 인스턴스를 만들 수 없어 테스트용 구현을 둔다. */
+    private static ClinicReservationRepository.SlotCount slotCount(Long clinicId, LocalTime at,
+                                                                   long reserved, long pending) {
+        return new ClinicReservationRepository.SlotCount() {
+            @Override public Long getClinicId() { return clinicId; }
+            @Override public LocalTime getArrivalTime() { return at; }
+            @Override public long getReservedCount() { return reserved; }
+            @Override public long getPendingCount() { return pending; }
+        };
+    }
+
+    @Test
+    @DisplayName("한 슬롯만 확정하면 클리닉은 아직 확정이 아니다 — 18시 명단이 남아 있다")
+    void clinicIsConfirmedOnlyWhenEveryStudentSlotIsDone() {
+        Clinic wide = Clinic.open(Fixtures.teacherEntity(1L), SEP_1,
+            LocalTime.of(17, 0), LocalTime.of(22, 0), (short) 6, null);
+        ReflectionTestUtils.setField(wide, "id", 41L);
+        given(clinicRepository.findInRange(any(), any(), any())).willReturn(List.of(wide));
+        given(reservationRepository.countReservedByClinicIds(List.of(41L))).willReturn(List.of());
+        given(reservationRepository.findAttendanceConfirmedClinicIds(List.of(41L)))
+            .willReturn(List.of());
+        // 17시 2명 전원 확정, 18시 1명 미확정. 나머지 슬롯(19·20·21시)은 배정이 없어 행이 없다
+        given(reservationRepository.countBySlot(List.of(41L))).willReturn(List.of(
+            slotCount(41L, LocalTime.of(17, 0), 2, 0),
+            slotCount(41L, LocalTime.of(18, 0), 1, 1)));
+
+        List<ClinicListItemResponse> result = clinicService.listForTeacher(2026, 9, 1, null);
+
+        ClinicListItemResponse item = result.get(0);
+        // 분모가 5가 아니다 — 배정 없는 시각은 확정할 것이 없어 세지 않는다
+        assertThat(item.studentSlotCount()).isEqualTo(2);
+        assertThat(item.confirmedSlotCount()).isEqualTo(1);
+        assertThat(item.attendanceConfirmed()).isFalse();
     }
 }
