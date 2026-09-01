@@ -91,6 +91,15 @@ public final class Fixtures {
         return reservation;
     }
 
+    /** 슬롯 테스트용. 기존 reservation()은 도착 시각이 클리닉 시작 시각으로 고정이다. */
+    public static ClinicReservation reservationAt(Long id, Clinic clinic, Student student,
+                                                  Teacher assignedBy, LocalTime arrivalTime) {
+        ClinicReservation reservation = ClinicReservation.reserve(clinic, student, assignedBy,
+            arrivalTime);
+        ReflectionTestUtils.setField(reservation, "id", id);
+        return reservation;
+    }
+
     public static Homework homework(Long id, ClassRoom classRoom, OffsetDateTime dueAt) {
         Homework homework = Homework.create(classRoom, null, teacherEntity(1L),
             "주간지 전 범위 풀기", "워크북 27~35쪽", dueAt);

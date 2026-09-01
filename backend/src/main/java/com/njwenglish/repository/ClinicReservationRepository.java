@@ -4,6 +4,7 @@ import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.enums.ReservationStatus;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +31,24 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
         ORDER BY s.name
         """)
     List<ClinicReservation> findReservedWithStudent(@Param("clinicId") Long clinicId);
+
+    /**
+     * 슬롯 하나의 명단. 출결 확정이 도착 시각 단위라(2026-09-01) 그 시각만 뽑는다.
+     * 이름은 students.name이다 — user.name을 쓰면 미가입 학생이 사라진다.
+     *
+     * <p><b>Clinic.slots() 밖의 시각도 그대로 조회한다.</b> 선생님이 시간대를 좁히면
+     * 범위 밖으로 남는 예약(outOfRange)이 생기는데, 그 학생도 출결은 확정해야 한다.
+     */
+    @Query("""
+        SELECT r FROM ClinicReservation r
+        JOIN FETCH r.student s
+        WHERE r.clinic.id = :clinicId
+          AND r.status = 'RESERVED'
+          AND r.arrivalTime = :arrivalTime
+        ORDER BY s.name
+        """)
+    List<ClinicReservation> findReservedWithStudentAt(@Param("clinicId") Long clinicId,
+                                                      @Param("arrivalTime") LocalTime arrivalTime);
 
     /** 목록 화면에서 클리닉별 신청 인원을 한 번에 채운다. 클리닉 수만큼 쿼리를 돌리지 않는다. */
     @Query("""

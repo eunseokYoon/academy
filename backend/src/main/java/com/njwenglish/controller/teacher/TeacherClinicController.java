@@ -1,8 +1,8 @@
 package com.njwenglish.controller.teacher;
 
 import com.njwenglish.common.response.ApiResponse;
-import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
+import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicBulkCreateRequest;
 import com.njwenglish.dto.clinic.ClinicBulkCreateResponse;
@@ -104,11 +104,11 @@ public class TeacherClinicController {
         return ApiResponse.ok();
     }
 
-    /** T-5와 같은 방식이다. 안 온 학생만 보낸다. */
+    /** T-5와 같은 방식이다. 안 온 학생만 보낸다. 단, <b>도착 시각 슬롯 하나</b>만 확정한다. */
     @PostMapping("/clinics/{clinicId}/attendance/confirm")
     public ApiResponse<ClinicAttendanceConfirmResponse> confirmAttendance(
         @PathVariable Long clinicId,
-        @Valid @RequestBody AttendanceConfirmRequest request) {
+        @Valid @RequestBody ClinicAttendanceConfirmRequest request) {
         return ApiResponse.ok(clinicReservationService.confirmAttendance(clinicId, request));
     }
 }

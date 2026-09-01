@@ -11,9 +11,9 @@ import static org.mockito.Mockito.verify;
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.StudentAccessGuard;
-import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.attendance.AttendanceExceptionRequest;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
+import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
 import com.njwenglish.entity.Clinic;
@@ -31,6 +31,7 @@ import com.njwenglish.repository.TeacherRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -182,11 +183,12 @@ class ClinicReservationServiceTest {
 
         ClinicReservation seoReservation = Fixtures.reservation(902L, clinic, seo, null);
         ClinicReservation kimReservation = Fixtures.reservation(903L, clinic, kim, teacher);
-        given(reservationRepository.findReservedWithStudent(41L))
+        // 이 클리닉은 17:00~18:00이라 슬롯이 17:00 하나다. 두 예약 모두 그 시각이다
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(17, 0)))
             .willReturn(List.of(seoReservation, kimReservation));
 
         ClinicAttendanceConfirmResponse response = clinicReservationService.confirmAttendance(41L,
-            new AttendanceConfirmRequest(List.of(
+            new ClinicAttendanceConfirmRequest(LocalTime.of(17, 0), List.of(
                 new AttendanceExceptionRequest(91L, AttendanceStatus.ABSENT, "무단"))));
 
         // 안 온 학생만 보내고 나머지는 PRESENT로 채운다 (T-5와 같은 방식)
@@ -196,6 +198,125 @@ class ClinicReservationServiceTest {
         assertThat(seoReservation.getCheckedBy()).isSameAs(teacher);
         assertThat(response.summary().present()).isEqualTo(1);
         assertThat(response.summary().absent()).isEqualTo(1);
+    }
+
+    // ---------- 시간대별 출결 (2026-09-01) ----------
+
+    /** 17:00~22:00. 슬롯이 17·18·19·20·21시 다섯 개다. */
+    private Clinic wideForAttendance() {
+        Clinic wide = Clinic.open(teacher, LocalDate.now().plusDays(7),
+            LocalTime.of(17, 0), LocalTime.of(22, 0), (short) 6, null);
+        ReflectionTestUtils.setField(wide, "id", 41L);
+        return wide;
+    }
+
+    @Test
+    @DisplayName("슬롯 확정은 그 시각 학생만 건드린다 — 다른 슬롯은 미확정으로 남는다")
+    void confirmTouchesOnlyGivenSlot() {
+        Fixtures.login(Fixtures.teacher(1L));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+
+        ClinicReservation at17 = Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
+        ClinicReservation at18 = Fixtures.reservationAt(903L, wide, kim, null, LocalTime.of(18, 0));
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(17, 0)))
+            .willReturn(List.of(at17));
+
+        clinicReservationService.confirmAttendance(41L,
+            new ClinicAttendanceConfirmRequest(LocalTime.of(17, 0), List.of()));
+
+        assertThat(at17.getAttendStatus()).isEqualTo(AttendanceStatus.PRESENT);
+        assertThat(at18.getAttendStatus()).isNull();
+    }
+
+    @Test
+    @DisplayName("슬롯도 아니고 예약도 없는 도착 시각은 400이다")
+    void confirmRejectsUnknownSlot() {
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(17, 30)))
+            .willReturn(List.of());
+
+        assertThatThrownBy(() -> clinicReservationService.confirmAttendance(41L,
+            new ClinicAttendanceConfirmRequest(LocalTime.of(17, 30), List.of())))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("슬롯 밖 예약(outOfRange)도 확정된다 — 못 하면 T-1에서 영영 안 사라진다")
+    void confirmAcceptsOutOfRangeReservation() {
+        Fixtures.login(Fixtures.teacher(1L));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+
+        // 선생님이 시간대를 좁혀 21:30이 슬롯 목록에서 빠진 상황. 예약은 그대로 남아 있다
+        ClinicReservation stranded =
+            Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(21, 30));
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(21, 30)))
+            .willReturn(List.of(stranded));
+
+        clinicReservationService.confirmAttendance(41L,
+            new ClinicAttendanceConfirmRequest(LocalTime.of(21, 30), List.of()));
+
+        assertThat(wide.hasSlot(LocalTime.of(21, 30))).isFalse();
+        assertThat(stranded.getAttendStatus()).isEqualTo(AttendanceStatus.PRESENT);
+    }
+
+    @Test
+    @DisplayName("그 슬롯 명단에 없는 학생을 exceptions에 넣으면 400이다")
+    void confirmRejectsStudentOutsideSlot() {
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+
+        ClinicReservation at17 = Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(17, 0)))
+            .willReturn(List.of(at17));
+
+        assertThatThrownBy(() -> clinicReservationService.confirmAttendance(41L,
+            new ClinicAttendanceConfirmRequest(LocalTime.of(17, 0),
+                List.of(new AttendanceExceptionRequest(91L, AttendanceStatus.ABSENT, null)))))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("이미 확정한 슬롯을 다시 확정하면 덮어쓴다 — 그게 수정이다")
+    void reconfirmOverwrites() {
+        Fixtures.login(Fixtures.teacher(1L));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+
+        ClinicReservation at17 = Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
+        at17.checkAttendance(AttendanceStatus.ABSENT, "무단", teacher, OffsetDateTime.now());
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(17, 0)))
+            .willReturn(List.of(at17));
+
+        clinicReservationService.confirmAttendance(41L,
+            new ClinicAttendanceConfirmRequest(LocalTime.of(17, 0), List.of()));
+
+        assertThat(at17.getAttendStatus()).isEqualTo(AttendanceStatus.PRESENT);
+        assertThat(at17.getMemo()).isNull();
+    }
+
+    @Test
+    @DisplayName("예약 0명인 슬롯은 200이고 아무것도 바뀌지 않는다 — 확정할 학생이 없다")
+    void confirmEmptySlotIsNoop() {
+        Fixtures.login(Fixtures.teacher(1L));
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        Clinic wide = wideForAttendance();
+        given(clinicRepository.findById(41L)).willReturn(Optional.of(wide));
+        given(reservationRepository.findReservedWithStudentAt(41L, LocalTime.of(21, 0)))
+            .willReturn(List.of());
+
+        ClinicAttendanceConfirmResponse response = clinicReservationService.confirmAttendance(41L,
+            new ClinicAttendanceConfirmRequest(LocalTime.of(21, 0), List.of()));
+
+        assertThat(response.summary().present()).isZero();
+        assertThat(response.summary().absent()).isZero();
     }
 
     // ---------- 도착 시각 · 변경 (2026-08-10) ----------

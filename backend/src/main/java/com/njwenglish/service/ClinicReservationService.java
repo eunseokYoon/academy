@@ -4,10 +4,10 @@ import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
-import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.attendance.AttendanceExceptionRequest;
 import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
+import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
@@ -223,17 +223,30 @@ public class ClinicReservationService {
     }
 
     /**
-     * 클리닉 출석 확정. T-5와 같은 방식이라 <b>안 온 학생만</b> 보낸다.
+     * T-13 출결 확정. <b>도착 시각 슬롯 하나를 확정한다</b>(2026-09-01 확정).
      *
-     * <p>기록은 clinic_reservations.attend_status다.
-     * attendances 테이블은 class_room_id가 NOT NULL인데 클리닉은 반이 없어서 못 쓴다.
+     * <p>다시 부르면 덮어쓴다 — 그게 "수정"이다. 되돌리기용 엔드포인트를 따로 만들지 마라.
+     * 예약이 0명인 슬롯은 확정할 학생이 없어 아무것도 하지 않고 200이다.
      */
     @Transactional
-    public ClinicAttendanceConfirmResponse confirmAttendance(Long clinicId,
-                                                             AttendanceConfirmRequest request) {
+    public ClinicAttendanceConfirmResponse confirmAttendance(
+        Long clinicId, ClinicAttendanceConfirmRequest request) {
         Clinic clinic = findClinic(clinicId);
         List<ClinicReservation> reservations =
-            reservationRepository.findReservedWithStudent(clinicId);
+            reservationRepository.findReservedWithStudentAt(clinicId, request.arrivalTime());
+        /*
+         * 슬롯이거나, 슬롯은 아니어도 그 시각에 학생이 있으면 받는다.
+         *
+         * hasSlot만으로 막으면 outOfRange 예약(선생님이 시간대를 좁혀 범위 밖으로 남은 것)을
+         * 영영 확정할 수 없다. attend_status가 null로 굳으면 findPendingUntil이 그 클리닉을
+         * 계속 미확정으로 뽑아 T-1에서 사라지지 않는다.
+         *
+         * 예약이 0명일 때 hasSlot을 요구하는 것으로 임의 시각 방어는 그대로 남는다 —
+         * 화면이 슬롯을 그려 주는 건 안내일 뿐이고 아무 값이나 올라올 수 있다.
+         */
+        if (reservations.isEmpty() && !clinic.hasSlot(request.arrivalTime())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
 
         Map<Long, AttendanceExceptionRequest> exceptions = new HashMap<>();
         for (AttendanceExceptionRequest exception : request.exceptionsOrEmpty()) {
