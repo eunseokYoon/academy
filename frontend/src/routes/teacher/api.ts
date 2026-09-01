@@ -365,7 +365,12 @@ export interface Clinic {
   capacity: number | null;
   reservedCount: number;
   status: ClinicStatus;
+  /** 학생이 배정된 슬롯 전부가 확정됐는지(2026-09-01부터 슬롯 단위 확정 기준). */
   attendanceConfirmed: boolean;
+  /** 학생이 배정된 슬롯 수. 목록 배지의 분모다 — 전체 슬롯 수가 아니다. */
+  studentSlotCount: number;
+  /** 확정된 슬롯 수. 목록 배지의 분자다. */
+  confirmedSlotCount: number;
   /**
    * "8월 2주". 목록을 주차별로 묶는 데 쓴다.
    * <b>날짜로 여기서 다시 만들지 마라</b> — 학생 화면·수업·성적이 쓰는 주차 계산과 갈라진다.
@@ -391,6 +396,14 @@ export interface ClinicReservationRow {
   memo: string | null;
 }
 
+/** 도착 시각 슬롯 하나의 확정 상태. 출결은 슬롯(도착 시각) 단위로 따로 확정한다(2026-09-01부터). */
+export interface ClinicSlotState {
+  arrivalTime: string;
+  reservedCount: number;
+  /** 그 슬롯에 예약이 1명 이상이고 전원 확정됐는지. reservedCount === 0이면 항상 false다. */
+  confirmed: boolean;
+}
+
 export interface ClinicReservations {
   clinicId: number;
   clinicDate: string;
@@ -400,6 +413,12 @@ export interface ClinicReservations {
   slots: string[];
   capacity: number | null;
   attendanceConfirmed: boolean;
+  /**
+   * Clinic.slots()와 실제 예약이 있는 시각의 합집합, 시각 오름차순.
+   * 시간대를 좁힌 뒤 범위 밖(outOfRange)으로 남은 예약의 시각도 여기 섞여 있을 수 있다 —
+   * 화면에서 빠뜨리면 그 학생을 확정할 방법이 사라진다.
+   */
+  slotStates: ClinicSlotState[];
   /** 도착 시각 → 이름 순으로 서버가 정렬해 준다. */
   students: ClinicReservationRow[];
 }
@@ -453,10 +472,15 @@ export const assignClinicStudents = (
 export const unassignClinicStudent = (clinicId: number, studentId: number) =>
   del<void>(`/teacher/clinics/${clinicId}/students/${studentId}`);
 
-export const confirmClinicAttendance = (clinicId: number, exceptions: AttendanceException[]) =>
+/** arrivalTime은 필수다 — 그 시각 예약만 확정된다. 다시 보내면 덮어쓴다(그게 수정이다). */
+export const confirmClinicAttendance = (
+  clinicId: number,
+  arrivalTime: string,
+  exceptions: AttendanceException[],
+) =>
   post<{ clinicId: number; confirmedAt: string; summary: AttendanceSummary }>(
     `/teacher/clinics/${clinicId}/attendance/confirm`,
-    { exceptions },
+    { arrivalTime, exceptions },
   );
 
 // ---------- 수업일 변경 (T-13) ----------

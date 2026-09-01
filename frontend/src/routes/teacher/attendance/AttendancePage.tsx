@@ -202,9 +202,14 @@ function LessonConfirmPanel({ lessonId, onBack }: { lessonId: number; onBack: ()
  * 클리닉 확정. 명단 UI는 수업과 같은 RosterEditor지만 <b>쓰는 곳이 다르다</b> —
  * attendances가 아니라 clinic_reservations.attend_status에 기록된다.
  * 클리닉 출석을 attendances에 넣지 마라. 수업 출석률이 오염된다.
+ *
+ * <p>출석 확정은 <b>도착 시각 슬롯별로 따로</b> 낸다(2026-09-01 확정, T-13과 같은 규칙).
+ * 이 화면에 뜬 클리닉도 일부 슬롯만 확정된 채로 "미확정"에 남을 수 있으므로 슬롯을 먼저
+ * 고르게 한다. {@link RosterEditor}는 T-13(ClinicPage)의 슬롯 탭과 같은 방식으로 쓴다.
  */
 function ClinicConfirmPanel({ clinicId, onBack }: { clinicId: number; onBack: () => void }) {
   const queryClient = useQueryClient();
+  const [slot, setSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -213,9 +218,16 @@ function ClinicConfirmPanel({ clinicId, onBack }: { clinicId: number; onBack: ()
     queryFn: () => listClinicReservations(clinicId),
   });
 
+  const slotStates = reservations.data?.slotStates ?? [];
+  const activeSlot = slot ?? slotStates.find((s) => s.reservedCount > 0)?.arrivalTime ?? "";
+  const current = slotStates.find((s) => s.arrivalTime === activeSlot);
+  const rows = (reservations.data?.students ?? []).filter(
+    (student) => student.arrivalTime === activeSlot,
+  );
+
   const mutation = useMutation({
     mutationFn: (exceptions: AttendanceException[]) =>
-      confirmClinicAttendance(clinicId, exceptions),
+      confirmClinicAttendance(clinicId, activeSlot, exceptions),
     onSuccess: async (result) => {
       setError(null);
       setDone(`확정했습니다. 출석 ${result.summary.present} · 결석 ${result.summary.absent}`);
@@ -228,6 +240,12 @@ function ClinicConfirmPanel({ clinicId, onBack }: { clinicId: number; onBack: ()
       setError(errorMessage(e, "출석을 확정하지 못했습니다."));
     },
   });
+
+  function selectSlot(arrivalTime: string) {
+    setSlot(arrivalTime);
+    setDone(null);
+    setError(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -242,27 +260,55 @@ function ClinicConfirmPanel({ clinicId, onBack }: { clinicId: number; onBack: ()
               클리닉 {reservations.data.startTime}~{reservations.data.endTime}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              {reservations.data.clinicDate} · 안 온 학생만 눌러 상태를 바꾸세요.
+              {reservations.data.clinicDate} · 도착 시각을 고르고, 안 온 학생만 눌러 상태를
+              바꾸세요.
             </p>
           </div>
+
+          {slotStates.length === 0 ? (
+            <p className="text-sm text-slate-400">배정된 학생이 없습니다.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {slotStates.map((s) => (
+                <button
+                  key={s.arrivalTime}
+                  type="button"
+                  disabled={s.reservedCount === 0}
+                  onClick={() => selectSlot(s.arrivalTime)}
+                  aria-pressed={activeSlot === s.arrivalTime}
+                  className={`rounded-lg px-2.5 py-1.5 text-sm disabled:cursor-not-allowed
+                              disabled:opacity-40 ${
+                    activeSlot === s.arrivalTime
+                      ? "bg-slate-900 font-medium text-white"
+                      : "border border-slate-300 text-slate-700"
+                  }`}
+                >
+                  {s.arrivalTime} · {s.reservedCount === 0 ? "배정 없음" : `${s.reservedCount}명`}
+                  {s.confirmed ? " ✓" : ""}
+                </button>
+              ))}
+            </div>
+          )}
 
           {done && (
             <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{done}</p>
           )}
 
-          <RosterEditor
-            rows={reservations.data.students.map((student) => ({
-              studentId: student.studentId,
-              name: student.name,
-              // attendStatus가 null이면 아직 확정 전이다. 기본값 출석으로 열어 준다
-              status: student.attendStatus ?? "PRESENT",
-              memo: student.memo,
-            }))}
-            confirmed={reservations.data.attendanceConfirmed}
-            pending={mutation.isPending}
-            error={error}
-            onConfirm={(exceptions) => mutation.mutate(exceptions)}
-          />
+          {activeSlot && (
+            <RosterEditor
+              rows={rows.map((student) => ({
+                studentId: student.studentId,
+                name: student.name,
+                // attendStatus가 null이면 아직 확정 전이다. 기본값 출석으로 열어 준다
+                status: student.attendStatus ?? "PRESENT",
+                memo: student.memo,
+              }))}
+              confirmed={current?.confirmed ?? false}
+              pending={mutation.isPending}
+              error={error}
+              onConfirm={(exceptions) => mutation.mutate(exceptions)}
+            />
+          )}
         </>
       ) : (
         <p className="text-sm text-red-600">클리닉 정보를 불러오지 못했습니다.</p>

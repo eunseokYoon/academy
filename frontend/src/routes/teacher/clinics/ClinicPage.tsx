@@ -22,7 +22,7 @@ import {
   updateClinic,
 } from "../api";
 import { formatLessonSlot } from "../../../shared/lessonchange/types";
-import type { AttendanceException, Clinic, ClinicReservationRow } from "../api";
+import type { AttendanceException, Clinic, ClinicReservationRow, ClinicSlotState } from "../api";
 import { dayLabel } from "../../../shared/date";
 import { today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
@@ -141,10 +141,12 @@ export default function ClinicPage() {
                           clinic.reservedCount >= clinic.capacity && (
                             <Badge tone="warn">정원 참</Badge>
                           )}
-                        {clinic.attendanceConfirmed ? (
-                          <Badge tone="ok">출석 확정</Badge>
+                        {clinic.studentSlotCount === 0 ? null : clinic.attendanceConfirmed ? (
+                          <Badge tone="ok">출결 확정</Badge>
                         ) : (
-                          <Badge tone="neutral">출석 미확정</Badge>
+                          <Badge tone="neutral">
+                            {clinic.confirmedSlotCount}/{clinic.studentSlotCount} 확정
+                          </Badge>
                         )}
                       </div>
                       {clinic.memo && (
@@ -442,7 +444,7 @@ function ClinicDetailModal({ clinic, onClose }: { clinic: Clinic; onClose: () =>
           <ClinicAttendanceTab
             clinic={clinic}
             students={reservations.data?.students ?? []}
-            confirmed={reservations.data?.attendanceConfirmed ?? false}
+            slotStates={reservations.data?.slotStates ?? []}
           />
         )}
       </div>
@@ -691,28 +693,41 @@ function AssignModal({
   );
 }
 
-/** 출석 확정은 T-5와 같은 UI를 그대로 쓴다. */
+/**
+ * 출석 확정은 <b>도착 시각 슬롯별로 따로</b> 낸다(2026-09-01 미팅에서 확정).
+ * 17시 명단을 먼저 닫고, 18시가 되면 그때 닫는 식이다 — 슬롯 하나를 골라 그 학생만
+ * {@link RosterEditor}에 넘기고, 확정 요청에도 그 슬롯의 시각을 함께 보낸다.
+ *
+ * <p>슬롯 버튼은 <b>{@link ClinicSlotState}(slotStates)를 그대로 순회</b>한다 —
+ * `Clinic.slots()`가 아니다. slotStates는 서버가 그 목록과 실제 예약 시각의 합집합으로
+ * 만들어 주므로, 시간대를 좁힌 뒤 범위 밖으로 남은 예약(outOfRange)의 시각도 여기 섞여
+ * 나온다. 여기서 빠뜨리면 그 학생을 확정할 방법이 화면에서 사라진다.
+ *
+ * <p>{@link RosterEditor} 자체는 건드리지 않는다 — T-5 수업 출석과 공유하는 컴포넌트라
+ * `rows`만 슬롯으로 걸러 넘긴다.
+ */
 function ClinicAttendanceTab({
   clinic,
   students,
-  confirmed,
+  slotStates,
 }: {
   clinic: Clinic;
-  students: {
-    studentId: number;
-    name: string;
-    attendStatus: "PRESENT" | "LATE" | "ABSENT" | "SICK" | "EXCUSED" | null;
-    memo: string | null;
-  }[];
-  confirmed: boolean;
+  students: ClinicReservationRow[];
+  slotStates: ClinicSlotState[];
 }) {
   const queryClient = useQueryClient();
+  const [slot, setSlot] = useState(
+    () => slotStates.find((s) => s.reservedCount > 0)?.arrivalTime ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  const current = slotStates.find((s) => s.arrivalTime === slot);
+  const rows = students.filter((student) => student.arrivalTime === slot);
+
   const mutation = useMutation({
     mutationFn: (exceptions: AttendanceException[]) =>
-      confirmClinicAttendance(clinic.clinicId, exceptions),
+      confirmClinicAttendance(clinic.clinicId, slot, exceptions),
     onSuccess: async (result) => {
       setError(null);
       setDone(`확정했습니다. 출석 ${result.summary.present} · 결석 ${result.summary.absent}`);
@@ -725,24 +740,58 @@ function ClinicAttendanceTab({
     },
   });
 
+  function selectSlot(arrivalTime: string) {
+    setSlot(arrivalTime);
+    setDone(null);
+    setError(null);
+  }
+
   return (
-    <div>
-      {done && (
-        <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{done}</p>
+    <div className="space-y-3">
+      {slotStates.length === 0 ? (
+        <p className="text-sm text-slate-400">배정된 학생이 없습니다.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {slotStates.map((s) => (
+            <button
+              key={s.arrivalTime}
+              type="button"
+              disabled={s.reservedCount === 0}
+              onClick={() => selectSlot(s.arrivalTime)}
+              aria-pressed={slot === s.arrivalTime}
+              className={`rounded-lg px-2.5 py-1.5 text-sm disabled:cursor-not-allowed
+                          disabled:opacity-40 ${
+                slot === s.arrivalTime
+                  ? "bg-slate-900 font-medium text-white"
+                  : "border border-slate-300 text-slate-700"
+              }`}
+            >
+              {s.arrivalTime} · {s.reservedCount === 0 ? "배정 없음" : `${s.reservedCount}명`}
+              {s.confirmed ? " ✓" : ""}
+            </button>
+          ))}
+        </div>
       )}
-      <RosterEditor
-        rows={students.map((student) => ({
-          studentId: student.studentId,
-          name: student.name,
-          status: student.attendStatus ?? "PRESENT",
-          memo: student.memo,
-        }))}
-        confirmed={confirmed}
-        pending={mutation.isPending}
-        error={error}
-        variant="inline"
-        onConfirm={(exceptions) => mutation.mutate(exceptions)}
-      />
+
+      {done && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{done}</p>
+      )}
+
+      {slot && (
+        <RosterEditor
+          rows={rows.map((student) => ({
+            studentId: student.studentId,
+            name: student.name,
+            status: student.attendStatus ?? "PRESENT",
+            memo: student.memo,
+          }))}
+          confirmed={current?.confirmed ?? false}
+          pending={mutation.isPending}
+          error={error}
+          variant="inline"
+          onConfirm={(exceptions) => mutation.mutate(exceptions)}
+        />
+      )}
     </div>
   );
 }
