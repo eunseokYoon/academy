@@ -145,7 +145,14 @@ function MonthButton({
  */
 function SummaryGrid({ data }: { data: CalendarData }) {
   const items = [
-    { label: "출석", value: data.summary.present, color: "text-emerald-600" },
+    // 대체 등원은 출석에 합친다(2026-09-01 확정). 4칸을 5칸으로 늘리면 360px에서 뭉개지고,
+    // 학부모가 여기서 보는 건 "몇 번 빠졌나"라 온 날은 한 칸이면 된다.
+    // 어느 날이 대체 등원이었는지는 캘린더 칸이 라벨로 그대로 보여준다
+    {
+      label: "출석",
+      value: data.summary.present + data.summary.makeup,
+      color: "text-emerald-600",
+    },
     { label: "지각", value: data.summary.late, color: "text-amber-600" },
     { label: "결석", value: data.summary.absent, color: "text-red-600" },
     { label: "병·공결", value: data.summary.sick + data.summary.excused, color: "text-sky-600" },

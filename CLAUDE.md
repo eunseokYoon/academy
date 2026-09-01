@@ -86,6 +86,16 @@ JPQL 사본이 `findByStudent`·`findByHomeworkForTeacher`·`countsByHomeworkIds
 **5. `attendance_status = PENDING`인 날은 출석이 아니다.** 회색 "미확인"이다.
 기본값이 출석이라, 이 구분이 없으면 선생님이 깜빡한 날이 학부모에게 초록색으로 보인다.
 
+**5-1. `MAKEUP`(대체 등원)은 출석이다(2026-09-01 확정).** 원래 요일에 못 와서 다른 날 수업에
+들어온 경우다. **결석 쪽으로 세지 마라** — 학부모 캘린더 요약의 「출석」 칸이 `present + makeup`이고,
+어느 날이 대체 등원이었는지는 캘린더 칸의 라벨이 보여준다.
+**선생님이 고를 수 있는 화면은 수업 출석(T-5)뿐이다.** 클리닉 출결에는 넣지 마라 —
+클리닉에서 다른 시간대로 오는 것은 「이동」이 이미 처리한다. 목록이 둘로 갈라져 있다
+(`EXCEPTION_STATUSES` / `CLINIC_EXCEPTION_STATUSES`).
+**`AttendanceStatus`를 늘릴 때 CHECK 제약이 두 곳이다** — `ck_attendances_status`(수업)와
+`ck_clinic_res_attend`(클리닉)가 같은 enum을 쓴다. 한쪽만 고치면 나머지에서 저장이
+조용히 실패한다. V21이 그 예다.
+
 **6. 파일은 presigned URL로 S3에 직접 올린다.** 서버 경유 금지.
 사진은 올리기 전 브라우저에서 리사이즈(장변 1600px, WebP). 안 하면 연 200GB다.
 **숙제 영상은 압축이 안 된다.** 그래서 1개·100MB 상한이 저장 비용을 막는 유일한 장치다. 늘리지 마라.

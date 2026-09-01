@@ -4,7 +4,7 @@
  * PENDING은 출석이 아니라 "아직 확정되지 않은 날"이다. 미래 수업일도 PENDING이라
  * 이 구분이 없으면 아직 오지 않은 날이 초록색으로 보인다.
  */
-export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "SICK" | "EXCUSED";
+export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "SICK" | "EXCUSED" | "MAKEUP";
 export type DayStatus = AttendanceStatus | "PENDING";
 
 export interface AttendanceSummary {
@@ -13,6 +13,8 @@ export interface AttendanceSummary {
   absent: number;
   sick: number;
   excused: number;
+  /** 대체 등원. 출석으로 친다 — 결석 쪽에 더하지 마라(2026-09-01 확정). */
+  makeup: number;
 }
 
 export interface AttendanceDay {
@@ -46,11 +48,32 @@ export const DAY_STATUS_STYLE: Record<DayStatus, { label: string; cell: string }
   ABSENT: { label: "결석", cell: "bg-red-100 text-red-800 ring-red-200" },
   SICK: { label: "병결", cell: "bg-sky-100 text-sky-800 ring-sky-200" },
   EXCUSED: { label: "공결", cell: "bg-slate-200 text-slate-700 ring-slate-300" },
+  MAKEUP: { label: "대체 등원", cell: "bg-teal-100 text-teal-800 ring-teal-200" },
   PENDING: { label: "미확인", cell: "bg-slate-100 text-slate-400 ring-slate-200" },
 };
 
-/** T-5에서 선생님이 고를 수 있는 예외 상태. 기본값 PRESENT는 고를 필요가 없다. */
-export const EXCEPTION_STATUSES: AttendanceStatus[] = ["LATE", "ABSENT", "SICK", "EXCUSED"];
+/**
+ * T-5(수업 출석)에서 선생님이 고를 수 있는 예외 상태. 기본값 PRESENT는 고를 필요가 없다.
+ *
+ * <p>MAKEUP은 <b>수업에만 있다</b>(2026-09-01 확정). 클리닉 출결에는 넣지 마라 —
+ * 클리닉에서 다른 시간대로 오는 것은 「이동」이 이미 처리하고, 목록이 갈라지지 않으면
+ * 선생님이 쓸 일 없는 버튼을 매번 지나치게 된다. 클리닉은 CLINIC_EXCEPTION_STATUSES를 쓴다.
+ */
+export const EXCEPTION_STATUSES: AttendanceStatus[] = [
+  "LATE",
+  "ABSENT",
+  "SICK",
+  "EXCUSED",
+  "MAKEUP",
+];
+
+/** T-13(클리닉 출결)용. 대체 등원이 빠진다 — 위 주석을 봐라. */
+export const CLINIC_EXCEPTION_STATUSES: AttendanceStatus[] = [
+  "LATE",
+  "ABSENT",
+  "SICK",
+  "EXCUSED",
+];
 
 export const STATUS_LABEL: Record<AttendanceStatus, string> = {
   PRESENT: "출석",
@@ -58,4 +81,5 @@ export const STATUS_LABEL: Record<AttendanceStatus, string> = {
   ABSENT: "결석",
   SICK: "병결",
   EXCUSED: "공결",
+  MAKEUP: "대체 등원",
 };

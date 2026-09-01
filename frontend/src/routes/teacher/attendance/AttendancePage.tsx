@@ -12,6 +12,7 @@ import {
 import type { AttendanceException } from "../api";
 import { dayLabel } from "../../../shared/date";
 import { RosterEditor } from "./RosterEditor";
+import { CLINIC_EXCEPTION_STATUSES } from "../../../shared/attendance/types";
 
 /**
  * T-5. 미확정 수업·클리닉을 먼저 보여주고, 하나를 고르면 그 자리에서 출석을 확정한다.
@@ -153,7 +154,7 @@ function LessonConfirmPanel({ lessonId, onBack }: { lessonId: number; onBack: ()
       setDone(
         `확정했습니다. 출석 ${result.summary.present} · 지각 ${result.summary.late} · ` +
           `결석 ${result.summary.absent} · 병결 ${result.summary.sick} · ` +
-          `공결 ${result.summary.excused}`,
+          `공결 ${result.summary.excused} · 대체 등원 ${result.summary.makeup}`,
       );
       await queryClient.invalidateQueries({ queryKey: ["teacher", "attendance"] });
       await queryClient.invalidateQueries({ queryKey: ["teacher", "lessons"] });
@@ -307,6 +308,7 @@ function ClinicConfirmPanel({ clinicId, onBack }: { clinicId: number; onBack: ()
               pending={mutation.isPending}
               error={error}
               onConfirm={(exceptions) => mutation.mutate(exceptions)}
+              statuses={CLINIC_EXCEPTION_STATUSES}
             />
           )}
         </>

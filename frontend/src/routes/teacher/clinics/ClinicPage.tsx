@@ -26,6 +26,7 @@ import type { AttendanceException, Clinic, ClinicReservationRow, ClinicSlotState
 import { dayLabel } from "../../../shared/date";
 import { today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
+import { CLINIC_EXCEPTION_STATUSES } from "../../../shared/attendance/types";
 
 const NOW = new Date();
 
@@ -793,6 +794,7 @@ function ClinicAttendanceTab({
           pending={mutation.isPending}
           error={error}
           variant="inline"
+          statuses={CLINIC_EXCEPTION_STATUSES}
           onConfirm={(exceptions) => mutation.mutate(exceptions)}
         />
       )}

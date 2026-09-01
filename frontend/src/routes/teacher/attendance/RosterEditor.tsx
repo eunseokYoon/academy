@@ -20,6 +20,11 @@ interface Props {
   onConfirm: (exceptions: AttendanceException[]) => void;
   /** page는 하단 고정 버튼(T-5), inline은 흐름 안 버튼(모달 안에서 쓰는 T-13). */
   variant?: "page" | "inline";
+  /**
+   * 선생님이 고를 수 있는 예외 상태. 기본값은 수업 출석(T-5)용이다.
+   * 클리닉은 CLINIC_EXCEPTION_STATUSES를 넘긴다 — 대체 등원이 빠진다(2026-09-01 확정).
+   */
+  statuses?: AttendanceStatus[];
 }
 
 /**
@@ -36,6 +41,7 @@ export function RosterEditor({
   error,
   onConfirm,
   variant = "page",
+  statuses = EXCEPTION_STATUSES,
 }: Props) {
   const [draft, setDraft] = useState<RosterRow[]>(rows);
   const [editing, setEditing] = useState<RosterRow | null>(null);
@@ -129,6 +135,7 @@ export function RosterEditor({
       {editing && (
         <StatusPicker
           row={editing}
+          statuses={statuses}
           onClose={() => setEditing(null)}
           onApply={(status, memo) => apply(editing.studentId, status, memo)}
         />
@@ -170,15 +177,20 @@ export function RosterEditor({
 }
 
 /**
- * 탭하면 4개 선택지가 뜬다. 탭할 때마다 출석→지각→결석으로 순환시키면
+ * 탭하면 선택지가 한 번에 뜬다. 탭할 때마다 출석→지각→결석으로 순환시키면
  * 한 번 지나쳤을 때 세 번 더 눌러야 한다.
+ *
+ * <p>선택지 목록은 호출부가 정한다. 수업 출석에는 「대체 등원」이 있고 클리닉에는 없다
+ * (2026-09-01 확정) — 여기에 목록을 박아 두면 두 화면이 같은 버튼을 갖게 된다.
  */
 function StatusPicker({
   row,
+  statuses,
   onClose,
   onApply,
 }: {
   row: RosterRow;
+  statuses: AttendanceStatus[];
   onClose: () => void;
   onApply: (status: AttendanceStatus, memo: string | null) => void;
 }) {
@@ -199,7 +211,7 @@ function StatusPicker({
         >
           출석
         </button>
-        {EXCEPTION_STATUSES.map((value) => (
+        {statuses.map((value) => (
           <button
             key={value}
             type="button"
