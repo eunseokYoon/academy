@@ -71,7 +71,7 @@ export default function StudentClinicPage() {
         {mine.length === 0 ? (
           <TintBlock tone="neutral">
             <p className="px-4 py-5 text-center text-sm text-slate-500">
-              신청한 클리닉이 없습니다.
+              배정된 클리닉이 없습니다.
             </p>
           </TintBlock>
         ) : (
@@ -87,7 +87,7 @@ export default function StudentClinicPage() {
                     </p>
                     <p className="text-xs text-slate-500">{formatClinicSlot(clinic)}</p>
                   </div>
-                  <Badge tone="ok">신청 완료</Badge>
+                  <Badge tone="ok">배정됨</Badge>
                 </div>
                 {/* 취소 버튼은 없다(2026-08-10 확정). 못 가면 다른 시각으로 옮긴다 —
                     학생이 스스로 명단에서 사라지면 선생님이 그날 인원을 신뢰할 수 없다 */}
