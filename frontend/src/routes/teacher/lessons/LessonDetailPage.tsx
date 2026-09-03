@@ -121,8 +121,8 @@ function ContentForm({ lesson, onDone }: Props) {
         <TextField label="제목" value={title} onChange={(e) => setTitle(e.target.value)} />
         <TextField
           label="영상 링크"
-          placeholder="https://youtu.be/... 또는 https://youtube.com/playlist?list=..."
-          hint="YouTube 영상 또는 재생목록 링크만 저장합니다. 파일 업로드는 없습니다."
+          placeholder="https://www.youtube.com/watch?v=...&list=..."
+          hint="재생목록을 쓰실 때는 목록 안의 영상을 열어 그 주소를 붙여 주세요 (v=와 list=가 함께 있는 주소). 일부 공개 재생목록은 playlist?list= 주소만으로는 재생되지 않습니다. 파일 업로드는 없습니다."
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
         />

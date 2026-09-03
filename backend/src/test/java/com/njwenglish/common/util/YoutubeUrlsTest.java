@@ -57,11 +57,11 @@ class YoutubeUrlsTest {
     }
 
     @Test
-    @DisplayName("영상과 재생목록이 같이 있으면 재생목록이 이긴다 — 그날 수업이 여러 개다")
-    void playlistWinsOverVideo() {
+    @DisplayName("영상과 재생목록이 같이 있으면 둘 다 살린다 — 영상으로 열고 목록으로 이어본다")
+    void videoAndPlaylistBothKept() {
         String url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc123DEF";
         assertThat(YoutubeUrls.embedUrlOf(url))
-            .isEqualTo("https://www.youtube.com/embed/videoseries?list=PLabc123DEF");
+            .isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ?list=PLabc123DEF");
     }
 
     @Test
@@ -92,7 +92,7 @@ class YoutubeUrlsTest {
         String url = "https://youtu.be/dQw4w9WgXcQ?list=PLabc123DEF&index=2";
         assertThat(YoutubeUrls.playlistId(url)).isEqualTo("PLabc123DEF");
         assertThat(YoutubeUrls.embedUrlOf(url))
-            .isEqualTo("https://www.youtube.com/embed/videoseries?list=PLabc123DEF");
+            .isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ?list=PLabc123DEF");
     }
 
     @Test
@@ -101,5 +101,34 @@ class YoutubeUrlsTest {
         assertThat(YoutubeUrls.playlistId("https://youtu.be/dQw4w9WgXcQ")).isNull();
         assertThat(YoutubeUrls.embedUrlOf("https://youtu.be/dQw4w9WgXcQ"))
             .isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ");
+    }
+
+    @Test
+    @DisplayName("영상과 재생목록이 둘 다 있으면 embed/{videoId}?list= 다 — 일부 공개 목록에서 되는 형식")
+    void videoWithPlaylistKeepsBoth() {
+        assertThat(YoutubeUrls.embedUrlOf(
+            "https://www.youtube.com/watch?v=im83SqpKKJ0&list=PLSaF8K8pRF_s&index=1&t=3s"))
+            .isEqualTo("https://www.youtube.com/embed/im83SqpKKJ0?list=PLSaF8K8pRF_s");
+    }
+
+    @Test
+    @DisplayName("임베드 주소를 그대로 붙여도 재생목록이 안 떨어진다")
+    void embedUrlWithPlaylistRoundTrips() {
+        String url = "https://www.youtube.com/embed/im83SqpKKJ0?list=PLSaF8K8pRF_s";
+        assertThat(YoutubeUrls.embedUrlOf(url)).isEqualTo(url);
+    }
+
+    @Test
+    @DisplayName("youtu.be 단축 링크도 영상 ID를 살려서 재생목록을 붙인다")
+    void shortLinkKeepsBoth() {
+        assertThat(YoutubeUrls.embedUrlOf("https://youtu.be/im83SqpKKJ0?list=PLSaF8K8pRF_s"))
+            .isEqualTo("https://www.youtube.com/embed/im83SqpKKJ0?list=PLSaF8K8pRF_s");
+    }
+
+    @Test
+    @DisplayName("재생목록만 있으면 videoseries다 — 영상 ID가 없어 다른 형식을 만들 수 없다")
+    void playlistOnlyStaysVideoseries() {
+        assertThat(YoutubeUrls.embedUrlOf("https://www.youtube.com/playlist?list=PLSaF8K8pRF_s"))
+            .isEqualTo("https://www.youtube.com/embed/videoseries?list=PLSaF8K8pRF_s");
     }
 }

@@ -30,7 +30,7 @@ public final class YoutubeUrls {
      */
     private static final Pattern PLAYLIST_ID = Pattern.compile(
         "^(?:https?://)?(?:www\\.|m\\.)?(?:"
-            + "youtube\\.com/(?:playlist|watch|embed/videoseries)"
+            + "youtube\\.com/(?:playlist|watch|embed/[\\w-]+)"
             + "|youtu\\.be/[\\w-]{11}"
             + ")\\?(?:[^&]*&)*list=([\\w-]+)(?:[&#].*)?$");
 
@@ -75,10 +75,26 @@ public final class YoutubeUrls {
      */
     public static String embedUrlOf(String url) {
         String playlistId = playlistId(url);
+        String videoId = videoId(url);
+        /*
+         * 영상 ID와 재생목록이 둘 다 있으면 embed/{videoId}?list={listId}다.
+         *
+         * videoseries 형식은 재생목록을 공개적으로 조회할 수 있어야 동작한다.
+         * 선생님이 수업 영상을 「일부 공개」 재생목록에 담으면 그 조회가 막혀서
+         * 플레이어가 "이 동영상은 볼 수 없습니다"를 띄운다 — 안의 영상은 멀쩡한데도 그렇다.
+         * 영상 ID를 앞에 두면 그 영상으로 플레이어를 열고 재생목록은 이어보기 맥락으로만
+         * 쓰므로 일부 공개에서도 재생된다(2026-09-04 확인).
+         *
+         * 그래서 선생님에게는 재생목록 안의 영상 링크를 붙이라고 안내한다.
+         * playlist?list=만 있는 링크는 영상 ID가 없어 videoseries로 갈 수밖에 없고,
+         * 그건 공개 재생목록에서만 된다.
+         */
+        if (videoId != null && playlistId != null) {
+            return EMBED_PREFIX + videoId + "?list=" + playlistId;
+        }
         if (playlistId != null) {
             return PLAYLIST_PREFIX + playlistId;
         }
-        String videoId = videoId(url);
         return videoId == null ? null : EMBED_PREFIX + videoId;
     }
 }
