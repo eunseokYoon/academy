@@ -1,12 +1,15 @@
 package com.njwenglish.dto.lesson;
 
-import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.enums.LessonAttendanceStatus;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
-/** videoId·embedUrl은 저장하지 않고 videoUrl에서 파싱해 내려준다. 프론트가 iframe에 쓴다. */
+/**
+ * videos는 원본 url과 파싱된 embedUrl을 함께 담는다 — 선생님 화면은 수정용으로 원본이,
+ * 미리보기용으로 embedUrl이 필요하다. 학생·학부모용은 {@link LessonReportResponse}다.
+ */
 public record LessonDetailResponse(
     Long lessonId,
     Long classRoomId,
@@ -16,9 +19,7 @@ public record LessonDetailResponse(
     Short month,
     Short week,
     String title,
-    String videoUrl,
-    String videoId,
-    String embedUrl,
+    List<LessonVideoEditResponse> videos,
     String content,
     String keyPoints,
     String nextPreview,
@@ -26,12 +27,11 @@ public record LessonDetailResponse(
     OffsetDateTime publishedAt
 ) {
     public static LessonDetailResponse from(Lesson lesson) {
-        String videoId = YoutubeUrls.videoId(lesson.getVideoUrl());
         return new LessonDetailResponse(
             lesson.getId(), lesson.getClassRoom().getId(), lesson.getClassRoom().getName(),
             lesson.getLessonDate(), lesson.getYear(), lesson.getMonth(), lesson.getWeek(),
-            lesson.getTitle(), lesson.getVideoUrl(), videoId,
-            YoutubeUrls.embedUrlOf(lesson.getVideoUrl()),
+            lesson.getTitle(),
+            lesson.getVideos().stream().map(LessonVideoEditResponse::from).toList(),
             lesson.getContent(), lesson.getKeyPoints(), lesson.getNextPreview(),
             lesson.getAttendanceStatus(), lesson.getPublishedAt());
     }

@@ -12,6 +12,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.dto.lesson.LessonBulkCreateRequest;
 import com.njwenglish.dto.lesson.LessonBulkCreateResponse;
 import com.njwenglish.dto.lesson.LessonCreateRequest;
+import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.dto.lesson.LessonDetailResponse;
 import com.njwenglish.dto.lesson.LessonUpdateRequest;
 import com.njwenglish.entity.ClassRoom;
@@ -104,23 +105,33 @@ class LessonServiceTest {
 
         assertThatThrownBy(() -> lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
-            null, "https://vimeo.com/12345678", null, null, null)))
+            null, List.of(new LessonVideoRequest("https://vimeo.com/12345678", null)),
+            null, null, null)))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
 
     @Test
-    @DisplayName("videoUrl에서 videoId·embedUrl을 파싱해 내려준다")
+    @DisplayName("링크 목록에서 embedUrl을 파싱해 내려준다 — 순서는 보낸 순서다")
     void 영상_id를_내려준다() {
         given(classRoomRepository.findById(3L)).willReturn(Optional.of(thursdayClass()));
         given(lessonRepository.save(any())).willAnswer(i -> i.getArgument(0));
 
         LessonDetailResponse response = lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
-            null, "https://www.youtube.com/watch?v=dQw4w9WgXcQ", null, null, null));
+            null, List.of(
+                new LessonVideoRequest("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "1교시"),
+                new LessonVideoRequest("https://youtu.be/im83SqpKKJ0", null)),
+            null, null, null));
 
-        assertThat(response.videoId()).isEqualTo("dQw4w9WgXcQ");
-        assertThat(response.embedUrl()).isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ");
+        assertThat(response.videos()).hasSize(2);
+        assertThat(response.videos().get(0).title()).isEqualTo("1교시");
+        assertThat(response.videos().get(0).embedUrl())
+            .isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ");
+        // 이름을 안 적으면 null이다. "영상 2"는 화면이 채운다
+        assertThat(response.videos().get(1).title()).isNull();
+        assertThat(response.videos().get(1).embedUrl())
+            .isEqualTo("https://www.youtube.com/embed/im83SqpKKJ0");
     }
 
     @Test
@@ -221,7 +232,7 @@ class LessonServiceTest {
     void 보낸_필드만_바꾼다() {
         Lesson lesson = Lesson.create(thursdayClass(), LocalDate.of(2026, 5, 20),
             (short) 2026, (short) 5, (short) 4);
-        lesson.writeContent("원래 제목", null, "원래 내용", "원래 중점", null);
+        lesson.writeContent("원래 제목", "원래 내용", "원래 중점", null);
         given(lessonRepository.findWithClassRoom(501L)).willReturn(Optional.of(lesson));
 
         lessonService.update(501L, new LessonUpdateRequest(

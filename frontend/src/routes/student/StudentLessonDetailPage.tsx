@@ -14,7 +14,8 @@ export default function StudentLessonDetailPage() {
   const navigate = useNavigate();
   const { lessonId } = useParams();
   const id = Number(lessonId);
-  const [playing, setPlaying] = useState(false);
+  /** 재생 중인 영상의 인덱스. null이면 아직 안 눌렀다 — 처음부터 iframe을 심지 않는다 */
+  const [playing, setPlaying] = useState<number | null>(null);
 
   const { data, isPending, isError } = useQuery({
     queryKey: ["student", "lesson", id],
@@ -53,29 +54,70 @@ export default function StudentLessonDetailPage() {
         </h2>
       </div>
 
-      {/* embedUrl이 null이면 영상이 등록되지 않은 수업이다. 영역을 통째로 숨긴다.
-          재생목록이면 videoId는 null이지만 embedUrl은 채워진다 */}
-      {data.embedUrl && (
+      {/*
+        영상은 여러 개다(2026-09-04). 재생목록 임베드가 「일부 공개」 목록에서 재생되지
+        않아 학생이 못 보던 것을 이 구조가 비켜 간다 — 영상 단독 임베드는 공개 설정에
+        걸리지 않는다.
+
+        비어 있으면 영역을 통째로 숨긴다. 처음부터 iframe을 심지 않는 것도 그대로다 —
+        여러 개면 그만큼 무거워진다.
+      */}
+      {data.videos.length > 0 && (
         <section className="space-y-2">
-          {playing ? (
+          {playing === null ? (
+            <button
+              type="button"
+              onClick={() => setPlaying(0)}
+              className="w-full rounded-xl bg-brand-900 px-4 py-4 text-sm font-medium text-white"
+            >
+              ▶ 수업영상 시청하기
+              {data.videos.length > 1 && ` (${data.videos.length}개)`}
+            </button>
+          ) : (
             <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
               <iframe
-                src={`${data.embedUrl}${data.embedUrl.includes("?") ? "&" : "?"}rel=0&modestbranding=1&autoplay=1`}
-                title="수업 영상"
+                src={`${data.videos[playing].embedUrl}${
+                  data.videos[playing].embedUrl?.includes("?") ? "&" : "?"
+                }rel=0&modestbranding=1&autoplay=1`}
+                title={data.videos[playing].title ?? `수업 영상 ${playing + 1}`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media;
                        picture-in-picture"
                 allowFullScreen
                 className="h-full w-full"
               />
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPlaying(true)}
-              className="w-full rounded-xl bg-brand-900 px-4 py-4 text-sm font-medium text-white"
-            >
-              ▶ 수업영상 시청하기
-            </button>
+          )}
+
+          {/* 영상이 하나뿐이면 목록을 그리지 않는다. 고를 것이 없다 */}
+          {data.videos.length > 1 && (
+            <ul className="space-y-1.5">
+              {data.videos.map((video, i) => (
+                <li key={i}>
+                  <button
+                    type="button"
+                    onClick={() => setPlaying(i)}
+                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left
+                                text-sm transition-colors ${
+                                  playing === i
+                                    ? "bg-brand-900 text-white"
+                                    : "bg-white text-brand-900 shadow-card active:bg-brand-50"
+                                }`}
+                  >
+                    <span
+                      className={`shrink-0 text-xs font-bold ${
+                        playing === i ? "text-white/70" : "text-brand-400"
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    {/* 이름을 안 적으면 "영상 N"으로 채운다 — 선생님이 매번 짓지 않아도 된다 */}
+                    <span className="min-w-0 flex-1 truncate">
+                      {video.title ?? `영상 ${i + 1}`}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       )}

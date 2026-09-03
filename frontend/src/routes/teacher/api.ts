@@ -113,10 +113,18 @@ export interface LessonListItem {
   attendanceStatus: LessonAttendanceStatus;
 }
 
-export interface LessonDetail extends Omit<LessonListItem, "contentWritten" | "published"> {
-  videoUrl: string | null;
-  videoId: string | null;
+/**
+ * 선생님 화면용 영상 한 줄. 학생용과 달리 <b>원본 url이 온다</b> — 수정할 때 입력칸에
+ * 되돌려 넣어야 한다. embedUrl은 미리보기 iframe이 쓴다.
+ */
+export interface LessonVideoEdit {
+  url: string;
+  title: string | null;
   embedUrl: string | null;
+}
+
+export interface LessonDetail extends Omit<LessonListItem, "contentWritten" | "published"> {
+  videos: LessonVideoEdit[];
   content: string | null;
   keyPoints: string | null;
   nextPreview: string | null;
@@ -273,7 +281,7 @@ export const updateLesson = (
     month: number;
     week: number;
     title: string;
-    videoUrl: string;
+    videos: { url: string; title: string | null }[];
     content: string;
     keyPoints: string;
     nextPreview: string;

@@ -113,7 +113,8 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c
         WHERE l.lessonDate < :today
-          AND (l.content IS NOT NULL OR l.videoUrl IS NOT NULL OR l.title IS NOT NULL)
+          AND (l.content IS NOT NULL OR l.title IS NOT NULL
+               OR EXISTS (SELECT 1 FROM LessonVideo v WHERE v.lesson.id = l.id))
           AND EXISTS (SELECT 1 FROM Enrollment e
                       WHERE e.classRoom.id = l.classRoom.id
                         AND e.student.id = :studentId

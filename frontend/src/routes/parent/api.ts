@@ -68,7 +68,7 @@ export const getChildHomeworks = (
 /**
  * 학생 화면(S-5)과 <b>같은 응답</b>이다. 영상 값만 null로 내려온다.
  *
- * <p>videoId·embedUrl이 null인 것은 "영상이 없다"가 아니라 "학부모는 못 본다"는 뜻이다.
+ * <p>videos가 비어 있는 것은 "영상이 없다"가 아니라 "학부모는 못 본다"는 뜻이다.
  * 서버가 forParent 팩토리에서 고정해 보낸다. 프론트에서 이 값을 채워 재생을 붙이지 마라.
  */
 export interface ParentLessonListItem {
@@ -89,8 +89,8 @@ export interface ParentLessonDetail {
   title: string | null;
   classRoomName: string;
   /** 학부모 응답에서는 항상 null이다. 프론트는 영상 영역을 그리지 않는다. */
-  videoId: string | null;
-  embedUrl: string | null;
+  /** 학부모에게는 언제나 빈 배열이다. 서버가 forParent에서 고정한다. */
+  videos: never[];
   content: string | null;
   keyPoints: string | null;
   nextPreview: string | null;

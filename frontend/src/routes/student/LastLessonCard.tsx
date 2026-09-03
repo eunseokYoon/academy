@@ -41,7 +41,8 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
         >
           {/*
             YouTube가 videoId만으로 주는 정적 썸네일이다. iframe이 아니라 이미지 한 장이라
-            홈이 무거워지지 않는다. 재생목록은 videoId가 없으므로 그리지 않는다.
+            홈이 무거워지지 않는다. 영상이 여러 개면 첫 영상의 썸네일이고, 재생목록
+            링크면 videoId가 없으므로 그리지 않는다.
 
             hqdefault는 480×360(4:3)이라 16:9 칸에 넣으면 위아래 검은 띠가 생긴다.
             object-cover로 그 띠를 잘라 낸다 — mqdefault(320×180)는 비율이 맞는 대신
@@ -74,6 +75,13 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
               <path d="M8 5v14l11-7z" />
             </svg>
           </span>
+          {/* 여러 개면 몇 개인지 알려 준다. 상세에서 골라 볼 수 있다는 신호다 */}
+          {lesson.videoCount > 1 && (
+            <span className="absolute bottom-2 right-2 rounded-md bg-black/65 px-1.5 py-0.5
+                             text-[11px] font-bold text-white">
+              영상 {lesson.videoCount}개
+            </span>
+          )}
           <span className="sr-only">수업영상 보기</span>
         </Link>
       )}

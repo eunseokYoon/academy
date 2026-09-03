@@ -3,6 +3,11 @@ package com.njwenglish.entity;
 import com.njwenglish.common.entity.BaseTimeEntity;
 import com.njwenglish.entity.enums.LessonAttendanceStatus;
 import jakarta.persistence.Column;
+import java.util.List;
+import java.util.ArrayList;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -20,7 +25,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * videoUrl은 YouTube 미등록 링크 문자열만 저장한다. 영상 파일은 다루지 않는다.
+ * 영상은 {@link LessonVideo}에 여러 줄로 담긴다(2026-09-04). YouTube 링크 문자열만
+ * 저장하고 영상 파일은 다루지 않는다.
  *
  * <p>publishedAt이 null이면 작성 중이라 선생님만 본다. 학생·학부모 조회에는
  * published_at IS NOT NULL 조건을 반드시 넣어라.
@@ -55,8 +61,16 @@ public class Lesson extends BaseTimeEntity {
     @Column(length = 200)
     private String title;
 
-    @Column(name = "video_url", length = 500)
-    private String videoUrl;
+    /**
+     * 수업 영상들. 수업당 여러 개다(2026-09-04 확정).
+     *
+     * <p>전량 교체 방식이라({@link #replaceVideos}) orphanRemoval이 켜져 있다.
+     * sort_order에 UNIQUE가 없는 이유는 V22 주석에 있다 — 있으면 flush 순서 때문에
+     * 지우고 다시 넣는 순간 제약에 걸린다.
+     */
+    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
+    private List<LessonVideo> videos = new ArrayList<>();
 
     @Column(columnDefinition = "TEXT")
     private String content;
@@ -102,13 +116,28 @@ public class Lesson extends BaseTimeEntity {
     }
 
     /** 내용 수정은 공개 상태를 건드리지 않는다. 공개는 publish()로만 이루어진다. */
-    public void writeContent(String title, String videoUrl, String content,
+    public void writeContent(String title, String content,
                              String keyPoints, String nextPreview) {
         this.title = title;
-        this.videoUrl = videoUrl;
         this.content = content;
         this.keyPoints = keyPoints;
         this.nextPreview = nextPreview;
+    }
+
+    /**
+     * 영상 목록을 통째로 갈아 끼운다. 링크별 추가·삭제 API를 따로 두지 않는 이유는
+     * 순서 재배열 때문이다 — 화면이 어차피 전체를 들고 있어서 통째로 보내는 게 단순하다.
+     *
+     * <p>호출부가 URL 유효성과 개수 상한을 이미 검사한 뒤에 부른다.
+     */
+    public void replaceVideos(List<LessonVideo> next) {
+        this.videos.clear();
+        this.videos.addAll(next);
+    }
+
+    /** 영상이 하나라도 있는가. 목록·레포트가 "영상 있음"을 판정할 때 쓴다. */
+    public boolean hasVideo() {
+        return !videos.isEmpty();
     }
 
     public boolean isPublished() {

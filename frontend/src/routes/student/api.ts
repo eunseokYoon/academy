@@ -243,14 +243,23 @@ export interface StudentLessonListItem {
   homeworkTitle: string | null;
 }
 
+/**
+ * 수업 영상 한 줄. title은 비어 있을 수 있고, 그때 화면이 "영상 N"으로 채운다.
+ * videoId는 썸네일용이라 재생목록 링크면 null이다 — 그때도 embedUrl은 있다.
+ */
+export interface LessonVideo {
+  title: string | null;
+  videoId: string | null;
+  embedUrl: string | null;
+}
+
 export interface StudentLessonDetail {
   lessonId: number;
   lessonDate: string;
   title: string | null;
   classRoomName: string;
-  /** null이면 영상이 등록되지 않은 수업이다. 프론트는 영상 영역을 숨긴다. */
-  videoId: string | null;
-  embedUrl: string | null;
+  /** 수업 영상 목록. 비어 있으면 화면이 영상 영역을 숨긴다. */
+  videos: LessonVideo[];
   content: string | null;
   keyPoints: string | null;
   nextPreview: string | null;
@@ -330,8 +339,10 @@ export interface StudentHome {
     lessonId: number;
     lessonDate: string;
     title: string | null;
+    /** 첫 영상. 홈 카드는 하나만 쓰고 개수는 videoCount가 알린다. */
     videoId: string | null;
     embedUrl: string | null;
+    videoCount: number;
     content: string | null;
     nextPreview: string | null;
   } | null;
