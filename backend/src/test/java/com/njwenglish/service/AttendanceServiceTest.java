@@ -220,8 +220,8 @@ class AttendanceServiceTest {
     }
 
     @Test
-    @DisplayName("숙제가 있는 날만 완료율이 채워지고, 없는 날은 0이 아니라 null이다")
-    void 숙제가_없는_날의_완료율은_null이다() {
+    @DisplayName("숙제가 없던 수업일은 월 합계의 분모에 들어가지 않는다")
+    void 숙제가_없는_날은_월_합계_분모에서_빠진다() {
         given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
         given(attendanceRepository.findCalendarRows(anyLong(), any(), any()))
             .willReturn(List.of(
@@ -235,9 +235,32 @@ class AttendanceServiceTest {
 
         AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
 
-        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(60);
-        // 숙제가 없던 날이다. 0으로 바꾸면 "하나도 안 냈다"로 읽힌다
-        assertThat(calendar.days().get(1).homeworkRate()).isNull();
+        // 5/13은 숙제가 없었다. 분모에 들어가면 월 합계가 30으로 반토막 난다
+        assertThat(calendar.homeworkCompletionRate()).isEqualTo(60);
+    }
+
+    /**
+     * 날짜 칸의 띠는 2026-09-10에 없앴다. 값을 지우지 않고 null을 내리는 이유는
+     * 배포 순서가 backend → web이라, 필드를 빼면 옛 화면에서 undefined !== null이
+     * 참이 되어 NaN% 그라디언트가 그려지기 때문이다.
+     */
+    @Test
+    @DisplayName("숙제가 있어도 날짜 칸의 완료율은 null이다 - 띠를 없앴다")
+    void 날짜_칸_완료율은_항상_null이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(attendanceRepository.findCalendarRows(88L,
+            LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31)))
+            .willReturn(List.of(
+                row(501L, LocalDate.of(2026, 5, 6),
+                    LessonAttendanceStatus.CONFIRMED, AttendanceStatus.PRESENT)));
+        given(submissionRepository.findHomeworkRates(88L, List.of(501L)))
+            .willReturn(List.of(rate(501L, 300, 5)));
+
+        AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
+
+        assertThat(calendar.days()).hasSize(1);
+        assertThat(calendar.days().get(0).homeworkRate()).isNull();
+        // 계산은 살아 있다. 카드가 이 값을 쓴다
         assertThat(calendar.homeworkCompletionRate()).isEqualTo(60);
     }
 
@@ -276,7 +299,7 @@ class AttendanceServiceTest {
 
         AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
 
-        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(100);
+        assertThat(calendar.homeworkCompletionRate()).isEqualTo(100);
     }
 
     @Test
@@ -294,7 +317,7 @@ class AttendanceServiceTest {
 
         AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
 
-        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(75);
+        assertThat(calendar.homeworkCompletionRate()).isEqualTo(75);
     }
 
     @Test
@@ -312,7 +335,6 @@ class AttendanceServiceTest {
 
         AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
 
-        assertThat(calendar.days().get(0).homeworkRate()).isEqualTo(67);
         assertThat(calendar.homeworkCompletionRate()).isEqualTo(67);
     }
 
@@ -331,7 +353,7 @@ class AttendanceServiceTest {
 
         AttendanceCalendarResponse calendar = attendanceService.calendar(88L, 2026, 5);
 
-        assertThat(calendar.days().get(0).homeworkRate()).isNull();
+        assertThat(calendar.homeworkCompletionRate()).isNull();
     }
 
     @Test

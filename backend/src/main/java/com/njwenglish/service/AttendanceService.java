@@ -222,12 +222,14 @@ public class AttendanceService {
                 && row.getAttendStatus() != null;
             HomeworkRateRow rate = homeworkRates.get(row.getLessonId());
 
-            // rate가 null이면 그날 숙제가 없었다는 뜻이다. 0으로 바꾸지 마라 —
-            // 0은 "전부 미제출"이라 캘린더에 빨간 띠가 뜨고 학부모는 그걸 그렇게 읽는다
+            // 날짜 칸의 띠는 없앴다(2026-09-10). 50% 미만이면 빨강이라 학부모 캘린더가
+            // 빨개졌다. 계산은 남는다 — 아래 누적이 월 합계 카드의 원본이다.
+            //
+            // 필드를 지우지 않고 null을 넣는 이유: 배포가 backend → web 순서라
+            // 필드가 사라지면 옛 화면이 undefined !== null을 참으로 읽어 NaN%를 그린다
             days.add(new AttendanceDayResponse(row.getLessonDate(),
                 isConfirmed ? row.getAttendStatus().name() : AttendanceDayResponse.PENDING,
-                rate == null || rate.getTargetCount() == 0
-                    ? null : average(rate.getScoreSum(), rate.getTargetCount())));
+                null));
 
             if (isConfirmed) {
                 confirmed.add(row.getAttendStatus());
