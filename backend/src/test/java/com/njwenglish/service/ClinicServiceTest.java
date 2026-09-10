@@ -221,6 +221,10 @@ class ClinicServiceTest {
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_HAS_RECORDS);
 
+        // 거절된 요청에서 예약 행이 지워지면 안 된다 — 이 태스크가 막는 회귀가
+        // "purge가 409 검사보다 먼저 도는 것"이다
+        verify(reservationRepository, never())
+            .deleteByClinicIdAndStatusNot(any(), any());
         verify(clinicRepository, never()).delete(any(Clinic.class));
     }
 
