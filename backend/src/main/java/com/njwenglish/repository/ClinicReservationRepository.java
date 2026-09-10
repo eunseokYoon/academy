@@ -23,6 +23,15 @@ public interface ClinicReservationRepository extends JpaRepository<ClinicReserva
     Optional<ClinicReservation> findByClinicIdAndStudentIdAndStatus(Long clinicId, Long studentId,
                                                                     ReservationStatus status);
 
+    /**
+     * 클리닉 삭제 직전의 잔여 행 정리. <b>CANCELED·MOVED만 지운다</b> —
+     * RESERVED가 남아 있으면 호출부가 이미 409로 막았어야 한다.
+     *
+     * <p>이 행들을 읽는 쿼리는 없다. 전부 status = RESERVED만 본다.
+     * 이동 이력은 clinic_change_logs가 따로 갖고 있다.
+     */
+    void deleteByClinicIdAndStatusNot(Long clinicId, ReservationStatus status);
+
     /** T-13 명단. 학생 이름은 students.name이라 user를 타지 않는다. */
     @Query("""
         SELECT r FROM ClinicReservation r

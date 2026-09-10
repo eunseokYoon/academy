@@ -21,6 +21,7 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.ClinicStatus;
 import com.njwenglish.entity.enums.ReservationStatus;
+import com.njwenglish.repository.ClinicChangeLogRepository;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.ClinicReservationRepository.ClinicCount;
@@ -55,6 +56,7 @@ public class ClinicService {
     private final ClinicReservationRepository reservationRepository;
     private final TeacherRepository teacherRepository;
     private final StudentAccessGuard studentAccessGuard;
+    private final ClinicChangeLogRepository changeLogRepository;
 
     @Transactional
     public ClinicCreateResponse create(ClinicCreateRequest request) {
@@ -155,16 +157,31 @@ public class ClinicService {
     }
 
     /**
-     * 시간대 삭제. 배정된 학생이 한 명이라도 있으면 지우지 말고 CLOSED로 닫아야 한다 —
-     * 예약 행이 FK로 남아 있어 물리 삭제가 안 되고, 지워지면 학생 기록이 사라진다.
+     * 시간대 삭제. <b>어느 경우에도 500이 나오지 않는다</b> — FK 위반을 예외로 잡아
+     * 변환하지 말고 미리 검사해서 409를 던진다. 그렇게 하지 않으면 FK가 하나 늘 때마다
+     * 같은 500이 되돌아온다.
+     *
+     * <p>배정 해제(unassign)가 행을 지우지 않고 CANCELED로 바꾸기 때문에, 선생님 눈에
+     * 명단이 비어도 예약 행이 남아 삭제를 막고 있었다. 그 행들을 읽는 쿼리는 없으므로
+     * 여기서 정리한다.
      */
     @Transactional
     public void delete(Long clinicId) {
         Clinic clinic = findClinic(clinicId);
+
+        // 1. 배정된 학생이 있으면 지우지 않는다. 닫아야 한다
         if (reservationRepository.countByClinicIdAndStatus(
             clinicId, ReservationStatus.RESERVED) > 0) {
-            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE);
+            throw new BusinessException(ErrorCode.CLINIC_HAS_RECORDS);
         }
+        // 2. 변경 이력은 감사 기록이라 지울 수 없고 from_clinic_id가 NOT NULL이다
+        if (changeLogRepository.existsByFromClinicIdOrToClinicId(clinicId, clinicId)) {
+            throw new BusinessException(ErrorCode.CLINIC_HAS_RECORDS);
+        }
+        // 3. 남은 CANCELED·MOVED 행을 치운다. 읽는 곳이 없어 잃는 것이 없다
+        reservationRepository.deleteByClinicIdAndStatusNot(
+            clinicId, ReservationStatus.RESERVED);
+
         clinicRepository.delete(clinic);
     }
 

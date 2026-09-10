@@ -14,6 +14,8 @@ import com.njwenglish.dto.clinic.ClinicBulkCreateRequest;
 import com.njwenglish.dto.clinic.ClinicBulkCreateResponse;
 import com.njwenglish.dto.clinic.ClinicListItemResponse;
 import com.njwenglish.entity.Clinic;
+import com.njwenglish.entity.enums.ReservationStatus;
+import com.njwenglish.repository.ClinicChangeLogRepository;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.TeacherRepository;
@@ -50,6 +52,8 @@ class ClinicServiceTest {
     private TeacherRepository teacherRepository;
     @Mock
     private StudentAccessGuard studentAccessGuard;
+    @Mock
+    private ClinicChangeLogRepository changeLogRepository;
 
     private ClinicService clinicService;
 
@@ -61,7 +65,7 @@ class ClinicServiceTest {
     @BeforeEach
     void setUp() {
         clinicService = new ClinicService(clinicRepository, reservationRepository,
-            teacherRepository, studentAccessGuard);
+            teacherRepository, studentAccessGuard, changeLogRepository);
         given(teacherRepository.findByUserId(any()))
             .willReturn(Optional.of(Fixtures.teacherEntity(1L)));
         Fixtures.login(Fixtures.teacher(1L));
@@ -186,5 +190,59 @@ class ClinicServiceTest {
         assertThat(item.studentSlotCount()).isEqualTo(2);
         assertThat(item.confirmedSlotCount()).isEqualTo(1);
         assertThat(item.attendanceConfirmed()).isFalse();
+    }
+
+    /** 배정 해제(unassign)는 행을 지우지 않고 CANCELED로 바꾼다. 그 행이 FK로 삭제를 막고 있었다. */
+    @Test
+    @DisplayName("배정 해제로 남은 예약 행이 있어도 지운다")
+    void 취소된_예약만_남았으면_지운다() {
+        Clinic clinic = Fixtures.clinic(7L, SEP_1, LocalTime.of(17, 0), (short) 6);
+        given(clinicRepository.findById(7L)).willReturn(Optional.of(clinic));
+        given(reservationRepository.countByClinicIdAndStatus(7L, ReservationStatus.RESERVED))
+            .willReturn(0L);
+        given(changeLogRepository.existsByFromClinicIdOrToClinicId(7L, 7L)).willReturn(false);
+
+        clinicService.delete(7L);
+
+        verify(reservationRepository)
+            .deleteByClinicIdAndStatusNot(7L, ReservationStatus.RESERVED);
+        verify(clinicRepository).delete(clinic);
+    }
+
+    @Test
+    @DisplayName("배정된 학생이 있으면 409이고 삭제하지 않는다")
+    void 배정된_학생이_있으면_거절한다() {
+        Clinic clinic = Fixtures.clinic(7L, SEP_1, LocalTime.of(17, 0), (short) 6);
+        given(clinicRepository.findById(7L)).willReturn(Optional.of(clinic));
+        given(reservationRepository.countByClinicIdAndStatus(7L, ReservationStatus.RESERVED))
+            .willReturn(3L);
+
+        assertThatThrownBy(() -> clinicService.delete(7L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_HAS_RECORDS);
+
+        verify(clinicRepository, never()).delete(any(Clinic.class));
+    }
+
+    /**
+     * 변경 이력은 쓰기 전용 감사 기록이라 지우면 안 되고, from_clinic_id가 NOT NULL이라
+     * null로 비울 수도 없다. 이동이 얽힌 클리닉은 닫아야 한다 — 500이 아니라 409로 알린다.
+     */
+    @Test
+    @DisplayName("변경 이력이 걸려 있으면 409다")
+    void 변경_이력이_있으면_거절한다() {
+        Clinic clinic = Fixtures.clinic(7L, SEP_1, LocalTime.of(17, 0), (short) 6);
+        given(clinicRepository.findById(7L)).willReturn(Optional.of(clinic));
+        given(reservationRepository.countByClinicIdAndStatus(7L, ReservationStatus.RESERVED))
+            .willReturn(0L);
+        given(changeLogRepository.existsByFromClinicIdOrToClinicId(7L, 7L)).willReturn(true);
+
+        assertThatThrownBy(() -> clinicService.delete(7L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_HAS_RECORDS);
+
+        verify(reservationRepository, never())
+            .deleteByClinicIdAndStatusNot(any(), any());
+        verify(clinicRepository, never()).delete(any(Clinic.class));
     }
 }

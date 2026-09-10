@@ -11,4 +11,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * <p>조회 메서드를 다시 붙이려면 화면부터 정하고 붙여라 — 쓰는 곳 없는 쿼리가 늘어난다.
  */
 public interface ClinicChangeLogRepository extends JpaRepository<ClinicChangeLog, Long> {
+
+    /**
+     * 클리닉을 지울 수 있는지 판정하는 <b>가드 전용</b>이다. 화면에 이력을 그리는 용도가
+     * 아니다 — 그건 2026-08-11에 빼기로 확정했다.
+     *
+     * <p>이 행이 남아 있으면 clinics 삭제가 FK에 걸린다. 이력은 쓰기 전용 감사 기록이라
+     * 지울 수 없고 from_clinic_id가 NOT NULL이라 null로 비울 수도 없다. 그래서 409로 알린다.
+     */
+    boolean existsByFromClinicIdOrToClinicId(Long fromClinicId, Long toClinicId);
 }

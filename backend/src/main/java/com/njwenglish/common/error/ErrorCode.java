@@ -31,6 +31,8 @@ public enum ErrorCode {
         "공개된 테스트의 정답과 문항 수는 수정할 수 없습니다. 삭제 후 다시 출제해 주세요."),
     CLASS_ROOM_HAS_RECORDS(HttpStatus.CONFLICT, "수업·배정 기록이 있어 삭제할 수 없습니다. 종료 처리를 사용해 주세요."),
     LESSON_HAS_RECORDS(HttpStatus.CONFLICT, "출석·숙제 기록이 있어 삭제할 수 없습니다."),
+    CLINIC_HAS_RECORDS(HttpStatus.CONFLICT,
+        "배정·변경 기록이 있어 삭제할 수 없습니다. 닫기를 사용해 주세요."),
     INVITE_CODE_INVALID(HttpStatus.BAD_REQUEST, "초대코드가 유효하지 않습니다."),
     INVITE_CODE_USED(HttpStatus.BAD_REQUEST, "이미 사용된 초대코드입니다."),
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "이미 존재하는 데이터입니다."),
