@@ -16,6 +16,11 @@ import org.springframework.data.repository.query.Param;
  *
  * <p>조건을 n에 직접 건다. n.classRoom.id 같은 경로를 새로 만들지 마라 —
  * 암묵적 INNER JOIN이 생겨 다른 scope의 공지가 통째로 사라진다.
+ *
+ * <p><b>정렬에 scope 절이 맨 앞에 있다</b>(2026-09-10). scope = STUDENT는 수업일·클리닉
+ * 변경이 자동 발행한 공지이고, 선생님이 직접 쓴 안내가 그 아래 묻히면 안 된다.
+ * 고정(pinned)은 각 덩어리 안에서 위로 온다 — 자동 공지가 고정되는 경로는 없다.
+ * 목록과 findRecentForStudent가 <b>같은 정렬</b>이어야 홈 배너와 공지 탭의 첫 줄이 같다.
  */
 public interface NoticeRepository extends JpaRepository<Notice, Long> {
 
@@ -45,7 +50,8 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
           AND (:parentView = false OR n.studentsOnly = false)
-        ORDER BY n.pinned DESC, n.publishedAt DESC, n.id DESC
+        ORDER BY CASE WHEN n.scope = 'STUDENT' THEN 1 ELSE 0 END,
+                 n.pinned DESC, n.publishedAt DESC, n.id DESC
         """,
         countQuery = """
         SELECT COUNT(n) FROM Notice n
@@ -116,7 +122,8 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
           AND (:parentView = false OR n.studentsOnly = false)
-        ORDER BY n.pinned DESC, n.publishedAt DESC, n.id DESC
+        ORDER BY CASE WHEN n.scope = 'STUDENT' THEN 1 ELSE 0 END,
+                 n.pinned DESC, n.publishedAt DESC, n.id DESC
         """)
     List<Notice> findRecentForStudent(@Param("studentId") Long studentId,
                                       @Param("classRoomIds") Collection<Long> classRoomIds,
