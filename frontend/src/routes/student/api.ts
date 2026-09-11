@@ -322,6 +322,8 @@ export interface StudentHome {
     scopeNote: string | null;
     dDay: number;
   } | null;
+  /** 시각은 시간대 시작이 아니라 <b>학생이 배정받은 도착 시각</b>이다. */
+  nextClinic: { clinicId: number; clinicDate: string; arrivalTime: string; dDay: number } | null;
   /** 마감 지난 미제출도 들어 있다. 마감 이른 순이다. */
   currentHomeworks: {
     homeworkId: number;

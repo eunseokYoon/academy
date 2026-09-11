@@ -164,6 +164,8 @@ export interface ParentHome {
   nextLessonDate: string | null;
   /** 반에 그 요일 슬롯이 없으면 null이다. 그때는 날짜만 그린다. */
   nextLessonTime: string | null;
+  /** 옛 응답에는 없어서 undefined일 수 있다. `!== null` 검사 없이 라벨에 넣지 마라. */
+  nextLessonDDay: number | null;
   notices: { totalCount: number; recent: NoticeSummary[] };
   pendingHomeworkCount: number;
   /** 시각은 시간대 시작이 아니라 <b>자녀가 고른 도착 시각</b>이다. */
