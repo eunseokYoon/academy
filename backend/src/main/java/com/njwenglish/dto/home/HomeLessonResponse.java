@@ -27,7 +27,7 @@ public record HomeLessonResponse(Long lessonId,
                                  String embedUrl,
                                  int videoCount,
                                  String content,
-                                 String nextPreview) {
+                                 String homeworkNote) {
 
     public static HomeLessonResponse from(Lesson lesson) {
         LessonVideo first = lesson.getVideos().isEmpty() ? null : lesson.getVideos().get(0);
@@ -36,6 +36,6 @@ public record HomeLessonResponse(Long lessonId,
             first == null ? null : YoutubeUrls.videoId(first.getUrl()),
             first == null ? null : YoutubeUrls.embedUrlOf(first.getUrl()),
             lesson.getVideos().size(),
-            lesson.getContent(), lesson.getNextPreview());
+            lesson.getContent(), lesson.getHomeworkNote());
     }
 }

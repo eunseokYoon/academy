@@ -22,7 +22,8 @@ public record LessonDetailResponse(
     List<LessonVideoEditResponse> videos,
     String content,
     String keyPoints,
-    String nextPreview,
+    String homeworkNote,
+    String clinicNote,
     LessonAttendanceStatus attendanceStatus,
     OffsetDateTime publishedAt
 ) {
@@ -32,7 +33,7 @@ public record LessonDetailResponse(
             lesson.getLessonDate(), lesson.getYear(), lesson.getMonth(), lesson.getWeek(),
             lesson.getTitle(),
             lesson.getVideos().stream().map(LessonVideoEditResponse::from).toList(),
-            lesson.getContent(), lesson.getKeyPoints(), lesson.getNextPreview(),
+            lesson.getContent(), lesson.getKeyPoints(), lesson.getHomeworkNote(), lesson.getClinicNote(),
             lesson.getAttendanceStatus(), lesson.getPublishedAt());
     }
 }

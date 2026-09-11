@@ -78,8 +78,19 @@ public class Lesson extends BaseTimeEntity {
     @Column(name = "key_points", columnDefinition = "TEXT")
     private String keyPoints;
 
-    @Column(name = "next_preview", columnDefinition = "TEXT")
-    private String nextPreview;
+    /**
+     * 이번 수업에서 낸 숙제. 학생이 <b>다음 수업까지 해올 것</b>이라, 숙제 탭의
+     * 「이번 주에 낼 것」이 이 글을 그대로 보여준다(2026-09-10).
+     *
+     * <p>예전 이름은 next_preview였다. 실제로 적히던 내용이 숙제였고,
+     * 클리닉 안내가 같은 칸에 섞여 있었다.
+     */
+    @Column(name = "homework_note", columnDefinition = "TEXT")
+    private String homeworkNote;
+
+    /** 이번 주 클리닉 안내. 숙제와 한 칸에 섞으면 학생이 골라 읽어야 한다. */
+    @Column(name = "clinic_note", columnDefinition = "TEXT")
+    private String clinicNote;
 
     /** PENDING인 날은 출석이 아니라 미확인이다. 집계에 넣지 마라. */
     @Enumerated(EnumType.STRING)
@@ -116,12 +127,13 @@ public class Lesson extends BaseTimeEntity {
     }
 
     /** 내용 수정은 공개 상태를 건드리지 않는다. 공개는 publish()로만 이루어진다. */
-    public void writeContent(String title, String content,
-                             String keyPoints, String nextPreview) {
+    public void writeContent(String title, String content, String keyPoints,
+                             String homeworkNote, String clinicNote) {
         this.title = title;
         this.content = content;
         this.keyPoints = keyPoints;
-        this.nextPreview = nextPreview;
+        this.homeworkNote = homeworkNote;
+        this.clinicNote = clinicNote;
     }
 
     /**

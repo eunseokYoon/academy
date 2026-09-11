@@ -21,6 +21,7 @@ public record LessonCreateRequest(
     @Valid List<LessonVideoRequest> videos,
     String content,
     String keyPoints,
-    String nextPreview
+    String homeworkNote,
+    String clinicNote
 ) {
 }

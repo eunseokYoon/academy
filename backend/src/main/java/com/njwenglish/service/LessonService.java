@@ -65,7 +65,7 @@ public class LessonService {
         Lesson lesson = lessonRepository.save(Lesson.create(classRoom, request.lessonDate(),
             request.year(), validMonth(request.month()), validWeek(request.week())));
         lesson.writeContent(request.title(),
-            request.content(), request.keyPoints(), request.nextPreview());
+            request.content(), request.keyPoints(), request.homeworkNote(), request.clinicNote());
         lesson.replaceVideos(toVideos(lesson, videos));
 
         return LessonDetailResponse.from(lesson);
@@ -127,7 +127,8 @@ public class LessonService {
             request.title() != null ? request.title() : lesson.getTitle(),
             request.content() != null ? request.content() : lesson.getContent(),
             request.keyPoints() != null ? request.keyPoints() : lesson.getKeyPoints(),
-            request.nextPreview() != null ? request.nextPreview() : lesson.getNextPreview());
+            request.homeworkNote() != null ? request.homeworkNote() : lesson.getHomeworkNote(),
+            request.clinicNote() != null ? request.clinicNote() : lesson.getClinicNote());
         // null이면 그대로 두고 빈 배열이면 전부 지운다. 같게 다루면 지울 방법이 없어진다
         if (request.videos() != null) {
             lesson.replaceVideos(toVideos(lesson, validVideos(request.videos())));

@@ -37,7 +37,10 @@ public record LessonReportResponse(
     List<LessonVideoResponse> videos,
     String content,
     String keyPoints,
-    String nextPreview,
+    /** 이번 수업에서 낸 숙제. 학생·학부모 둘 다 본다. */
+    String homeworkNote,
+    /** 이번 주 클리닉 안내. 학생·학부모 둘 다 본다. */
+    String clinicNote,
     Homework homework,
     AttendanceStatus attendanceStatus
 ) {
@@ -102,10 +105,11 @@ public record LessonReportResponse(
                                                   String title, String classRoomName,
                                                   List<LessonVideoResponse> videos,
                                                   String content, String keyPoints,
-                                                  String nextPreview, Homework homework,
+                                                  String homeworkNote, String clinicNote,
+                                                  Homework homework,
                                                   AttendanceStatus attendanceStatus) {
         return new LessonReportResponse(lessonId, lessonDate, title, classRoomName,
-            videos, content, keyPoints, nextPreview, homework, attendanceStatus);
+            videos, content, keyPoints, homeworkNote, clinicNote, homework, attendanceStatus);
     }
 
     /**
@@ -115,9 +119,10 @@ public record LessonReportResponse(
     public static LessonReportResponse forParent(Long lessonId, LocalDate lessonDate,
                                                  String title, String classRoomName,
                                                  String content, String keyPoints,
-                                                 String nextPreview, Homework homework,
+                                                 String homeworkNote, String clinicNote,
+                                                 Homework homework,
                                                  AttendanceStatus attendanceStatus) {
         return new LessonReportResponse(lessonId, lessonDate, title, classRoomName,
-            List.of(), content, keyPoints, nextPreview, homework, attendanceStatus);
+            List.of(), content, keyPoints, homeworkNote, clinicNote, homework, attendanceStatus);
     }
 }

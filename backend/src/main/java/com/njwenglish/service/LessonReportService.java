@@ -98,7 +98,8 @@ public class LessonReportService {
             lesson.getVideos().stream().map(LessonVideoResponse::from).toList(),
             lesson.getContent(),
             lesson.getKeyPoints(),
-            lesson.getNextPreview(),
+            lesson.getHomeworkNote(),
+            lesson.getClinicNote(),
             homework == null ? null : toHomework(homework, me.getId()),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), me.getId())
                 .map(a -> a.getStatus())
@@ -156,7 +157,8 @@ public class LessonReportService {
             lesson.getClassRoom().getName(),
             lesson.getContent(),
             lesson.getKeyPoints(),
-            lesson.getNextPreview(),
+            lesson.getHomeworkNote(),
+            lesson.getClinicNote(),
             homework == null ? null : toParentHomework(homework, child.getId()),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), child.getId())
                 .map(a -> a.getStatus())

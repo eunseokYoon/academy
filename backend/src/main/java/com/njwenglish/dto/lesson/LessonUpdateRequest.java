@@ -18,6 +18,7 @@ public record LessonUpdateRequest(
     @Valid List<LessonVideoRequest> videos,
     String content,
     String keyPoints,
-    String nextPreview
+    String homeworkNote,
+    String clinicNote
 ) {
 }
