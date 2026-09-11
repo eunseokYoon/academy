@@ -43,7 +43,7 @@ class HomeworkGradingTest {
     void openResubmit() {
         Homework column = gridColumn();
 
-        column.openResubmit(DUE_AT);
+        column.openResubmit(DUE_AT, "복습", null);
 
         assertThat(column.isResubmitOpen()).isTrue();
         assertThat(column.getDueAt()).isEqualTo(DUE_AT);
@@ -53,7 +53,7 @@ class HomeworkGradingTest {
     @DisplayName("재제출을 닫으면 마감이 null로 돌아간다")
     void closeResubmit() {
         Homework column = gridColumn();
-        column.openResubmit(DUE_AT);
+        column.openResubmit(DUE_AT, "복습", null);
 
         column.closeResubmit();
 
@@ -122,7 +122,7 @@ class HomeworkGradingTest {
     @DisplayName("재제출을 연 열에서 세모·X만 대상이 된다")
     void resubmitTarget() {
         Homework column = gridColumn();
-        column.openResubmit(DUE_AT);
+        column.openResubmit(DUE_AT, "복습", null);
 
         Submission done = cellOf(column);
         done.grade(HomeworkResult.DONE, null);

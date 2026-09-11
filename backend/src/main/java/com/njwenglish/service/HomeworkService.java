@@ -14,6 +14,7 @@ import com.njwenglish.dto.homework.HomeworkGridSaveRequest;
 import com.njwenglish.dto.homework.HomeworkListItemResponse;
 import com.njwenglish.dto.homework.HomeworkUpdateRequest;
 import com.njwenglish.dto.homework.PendingHomeworkResponse;
+import com.njwenglish.dto.homework.ResubmitOpenRequest;
 import com.njwenglish.dto.homework.ResubmitOpenResponse;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
@@ -277,7 +278,7 @@ public class HomeworkService {
         int resubmitted = (int) rosterCells.stream()
             .filter(Submission::isResolvedByResubmission).count();
 
-        return new HomeworkGridResponse.ColumnInfo(column.getId(), column.getTitle(),
+        return new HomeworkGridResponse.ColumnInfo(column.getId(), column.getTitle(), column.getDescription(),
             column.getSortOrder(), column.getDueAt(), targets, resubmitted, cellInfos);
     }
 
@@ -414,7 +415,7 @@ public class HomeworkService {
      * 다시 열 필요가 없다 — 판정이 result를 실시간으로 보기 때문이다.
      */
     @Transactional
-    public ResubmitOpenResponse openResubmit(Long homeworkId, OffsetDateTime dueAt) {
+    public ResubmitOpenResponse openResubmit(Long homeworkId, ResubmitOpenRequest request) {
         Homework homework = findHomework(homeworkId);
         if (!homework.isGrid()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
@@ -425,17 +426,16 @@ public class HomeworkService {
             throw new BusinessException(ErrorCode.NO_RESUBMIT_TARGET);
         }
 
-        // 마감은 선생님이 정한다. 기본값을 되살리지 마라 — 화면에서만 필수면
-        // API를 직접 치는 경로에 기본값이 남아 규칙이 두 곳으로 갈라진다
-        if (dueAt == null) {
+        // 마감은 선생님이 정한다. 기본값을 되살리지 마라
+        if (request.dueAt() == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        if (homework.isResubmitOpen() && !homework.canExtendTo(dueAt)) {
+        if (homework.isResubmitOpen() && !homework.canExtendTo(request.dueAt())) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        homework.openResubmit(dueAt);
+        homework.openResubmit(request.dueAt(), request.title(), request.description());
 
-        return new ResubmitOpenResponse(targets.size(), dueAt);
+        return new ResubmitOpenResponse(targets.size(), request.dueAt());
     }
 
     /**

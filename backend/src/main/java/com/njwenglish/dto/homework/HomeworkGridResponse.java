@@ -36,6 +36,8 @@ public record HomeworkGridResponse(LessonInfo lesson,
      */
     public record ColumnInfo(Long homeworkId,
                              String title,
+                             /** 재제출 요청에 적힌 상세 내용. 다이얼로그가 이 값으로 채운다. */
+                             String description,
                              Short sortOrder,
                              OffsetDateTime resubmitDueAt,
                              int resubmitTargetCount,

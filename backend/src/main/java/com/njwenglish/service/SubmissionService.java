@@ -99,7 +99,7 @@ public class SubmissionService {
         return PageResponse.from(page.map(submission -> {
             Homework homework = submission.getHomework();
             return new StudentHomeworkListItemResponse(
-                homework.getId(), homework.getTitle(), homework.getClassRoom().getName(),
+                homework.getId(), homework.getTitle(), homework.getDescription(), homework.getClassRoom().getName(),
                 homework.getKind(),
                 homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
                 submission.getResult(), submission.getCompletionRate(),

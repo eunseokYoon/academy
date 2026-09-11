@@ -275,7 +275,7 @@ class SubmissionServiceTest {
     void lateGridResubmissionStillResolves() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(PAST_DUE);
+        column.openResubmit(PAST_DUE, "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.NOT_DONE, null);
 
@@ -357,7 +357,7 @@ class SubmissionServiceTest {
         // 판정은 항상 이 학생 본인의 result여야 한다.
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.DONE, null);
 
@@ -376,7 +376,7 @@ class SubmissionServiceTest {
     void uploadUrlAllowedForResubmitTarget() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.NOT_DONE, null);
 
@@ -396,7 +396,7 @@ class SubmissionServiceTest {
     void uploadUrlAllowedForResubmitTargetWithPartialResult() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.PARTIAL, (short) 60);
 
@@ -468,7 +468,7 @@ class SubmissionServiceTest {
     void submissionsOfKeepsResubmissionResolvedGridSubmission() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission resolved = Fixtures.submission(9L, column, Fixtures.student(88L, "고연준"));
         resolved.grade(HomeworkResult.NOT_DONE, null);
         resolved.submit(OffsetDateTime.now(), false);
@@ -629,7 +629,7 @@ class SubmissionServiceTest {
     private Submission givenResubmitTarget(HomeworkResult result, Short completionRate) {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(FUTURE_DUE);
+        column.openResubmit(FUTURE_DUE, "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(result, completionRate);
 

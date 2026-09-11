@@ -143,7 +143,7 @@ public class TeacherHomeworkController {
     public ApiResponse<ResubmitOpenResponse> openResubmit(
             @PathVariable Long homeworkId,
             @Valid @RequestBody ResubmitOpenRequest request) {
-        return ApiResponse.ok(homeworkService.openResubmit(homeworkId, request.dueAt()));
+        return ApiResponse.ok(homeworkService.openResubmit(homeworkId, request));
     }
 
     /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */
