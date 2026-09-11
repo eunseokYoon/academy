@@ -88,7 +88,7 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
 
       <div className="space-y-3 p-4">
         {lesson.content && <Block label="수업 내용" text={lesson.content} />}
-        {lesson.nextPreview && <Block label="다음 수업 예고" text={lesson.nextPreview} />}
+        {lesson.homeworkNote && <Block label="수업 숙제" text={lesson.homeworkNote} />}
 
         <Link
           to={`/student/lessons/${lesson.lessonId}`}
@@ -105,7 +105,7 @@ export function LastLessonCard({ lesson }: { lesson: LastLesson }) {
 function Block({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <p className="eyebrow">{label}</p>
+      <p className="text-[13px] font-bold tracking-[-0.01em] text-brand-900">{label}</p>
       <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{text}</p>
     </div>
   );

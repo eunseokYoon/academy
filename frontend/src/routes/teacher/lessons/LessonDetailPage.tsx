@@ -78,7 +78,8 @@ function ContentForm({ lesson, onDone }: Props) {
   );
   const [content, setContent] = useState(lesson.content ?? "");
   const [keyPoints, setKeyPoints] = useState(lesson.keyPoints ?? "");
-  const [nextPreview, setNextPreview] = useState(lesson.nextPreview ?? "");
+  const [homeworkNote, setHomeworkNote] = useState(lesson.homeworkNote ?? "");
+  const [clinicNote, setClinicNote] = useState(lesson.clinicNote ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -92,7 +93,8 @@ function ContentForm({ lesson, onDone }: Props) {
           .map((v) => ({ url: v.url.trim(), title: v.title.trim() || null })),
         content,
         keyPoints,
-        nextPreview,
+        homeworkNote,
+        clinicNote,
       }),
     onSuccess: async (updated) => {
       setError(null);
@@ -199,7 +201,6 @@ function ContentForm({ lesson, onDone }: Props) {
         </div>
         <TextAreaField
           label="수업 내용"
-          hint="학생에게만 보입니다. 학부모 화면에는 나오지 않습니다."
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />
@@ -210,10 +211,16 @@ function ContentForm({ lesson, onDone }: Props) {
           onChange={(e) => setKeyPoints(e.target.value)}
         />
         <TextAreaField
-          label="다음 수업 예고"
-          rows={2}
-          value={nextPreview}
-          onChange={(e) => setNextPreview(e.target.value)}
+          label="수업 숙제"
+          hint="학생 숙제 탭의 「이번 주에 낼 것」에 그대로 보입니다. 수업을 공개해야 보입니다."
+          value={homeworkNote}
+          onChange={(e) => setHomeworkNote(e.target.value)}
+        />
+        <TextAreaField
+          label="클리닉"
+          hint="이번 주 클리닉 안내입니다."
+          value={clinicNote}
+          onChange={(e) => setClinicNote(e.target.value)}
         />
         <FormError message={error} />
         {saved && <p className="text-sm text-emerald-700">저장했습니다.</p>}

@@ -93,7 +93,8 @@ export interface ParentLessonDetail {
   videos: never[];
   content: string | null;
   keyPoints: string | null;
-  nextPreview: string | null;
+  homeworkNote: string | null;
+  clinicNote: string | null;
   homework: {
     homeworkId: number;
     title: string;

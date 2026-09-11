@@ -134,9 +134,15 @@ export default function StudentLessonDetailPage() {
         </Section>
       )}
 
-      {data.nextPreview && (
-        <Section title="다음 수업">
-          <p className="whitespace-pre-wrap text-sm text-slate-700">{data.nextPreview}</p>
+      {data.homeworkNote && (
+        <Section title="수업 숙제">
+          <p className="whitespace-pre-wrap text-sm text-slate-700">{data.homeworkNote}</p>
+        </Section>
+      )}
+
+      {data.clinicNote && (
+        <Section title="클리닉">
+          <p className="whitespace-pre-wrap text-sm text-slate-700">{data.clinicNote}</p>
         </Section>
       )}
 

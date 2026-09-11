@@ -262,7 +262,8 @@ export interface StudentLessonDetail {
   videos: LessonVideo[];
   content: string | null;
   keyPoints: string | null;
-  nextPreview: string | null;
+  homeworkNote: string | null;
+  clinicNote: string | null;
   homework: {
     homeworkId: number;
     title: string;
@@ -346,7 +347,7 @@ export interface StudentHome {
     embedUrl: string | null;
     videoCount: number;
     content: string | null;
-    nextPreview: string | null;
+    homeworkNote: string | null;
   } | null;
   /** 학부모 홈과 같은 블록이다. recent는 배너에 펼치는 상단 몇 건. */
   notices: { totalCount: number; recent: NoticeSummary[] };

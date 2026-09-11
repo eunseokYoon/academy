@@ -37,14 +37,18 @@ export function ReportLessonCard({ lesson }: { lesson: ParentLessonDetail }) {
         </span>
       </div>
 
-      {(lesson.content || lesson.keyPoints || lesson.nextPreview) && (
-        <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+      {(lesson.content || lesson.keyPoints || lesson.homeworkNote || lesson.clinicNote) && (
+        <div
+          className="mt-3 space-y-3 divide-y divide-slate-100 border-t border-slate-100 pt-3
+                     [&>*+*]:pt-3"
+        >
           {lesson.content && <Block label="수업 내용" text={lesson.content} />}
           {/* 중점 사항만 배경을 깐다. 선생님이 "이건 꼭 보세요"로 쓰는 칸이다 */}
           {lesson.keyPoints && (
             <Block label="중점 사항" text={lesson.keyPoints} tone="highlight" />
           )}
-          {lesson.nextPreview && <Block label="다음 수업" text={lesson.nextPreview} />}
+          {lesson.homeworkNote && <Block label="수업 숙제" text={lesson.homeworkNote} />}
+          {lesson.clinicNote && <Block label="클리닉" text={lesson.clinicNote} />}
         </div>
       )}
     </article>
@@ -64,7 +68,18 @@ function Block({
     tone === "highlight" ? "rounded-xl border-l-[3px] border-accent-500 bg-accent-50 p-3" : "";
   return (
     <div className={wrapper}>
-      <p className={tone === "highlight" ? "eyebrow text-accent-700" : "eyebrow"}>{label}</p>
+      {/*
+        11px 회색(.eyebrow)에서 올렸다(2026-09-10). 항목이 넷이 되면서 제목이 본문보다
+        약해 네 덩어리가 하나로 읽혔다. 본문이 14px이므로 제목은 그보다 굵어야 한다.
+        중점 사항만 주황을 유지한다 — 선생님이 "이건 꼭 보세요"로 쓰는 칸이다.
+      */}
+      <p
+        className={`text-[13px] font-bold tracking-[-0.01em] ${
+          tone === "highlight" ? "text-accent-700" : "text-brand-900"
+        }`}
+      >
+        {label}
+      </p>
       {/* 줄바꿈은 선생님이 쓴 그대로 살린다 */}
       <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{text}</p>
     </div>

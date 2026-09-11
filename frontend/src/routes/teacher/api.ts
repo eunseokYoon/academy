@@ -127,7 +127,8 @@ export interface LessonDetail extends Omit<LessonListItem, "contentWritten" | "p
   videos: LessonVideoEdit[];
   content: string | null;
   keyPoints: string | null;
-  nextPreview: string | null;
+  homeworkNote: string | null;
+  clinicNote: string | null;
   publishedAt: string | null;
 }
 
@@ -284,7 +285,8 @@ export const updateLesson = (
     videos: { url: string; title: string | null }[];
     content: string;
     keyPoints: string;
-    nextPreview: string;
+    homeworkNote: string;
+    clinicNote: string;
   }>,
 ) => patch<LessonDetail>(`/teacher/lessons/${lessonId}`, body);
 
