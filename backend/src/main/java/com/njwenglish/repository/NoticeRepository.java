@@ -39,7 +39,8 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
      * <p><b>studentId 분기는 대상 그 자체다.</b> 호출부가 넘기는 값이 권한 검증을 통과한
      * 학생인지 반드시 확인해라 — 아무 숫자나 들어오면 남의 개인 공지가 보인다.
      *
-     * <p>정렬은 pinned DESC, publishedAt DESC다. 고정 공지가 항상 위에 온다.
+     * <p>정렬은 scope = STUDENT(자동 발행)가 맨 아래로 밀리고, pinned는 그 덩어리 안에서
+     * 위로 온다 — 순서는 클래스 주석을 봐라.
      *
      * <p>classRoomIds는 빈 컬렉션이면 안 된다. 호출부에서 더미 값을 넣는다.
      */

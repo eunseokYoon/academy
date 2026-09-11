@@ -68,7 +68,9 @@ class LessonChangeRequestServiceTest {
             enrollmentRepository, teacherRepository, studentAccessGuard, noticeService);
         given(teacherRepository.findByUserId(any()))
             .willReturn(Optional.of(Fixtures.teacherEntity(1L)));
-        // decide()가 발행 결과를 changeRequest에 붙인다. null이면 응답 조립에서 터진다
+        // decide()가 발행 결과를 changeRequest에 붙인다. 진짜 Notice를 돌려주는 건
+        // 픽스처를 실제 흐름과 같게 두려는 것이지 null이면 터지기 때문이 아니다 —
+        // LessonChangeRequest.decide는 대입만 하고 응답 조립은 notice를 읽지 않는다
         given(noticeService.publishForStudent(any(), any(), any(), any()))
             .willReturn(Notice.publishedForStudent("제목", "본문", me,
                 Fixtures.teacherEntity(1L), OffsetDateTime.now()));
