@@ -22,6 +22,7 @@ import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Notice;
 import com.njwenglish.entity.NoticeAttachment;
 import com.njwenglish.entity.Student;
+import com.njwenglish.entity.enums.NoticeAudience;
 import com.njwenglish.entity.enums.NoticeScope;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
@@ -93,12 +94,13 @@ class NoticeServiceTest {
     }
 
     private Notice notice(Long id, NoticeScope scope, ClassRoom target) {
-        return notice(id, scope, target, false);
+        return notice(id, scope, target, NoticeAudience.ALL);
     }
 
-    private Notice notice(Long id, NoticeScope scope, ClassRoom target, boolean studentsOnly) {
+    private Notice notice(Long id, NoticeScope scope, ClassRoom target,
+                          NoticeAudience audience) {
         Notice notice = Notice.draft("[SUMMER] 선행 안내", "본문", scope, target, false,
-            studentsOnly, Fixtures.teacherEntity(1L));
+            audience, Fixtures.teacherEntity(1L));
         ReflectionTestUtils.setField(notice, "id", id);
         return notice;
     }
@@ -180,7 +182,7 @@ class NoticeServiceTest {
     @DisplayName("CLASS인데 classRoomId가 없으면 400이다")
     void CLASS는_반이_필수다() {
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.CLASS, null, false, false, List.of())))
+            "제목", "본문", NoticeScope.CLASS, null, false, NoticeAudience.ALL, List.of())))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
 
@@ -191,7 +193,7 @@ class NoticeServiceTest {
     @DisplayName("ALL인데 classRoomId가 있으면 400이다 — ck_notices_target과 같은 규칙이다")
     void ALL은_반을_받지_않는다() {
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.ALL, 3L, false, false, List.of())))
+            "제목", "본문", NoticeScope.ALL, 3L, false, NoticeAudience.ALL, List.of())))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
@@ -203,7 +205,8 @@ class NoticeServiceTest {
         given(noticeRepository.save(any())).willAnswer(call -> call.getArgument(0));
 
         var response = noticeService.create(new NoticeCreateRequest(
-            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false, false, List.of()));
+            "[SUMMER] 선행 안내", "본문", NoticeScope.CLASS, 3L, false, NoticeAudience.ALL,
+            List.of()));
 
         assertThat(response.publishedAt()).isNull();
         assertThat(response.classRoomName()).isEqualTo("고2 심화반");
@@ -316,15 +319,16 @@ class NoticeServiceTest {
     }
 
     @Test
-    @DisplayName("수업일 변경이 만든 개인 공지는 학부모에게 그대로 간다")
+    @DisplayName("수업일 변경이 만든 개인 공지는 학생과 학부모에게 다 간다")
     void 개인_공지는_학부모에게_간다() {
-        // publishedForStudent가 studentsOnly를 건드리지 않아야 한다.
-        // 학부모가 못 받으면 변경 알림 자체가 무의미하다
+        // publishedForStudent가 audience를 ALL로 못 박아야 한다.
+        // 한쪽이 못 받으면 변경 알림 자체가 무의미하고,
+        // ck_notices_audience_scope가 DB에서도 같은 것을 막는다
         Notice personal = Notice.publishedForStudent(
             "수업일이 바뀌었습니다", "8/25 → 8/26", child,
             Fixtures.teacherEntity(1L), java.time.OffsetDateTime.now());
 
-        assertThat(personal.isStudentsOnly()).isFalse();
+        assertThat(personal.getAudience()).isEqualTo(NoticeAudience.ALL);
     }
 
     @Test
@@ -335,21 +339,38 @@ class NoticeServiceTest {
             .willAnswer(invocation -> invocation.getArgument(0));
 
         var response = noticeService.create(new NoticeCreateRequest(
-            "이번 주 교재", "첨부 확인하세요", NoticeScope.CLASS, 3L, false, true, List.of()));
+            "이번 주 교재", "첨부 확인하세요", NoticeScope.CLASS, 3L, false,
+            NoticeAudience.STUDENT_ONLY, List.of()));
 
-        assertThat(response.studentsOnly()).isTrue();
+        assertThat(response.audience()).isEqualTo(NoticeAudience.STUDENT_ONLY);
+    }
+
+    /** 반대 방향이 새로 생겼다. 학생 쪽 필터를 안 걸면 이 공지가 학생에게 보인다. */
+    @Test
+    @DisplayName("학부모 전용 공지를 만든다")
+    void 학부모_전용_공지를_만든다() {
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(noticeRepository.save(any(Notice.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        var response = noticeService.create(new NoticeCreateRequest(
+            "학부모 상담 주간", "일정 확인 부탁드립니다", NoticeScope.CLASS, 3L, false,
+            NoticeAudience.PARENT_ONLY, List.of()));
+
+        assertThat(response.audience()).isEqualTo(NoticeAudience.PARENT_ONLY);
     }
 
     @Test
-    @DisplayName("수정에서 studentsOnly가 null이면 그대로 둔다")
-    void studentsOnly가_null이면_유지된다() {
-        Notice existing = notice(5L, NoticeScope.CLASS, classRoom, true);
+    @DisplayName("수정에서 audience가 null이면 그대로 둔다")
+    void audience가_null이면_유지된다() {
+        Notice existing = notice(5L, NoticeScope.CLASS, classRoom,
+            NoticeAudience.STUDENT_ONLY);
         given(noticeRepository.findWithClassRoom(5L)).willReturn(Optional.of(existing));
 
         var response = noticeService.update(5L,
             new NoticeUpdateRequest("제목만 수정", null, null, null, null, null, null));
 
-        assertThat(response.studentsOnly()).isTrue();
+        assertThat(response.audience()).isEqualTo(NoticeAudience.STUDENT_ONLY);
     }
 
     // ---------- 첨부 ----------
@@ -384,7 +405,7 @@ class NoticeServiceTest {
         given(materialKeys.matches("materials/2026/08/남의키.pdf", 1L)).willReturn(false);
 
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.CLASS, 3L, false, true,
+            "제목", "본문", NoticeScope.CLASS, 3L, false, NoticeAudience.STUDENT_ONLY,
             List.of(new NoticeAttachmentRequest(
                 "materials/2026/08/남의키.pdf", "교재.pdf", 1024L)))))
             .isInstanceOf(BusinessException.class)
@@ -403,7 +424,7 @@ class NoticeServiceTest {
             .toList();
 
         assertThatThrownBy(() -> noticeService.create(new NoticeCreateRequest(
-            "제목", "본문", NoticeScope.CLASS, 3L, false, true, six)))
+            "제목", "본문", NoticeScope.CLASS, 3L, false, NoticeAudience.STUDENT_ONLY, six)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ATTACHMENT_LIMIT_EXCEEDED);
     }
@@ -412,7 +433,7 @@ class NoticeServiceTest {
     @DisplayName("공지를 지우면 마지막 참조인 S3 객체를 지운다")
     void 공지를_지우면_S3_객체도_지운다() {
         // ON DELETE CASCADE는 행만 지운다. 세지 않고 지우면 남은 참조가 깨진다
-        Notice existing = notice(5L, NoticeScope.CLASS, classRoom, true);
+        Notice existing = notice(5L, NoticeScope.CLASS, classRoom, NoticeAudience.STUDENT_ONLY);
         given(noticeRepository.findWithClassRoom(5L)).willReturn(Optional.of(existing));
         given(attachmentRepository.findByNoticeIdOrderBySortOrder(5L)).willReturn(List.of(
             attachment("materials/2026/08/a.pdf"), attachment("materials/2026/08/b.pdf")));

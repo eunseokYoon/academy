@@ -1,6 +1,7 @@
 package com.njwenglish.dto.notice;
 
 import com.njwenglish.entity.Notice;
+import com.njwenglish.entity.enums.NoticeAudience;
 import com.njwenglish.entity.enums.NoticeScope;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -25,7 +26,7 @@ public record NoticeResponse(
     Long studentId,
     String studentName,
     boolean pinned,
-    boolean studentsOnly,
+    NoticeAudience audience,
     OffsetDateTime publishedAt,
     OffsetDateTime createdAt,
     List<NoticeAttachmentResponse> attachments
@@ -38,7 +39,7 @@ public record NoticeResponse(
             notice.getStudent() == null ? null : notice.getStudent().getId(),
             // 학생 이름은 students.name이다. users.name이 아니다 — 미가입 학생은 users 행이 없다
             notice.getStudent() == null ? null : notice.getStudent().getName(),
-            notice.isPinned(), notice.isStudentsOnly(), notice.getPublishedAt(),
+            notice.isPinned(), notice.getAudience(), notice.getPublishedAt(),
             notice.getCreatedAt(), attachments);
     }
 }

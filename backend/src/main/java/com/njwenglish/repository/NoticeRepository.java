@@ -11,8 +11,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * <b>parentView 조건은 넷 모두에 있어야 한다.</b> 목록·상세만 막으면 HomeService가
- * 학부모 홈 배너에 쓰는 countForStudent·findRecentForStudent로 그대로 샌다.
+ * <b>audience 조건은 넷 모두에 있어야 한다.</b> 목록·상세만 막으면 HomeService가
+ * 홈 배너에 쓰는 countForStudent·findRecentForStudent로 그대로 샌다.
+ * findForStudent 목록은 본문과 countQuery가 짝이라 실제로 다섯 군데다.
+ *
+ * <p>필터가 <b>양방향</b>이다(2026-09-10). 예전에는 학부모 쪽만 막았는데
+ * PARENT_ONLY가 생겨서 학생 쪽도 같은 자리에서 막아야 한다.
+ *
+ * <p>판정은 `NoticeService.parentView()` 하나이고 그건
+ * `CurrentUser.get().role() == PARENT`다. <b>studentId의 유무로 판정하지 마라</b> —
+ * 학생도 자기 studentId를 붙여 부를 수 있어서 「학생만 보기」 공지가 학생에게 사라진다.
  *
  * <p>조건을 n에 직접 건다. n.classRoom.id 같은 경로를 새로 만들지 마라 —
  * 암묵적 INNER JOIN이 생겨 다른 scope의 공지가 통째로 사라진다.
@@ -50,7 +58,9 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-          AND (:parentView = false OR n.studentsOnly = false)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         ORDER BY CASE WHEN n.scope = 'STUDENT' THEN 1 ELSE 0 END,
                  n.pinned DESC, n.publishedAt DESC, n.id DESC
         """,
@@ -60,7 +70,9 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-          AND (:parentView = false OR n.studentsOnly = false)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         """)
     Page<Notice> findForStudent(@Param("studentId") Long studentId,
                                 @Param("classRoomIds") Collection<Long> classRoomIds,
@@ -74,7 +86,9 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-          AND (:parentView = false OR n.studentsOnly = false)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         """)
     long countForStudent(@Param("studentId") Long studentId,
                          @Param("classRoomIds") Collection<Long> classRoomIds,
@@ -88,7 +102,9 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         WHERE n.id = :noticeId
           AND n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-          AND (:parentView = false OR n.studentsOnly = false)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         """)
     Optional<Notice> findForStudent(@Param("noticeId") Long noticeId,
                                     @Param("studentId") Long studentId,
@@ -122,7 +138,9 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-          AND (:parentView = false OR n.studentsOnly = false)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         ORDER BY CASE WHEN n.scope = 'STUDENT' THEN 1 ELSE 0 END,
                  n.pinned DESC, n.publishedAt DESC, n.id DESC
         """)

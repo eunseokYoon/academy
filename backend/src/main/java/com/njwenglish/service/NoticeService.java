@@ -212,7 +212,7 @@ public class NoticeService {
 
         Notice notice = noticeRepository.save(Notice.draft(
             request.title(), request.content(), request.scope(),
-            classRoom, request.pinned(), request.studentsOnly(), teacher));
+            classRoom, request.pinned(), request.audience(), teacher));
         replaceAttachments(notice, request.attachments(), teacher);
         return NoticeResponse.from(notice, attachmentsOf(notice.getId()));
     }
@@ -226,8 +226,7 @@ public class NoticeService {
             request.title() == null ? notice.getTitle() : request.title(),
             request.content() == null ? notice.getContent() : request.content(),
             request.pinned() == null ? notice.isPinned() : request.pinned(),
-            request.studentsOnly() == null
-                ? notice.isStudentsOnly() : request.studentsOnly());
+            request.audience() == null ? notice.getAudience() : request.audience());
 
         // scope를 보냈을 때만 대상을 건드린다. 따로 바꾸면 ck_notices_target에 걸린다
         if (request.scope() != null) {
