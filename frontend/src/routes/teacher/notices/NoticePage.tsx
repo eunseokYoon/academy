@@ -18,7 +18,7 @@ import {
   publishNotice,
   updateNotice,
 } from "../api";
-import type { TeacherNotice } from "../api";
+import type { NoticeAudience, TeacherNotice } from "../api";
 
 const MAX_ATTACHMENTS = 5;
 
@@ -227,7 +227,9 @@ function NoticeModal({
   const [selected, setSelected] = useState<number[]>(
     notice?.classRoomId ? [notice.classRoomId] : [],
   );
-  const [studentsOnly, setStudentsOnly] = useState(notice?.studentsOnly ?? false);
+  /* 옛 응답에는 audience가 없다. ?? "ALL"이 없으면 undefined가 라디오를 하나도
+     선택하지 않은 상태로 만들고, 그대로 저장하면 400이다 */
+  const [audience, setAudience] = useState<NoticeAudience>(notice?.audience ?? "ALL");
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -240,9 +242,9 @@ function NoticeModal({
   const rooms = (classRooms.data ?? []).filter((room) => room.status === "ACTIVE");
 
   /**
-   * 자료가 붙으면 기본을 「학생만」으로 돌린다. 자료실이 학생 전용이었던 규칙이
-   * 이제 이 체크박스 하나에 걸려 있어서, 실수하는 방향이 유출 쪽이면 안 된다.
-   * 선생님이 직접 끄는 건 막지 않는다.
+   * 파일을 붙이면 「학생만」으로 옮긴다 — 실수하는 방향이 유출 쪽이면 안 된다.
+   * 선생님이 다시 고를 수 있다. 학부모 전용 공지에 파일을 붙이려면 순서를
+   * 바꿔서, 파일을 먼저 올리고 대상을 「학부모만」으로 고르면 된다
    */
   const addFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -255,7 +257,7 @@ function NoticeModal({
     try {
       const uploaded = await Promise.all(files.map(uploadNoticeAttachment));
       setAttachments((prev) => [...prev, ...uploaded]);
-      setStudentsOnly(true);
+      setAudience("STUDENT_ONLY");
     } catch (e) {
       setError(errorMessage(e, "파일을 올리지 못했습니다."));
     } finally {
@@ -270,7 +272,7 @@ function NoticeModal({
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = { title: title.trim(), content: content.trim(), pinned, studentsOnly };
+      const body = { title: title.trim(), content: content.trim(), pinned, audience };
       const attachmentPayload = attachments.map(({ s3Key, fileName, bytes }) => ({
         s3Key,
         fileName,
@@ -453,20 +455,33 @@ function NoticeModal({
           </p>
         </div>
 
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={studentsOnly}
-            onChange={(e) => setStudentsOnly(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            학생만 보기
-            <span className="block text-xs text-brand-500">
-              켜면 학부모에게 이 공지가 보이지 않습니다.
-            </span>
-          </span>
-        </label>
+        <fieldset>
+          <legend className="text-sm font-medium text-slate-700">공지 대상</legend>
+          <div className="mt-1.5 space-y-1.5">
+            {(
+              [
+                ["ALL", "학생과 학부모", "둘 다 봅니다."],
+                ["STUDENT_ONLY", "학생만", "학부모에게 보이지 않습니다."],
+                ["PARENT_ONLY", "학부모만", "학생에게 보이지 않습니다."],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <label key={value} className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="notice-audience"
+                  value={value}
+                  checked={audience === value}
+                  onChange={() => setAudience(value)}
+                  className="mt-0.5"
+                />
+                <span>
+                  {label}
+                  <span className="block text-xs text-brand-500">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input

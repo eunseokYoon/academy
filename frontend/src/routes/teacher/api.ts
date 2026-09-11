@@ -991,6 +991,8 @@ export const getDashboard = () => get<TeacherDashboard>("/teacher/dashboard");
 
 // ---------- 공지 (T-10) ----------
 
+export type NoticeAudience = "ALL" | "STUDENT_ONLY" | "PARENT_ONLY";
+
 /** s3Key는 내려주지 않는다 — 다운로드는 별도 엔드포인트가 권한을 다시 확인한다. */
 export interface TeacherNoticeAttachment {
   attachmentId: number;
@@ -1010,8 +1012,7 @@ export interface TeacherNotice {
   studentId: number | null;
   studentName: string | null;
   pinned: boolean;
-  /** 켜면 학부모 목록·상세·홈 배너에서 이 공지가 빠진다. */
-  studentsOnly: boolean;
+  audience: NoticeAudience;
   publishedAt: string | null;
   createdAt: string;
   attachments: TeacherNoticeAttachment[];
@@ -1037,7 +1038,7 @@ export const createNotice = (body: {
   scope: NoticeScope;
   classRoomId: number | null;
   pinned: boolean;
-  studentsOnly: boolean;
+  audience: NoticeAudience;
   attachments: NoticeAttachmentInput[];
 }) => post<TeacherNotice>("/teacher/notices", body);
 
@@ -1049,7 +1050,7 @@ export const updateNotice = (
     pinned: boolean;
     scope: NoticeScope;
     classRoomId: number | null;
-    studentsOnly: boolean;
+    audience: NoticeAudience;
     /** 빼면(undefined) 기존 첨부를 그대로 둔다. 배열을 보내면 통째로 교체한다 — 빈 배열은 "전부 지운다"다. */
     attachments: NoticeAttachmentInput[];
   }>,
