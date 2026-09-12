@@ -6,8 +6,10 @@ import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.dto.homework.HomeworkBriefResponse;
 import com.njwenglish.dto.homework.HomeworkCountsResponse;
+import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
@@ -29,6 +31,7 @@ import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.SubmissionPhoto;
+import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
 import com.njwenglish.repository.SubmissionRepository;
@@ -76,6 +79,7 @@ public class SubmissionService {
     private final StudentAccessGuard studentAccessGuard;
     private final PresignedUrlProvider presignedUrlProvider;
     private final SubmissionMediaKeys mediaKeys;
+    private final LessonRepository lessonRepository;
 
     // ---------- 학생 (S-2 · S-3 · S-4) ----------
 
@@ -256,6 +260,30 @@ public class SubmissionService {
 
         return new SubmitResponse(submission.getId(), submission.getStatus(),
             submission.getSubmittedAt(), submission.isLate(), photoCount);
+    }
+
+    /**
+     * S-2 맨 위의 「이번 주에 낼 것」. 선생님이 수업에 적은 숙제 글이다.
+     *
+     * <p>숙제 <b>줄</b> 목록이 아니다 — 그건 아래 두 구획(다시 제출 필요 / 지난 숙제)이
+     * 맡는다. 종이로 해오는 숙제라 학생이 읽어야 하는 건 글이다.
+     *
+     * <p>글이 빈 수업은 넣지 않는다. 빈 구획이 뜨면 "낼 것이 없다"로 읽힌다.
+     */
+    @Transactional(readOnly = true)
+    public List<HomeworkNoteResponse> myHomeworkNotes() {
+        Student me = studentAccessGuard.requireSelf();
+        return lessonRepository
+            .findLastPublishedPerClassRoom(me.getId(), LocalDate.now())
+            .stream()
+            .filter(lesson -> lesson.getHomeworkNote() != null
+                && !lesson.getHomeworkNote().isBlank())
+            .map(lesson -> new HomeworkNoteResponse(
+                lesson.getId(), lesson.getLessonDate(),
+                lesson.getClassRoom().getName(),
+                MonthWeeks.label(lesson.getMonth(), lesson.getWeek()),
+                lesson.getHomeworkNote()))
+            .toList();
     }
 
     // ---------- 선생님 (T-7) ----------

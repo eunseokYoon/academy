@@ -279,4 +279,32 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         """)
     List<LocalDate> findNextLessonDates(@Param("classRoomId") Long classRoomId,
                                         @Param("after") LocalDate after);
+
+    /**
+     * 학생이 속한 <b>반마다</b> 가장 최근 공개된 수업 한 건. 숙제 탭의
+     * 「이번 주에 낼 것」이 반별로 글을 보여주기 때문이다.
+     *
+     * <p>홈의 findLastForStudent와 다르다 — 그쪽은 반 구분 없이 통틀어 한 건이다.
+     * 하나로 합치지 마라. 여러 반에 속한 학생이 한 반 숙제만 보게 된다.
+     *
+     * <p>published_at IS NOT NULL이 빠지면 초안이 학생에게 샌다.
+     * 정렬은 반 이름 → 최신 수업일이다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l
+        JOIN FETCH l.classRoom c
+        WHERE c.id IN (
+                SELECT e.classRoom.id FROM Enrollment e
+                WHERE e.student.id = :studentId AND e.leftAt IS NULL)
+          AND l.publishedAt IS NOT NULL
+          AND l.lessonDate <= :today
+          AND l.lessonDate = (
+                SELECT MAX(l2.lessonDate) FROM Lesson l2
+                WHERE l2.classRoom.id = c.id
+                  AND l2.publishedAt IS NOT NULL
+                  AND l2.lessonDate <= :today)
+        ORDER BY c.name, l.lessonDate DESC
+        """)
+    List<Lesson> findLastPublishedPerClassRoom(@Param("studentId") Long studentId,
+                                               @Param("today") LocalDate today);
 }

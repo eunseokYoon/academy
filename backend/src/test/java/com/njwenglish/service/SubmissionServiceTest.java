@@ -16,6 +16,7 @@ import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.homework.HomeworkCountsResponse;
+import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
@@ -32,6 +33,7 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
+import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
@@ -68,6 +70,8 @@ class SubmissionServiceTest {
     private StudentAccessGuard studentAccessGuard;
     @Mock
     private PresignedUrlProvider presignedUrlProvider;
+    @Mock
+    private LessonRepository lessonRepository;
 
     private SubmissionService submissionService;
 
@@ -87,7 +91,7 @@ class SubmissionServiceTest {
 
         submissionService = new SubmissionService(submissionRepository, photoRepository,
             homeworkService, studentAccessGuard, presignedUrlProvider,
-            new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"));
+            new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"), lessonRepository);
         Fixtures.login(Fixtures.studentUser(10L));
     }
 
@@ -646,5 +650,42 @@ class SubmissionServiceTest {
         given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
             .willReturn(Optional.of(submission));
         return submission;
+    }
+
+    /**
+     * 숙제 탭 맨 위의 글. 기준은 가장 최근 공개된 수업이다 —
+     * 방금 한 수업에 적힌 숙제가 다음 수업까지 해올 것이다.
+     */
+    @Test
+    @DisplayName("반마다 가장 최근 공개 수업의 숙제 글을 내려준다")
+    void 반마다_최근_수업의_숙제_글을_준다() {
+        Student me = Fixtures.student(88L, "서동환");
+        Lesson recent = Fixtures.lesson(502L, classRoom, LocalDate.of(2026, 9, 3));
+        recent.writeContent("관계대명사", "내용", "중점", "p.144-152 (1,2번 제외)", "화 19:00");
+        recent.publish(OffsetDateTime.now());
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(lessonRepository.findLastPublishedPerClassRoom(me.getId(), LocalDate.now()))
+            .willReturn(List.of(recent));
+
+        List<HomeworkNoteResponse> notes = submissionService.myHomeworkNotes();
+
+        assertThat(notes).hasSize(1);
+        assertThat(notes.get(0).homeworkNote()).isEqualTo("p.144-152 (1,2번 제외)");
+        assertThat(notes.get(0).classRoomName()).isEqualTo(classRoom.getName());
+    }
+
+    /** 선생님이 숙제 칸을 비워 둔 수업은 목록에 넣지 않는다 — 빈 구획이 뜬다. */
+    @Test
+    @DisplayName("숙제 글이 빈 수업은 목록에서 빠진다")
+    void 숙제_글이_없으면_빠진다() {
+        Student me = Fixtures.student(88L, "서동환");
+        Lesson recent = Fixtures.lesson(502L, classRoom, LocalDate.of(2026, 9, 3));
+        recent.writeContent("관계대명사", "내용", "중점", null, "화 19:00");
+        recent.publish(OffsetDateTime.now());
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(lessonRepository.findLastPublishedPerClassRoom(me.getId(), LocalDate.now()))
+            .willReturn(List.of(recent));
+
+        assertThat(submissionService.myHomeworkNotes()).isEmpty();
     }
 }
