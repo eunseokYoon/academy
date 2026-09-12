@@ -13,6 +13,7 @@ import {
   listLessons,
   openResubmit,
   saveHomeworkGrid,
+  type GridColumn,
 } from "../api";
 import { GradeCell } from "./GradeCell";
 
@@ -132,6 +133,8 @@ export default function HomeworkGridPage() {
 
   /** 재제출 모달을 연 열. null이면 닫힌 상태다 */
   const [resubmitTarget, setResubmitTarget] = useState<ResubmitTarget | null>(null);
+  const [resubmitTitle, setResubmitTitle] = useState("");
+  const [resubmitDescription, setResubmitDescription] = useState("");
 
   /**
    * 그 열의 🔺·❌ 수. <b>화면의 초안 기준</b>이라 저장 전이면 서버와 다를 수 있다 —
@@ -144,9 +147,29 @@ export default function HomeworkGridPage() {
     ).length;
   }
 
+  /* 다이얼로그를 열 때 그 열의 현재 값으로 채운다 */
+  function openResubmitDialog(column: GridColumn, index: number) {
+    setResubmitTarget({
+      homeworkId: column.homeworkId,
+      title: column.title,
+      targetCount: countResubmitTargets(index),
+    });
+    setResubmitTitle(column.title);
+    setResubmitDescription(column.description ?? "");
+  }
+
   const requestResubmit = useMutation({
-    mutationFn: ({ homeworkId, dueAt }: { homeworkId: number; dueAt: string }) =>
-      openResubmit(homeworkId, dueAt),
+    mutationFn: ({
+      homeworkId,
+      dueAt,
+      title,
+      description,
+    }: {
+      homeworkId: number;
+      dueAt: string;
+      title: string;
+      description: string | null;
+    }) => openResubmit(homeworkId, { dueAt, title, description }),
     onSuccess: () => {
       setError(null);
       setResubmitTarget(null);
@@ -312,13 +335,7 @@ export default function HomeworkGridPage() {
                             {server.resubmitDueAt === null ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setResubmitTarget({
-                                    homeworkId: server.homeworkId,
-                                    title: column.title,
-                                    targetCount: countResubmitTargets(index),
-                                  })
-                                }
+                                onClick={() => openResubmitDialog(server, index)}
                                 className="rounded bg-slate-900 px-2 py-1 text-[11px] text-white"
                               >
                                 재제출 요청
@@ -427,11 +444,20 @@ export default function HomeworkGridPage() {
       {resubmitTarget && (
         <ResubmitModal
           target={resubmitTarget}
+          title={resubmitTitle}
+          description={resubmitDescription}
+          onTitleChange={setResubmitTitle}
+          onDescriptionChange={setResubmitDescription}
           dirty={dirty}
           pending={requestResubmit.isPending}
           onClose={() => setResubmitTarget(null)}
           onSubmit={(dueAt) =>
-            requestResubmit.mutate({ homeworkId: resubmitTarget.homeworkId, dueAt })
+            requestResubmit.mutate({
+              homeworkId: resubmitTarget.homeworkId,
+              dueAt,
+              title: resubmitTitle.trim(),
+              description: resubmitDescription.trim() || null,
+            })
           }
         />
       )}
@@ -448,12 +474,20 @@ export default function HomeworkGridPage() {
  */
 function ResubmitModal({
   target,
+  title,
+  description,
+  onTitleChange,
+  onDescriptionChange,
   dirty,
   pending,
   onClose,
   onSubmit,
 }: {
   target: ResubmitTarget;
+  title: string;
+  description: string;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
   dirty: boolean;
   pending: boolean;
   onClose: () => void;
@@ -472,10 +506,33 @@ function ResubmitModal({
   return (
     <Modal title="재제출 요청" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-sm text-slate-900">{target.title || "(제목 없음)"}</p>
         <p className="text-xs text-slate-500">
           🔺·❌ {target.targetCount}명에게 제출 경로가 열립니다.
         </p>
+
+        <label className="block text-sm">
+          제목
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            maxLength={200}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+        </label>
+
+        <label className="block text-sm">
+          상세 내용
+          <textarea
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            rows={5}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+          <span className="mt-1 block text-xs text-slate-400">
+            길이 제한이 없습니다. 학생이 숙제 목록에서 눌러 전문을 봅니다.
+          </span>
+        </label>
 
         <label className="block text-sm">
           <span className="mb-1 block text-slate-600">마감</span>

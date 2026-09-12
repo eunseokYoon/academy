@@ -108,6 +108,7 @@ export const requestLessonChange = (body: {
 export interface StudentHomeworkListItem {
   homeworkId: number;
   title: string;
+  description: string | null;
   classRoomName: string;
   kind: HomeworkKind;
   /** GRID 열은 어느 수업 숙제인지 보여준다. ONLINE은 수업이 없을 수 있다. */

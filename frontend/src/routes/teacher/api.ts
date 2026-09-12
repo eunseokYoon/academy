@@ -684,6 +684,7 @@ export interface GridColumn {
   resubmitTargetCount: number;
   /** 이미 내서 자동으로 ⭕가 된 수. 곧 선생님이 T-7에서 볼 사진·영상이 있는 수다. */
   resubmittedCount: number;
+  description: string | null;
   cells: GridCell[];
 }
 
@@ -732,10 +733,13 @@ export const saveHomeworkGrid = (body: HomeworkGridSaveBody) =>
  * 재제출 열기. <b>dueAt은 필수다</b> — 서버 기본값(다음 수업일 21:00)을 없앴다.
  * 화면에서만 필수로 두면 이 경로를 직접 치는 쪽에 기본값이 남아 규칙이 갈라진다.
  */
-export const openResubmit = (homeworkId: number, dueAt: string) =>
+export const openResubmit = (
+  homeworkId: number,
+  body: { dueAt: string; title: string; description: string | null },
+) =>
   post<{ targetCount: number; dueAt: string }>(
     `/teacher/homeworks/${homeworkId}/resubmit-request`,
-    { dueAt },
+    body,
   );
 
 /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */

@@ -37,6 +37,7 @@ export default function StudentHomeworkPage() {
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState<number | "">("");
   const [day, setDay] = useState<string | null | undefined>(undefined);
+  const [detail, setDetail] = useState<StudentHomeworkListItem | null>(null);
 
   /*
     쿼리가 둘인 이유. 위 덩어리는 달 필터를 <b>따르지 않는다</b> — 8월을 보는 동안
@@ -107,7 +108,7 @@ export default function StudentHomeworkPage() {
           <SectionHead tone="accent" title="지금 낼 것" count={todo.length} />
           <TintBlock tone="accent">
             {todo.map((item) => (
-              <HomeworkRow key={item.homeworkId} item={item} tone="accent" />
+              <HomeworkRow key={item.homeworkId} item={item} tone="accent" onShowDescription={setDetail} />
             ))}
           </TintBlock>
         </section>
@@ -125,11 +126,44 @@ export default function StudentHomeworkPage() {
             <SectionHead tone="neutral" title={group.label} />
             <TintBlock tone="neutral">
               {group.items.map((item) => (
-                <HomeworkRow key={item.homeworkId} item={item} tone="neutral" />
+                <HomeworkRow key={item.homeworkId} item={item} tone="neutral" onShowDescription={setDetail} />
               ))}
             </TintBlock>
           </section>
         ))
+      )}
+
+      {detail && (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-black/50 sm:items-center
+                     sm:justify-center"
+          onClick={() => setDetail(null)}
+          role="presentation"
+        >
+          <div
+            className="max-h-[80vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5
+                       sm:max-w-md sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={detail.title}
+          >
+            <p className="text-[16px] font-extrabold tracking-[-0.02em] text-brand-900">
+              {detail.title}
+            </p>
+            {/* 줄바꿈은 선생님이 쓴 그대로 살린다 */}
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+              {detail.description}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDetail(null)}
+              className="mt-4 w-full rounded-xl bg-brand-900 py-2.5 text-sm font-bold text-white"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
     </>
   );
@@ -145,9 +179,11 @@ export default function StudentHomeworkPage() {
 function HomeworkRow({
   item,
   tone,
+  onShowDescription,
 }: {
   item: StudentHomeworkListItem;
   tone: "accent" | "neutral";
+  onShowDescription: (item: StudentHomeworkListItem) => void;
 }) {
   const overdue =
     item.status === "NOT_SUBMITTED" &&
@@ -202,6 +238,22 @@ function HomeworkRow({
         >
           {remainingLabel(item.remainingMinutes)}
         </p>
+      )}
+
+      {/* 상세 내용이 있는 줄만. 링크 안에 버튼을 넣으면 눌러도 링크가 먼저 먹으므로
+          stopPropagation과 preventDefault가 둘 다 필요하다 */}
+      {item.description && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onShowDescription(item);
+          }}
+          className="mt-1.5 text-[11.5px] font-semibold text-brand-600 underline"
+        >
+          내용 보기
+        </button>
       )}
 
       <div className="mt-1.5 flex flex-wrap gap-1">
