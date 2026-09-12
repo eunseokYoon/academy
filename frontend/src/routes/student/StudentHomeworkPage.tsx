@@ -7,7 +7,7 @@ import { PageTitle, SectionHead, TintBlock } from "../../shared/components/Secti
 import { gradeLabel, gradeTone } from "../../shared/homework/grade";
 import { groupByLessonDay } from "../../shared/homework/lessonDay";
 import { SUBMISSION_LABELS, remainingLabel } from "../../shared/homework/types";
-import { listMyHomeworks } from "./api";
+import { listMyHomeworks, listMyHomeworkNotes } from "./api";
 import type { StudentHomeworkListItem } from "./api";
 
 const NOW = new Date();
@@ -51,6 +51,15 @@ export default function StudentHomeworkPage() {
   const todoQuery = useQuery({
     queryKey: ["student", "homeworks", todoParams],
     queryFn: () => listMyHomeworks(todoParams),
+  });
+
+  /*
+    글 목록은 달 필터를 따르지 않는다 — 「이번 주에 낼 것」이라는 이름이 거짓이 된다.
+    todoQuery와 같은 이유다.
+  */
+  const notesQuery = useQuery({
+    queryKey: ["student", "homework-notes"],
+    queryFn: listMyHomeworkNotes,
   });
 
   const listParams = month === "" ? todoParams : { year, month };
@@ -103,9 +112,32 @@ export default function StudentHomeworkPage() {
         />
       </div>
 
+      {(notesQuery.data ?? []).length > 0 && (
+        <section className="mb-5">
+          <SectionHead tone="accent" title="이번 주에 낼 것" />
+          <TintBlock tone="accent">
+            {(notesQuery.data ?? []).map((note) => (
+              <div key={note.lessonId} className="px-3.5 py-3.5">
+                {/*
+                  반 이름과 주차가 먼저다. 여러 반에 속한 학생은 어느 반 숙제인지
+                  모르면 글을 읽어도 쓸 수 없다.
+                */}
+                <p className="tnum text-[11.5px] font-semibold text-accent-700/75">
+                  {note.classRoomName} · {note.weekLabel} · {note.lessonDate} 수업
+                </p>
+                {/* 줄바꿈은 선생님이 쓴 그대로 살린다 */}
+                <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-brand-900">
+                  {note.homeworkNote}
+                </p>
+              </div>
+            ))}
+          </TintBlock>
+        </section>
+      )}
+
       {todo.length > 0 && (
         <section className="mb-5">
-          <SectionHead tone="accent" title="지금 낼 것" count={todo.length} />
+          <SectionHead tone="accent" title="다시 제출 필요" count={todo.length} />
           <TintBlock tone="accent">
             {todo.map((item) => (
               <HomeworkRow key={item.homeworkId} item={item} tone="accent" onShowDescription={setDetail} />
@@ -117,7 +149,9 @@ export default function StudentHomeworkPage() {
       {shown.length === 0 ? (
         <TintBlock tone="neutral">
           <p className="px-4 py-6 text-center text-sm text-slate-500">
-            {todo.length > 0 ? "지난 숙제가 없습니다." : "받은 숙제가 없습니다."}
+            {todo.length > 0 || (notesQuery.data ?? []).length > 0
+              ? "지난 숙제가 없습니다."
+              : "받은 숙제가 없습니다."}
           </p>
         </TintBlock>
       ) : (

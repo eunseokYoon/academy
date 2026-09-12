@@ -218,6 +218,21 @@ export const submitHomework = (homeworkId: number) =>
     photoCount: number;
   }>(`/student/homeworks/${homeworkId}/submit`);
 
+export interface StudentHomeworkNote {
+  lessonId: number;
+  lessonDate: string;
+  classRoomName: string;
+  weekLabel: string;
+  homeworkNote: string;
+}
+
+export async function listMyHomeworkNotes(): Promise<StudentHomeworkNote[]> {
+  // 새 배열 필드는 ?? []로 받는다. 계약상 항상 배열이어도,
+  // 계약을 어긴 쪽이 화면을 통째로 무너뜨리게 두지 마라
+  const data = await get<StudentHomeworkNote[]>("/student/homeworks/notes");
+  return data ?? [];
+}
+
 // ---------- 내 정보 (S-7 상단) ----------
 
 export interface StudentMe {
