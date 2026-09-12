@@ -688,4 +688,22 @@ class SubmissionServiceTest {
 
         assertThat(submissionService.myHomeworkNotes()).isEmpty();
     }
+
+    /**
+     * 공백만 적힌 칸도 빼야 한다. 서버가 null과 isBlank() 둘 다로 걸러내는데
+     * null만 테스트하면 나머지 절반이 검증되지 않는다.
+     */
+    @Test
+    @DisplayName("숙제 글이 공백뿐인 수업도 목록에서 빠진다")
+    void 숙제_글이_공백뿐이면_빠진다() {
+        Student me = Fixtures.student(88L, "서동환");
+        Lesson recent = Fixtures.lesson(502L, classRoom, LocalDate.of(2026, 9, 3));
+        recent.writeContent("관계대명사", "내용", "중점", "   ", "화 19:00");
+        recent.publish(OffsetDateTime.now());
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(lessonRepository.findLastPublishedPerClassRoom(me.getId(), LocalDate.now()))
+            .willReturn(List.of(recent));
+
+        assertThat(submissionService.myHomeworkNotes()).isEmpty();
+    }
 }
