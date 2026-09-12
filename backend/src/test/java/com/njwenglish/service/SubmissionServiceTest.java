@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -784,7 +785,18 @@ class SubmissionServiceTest {
     void 온라인_숙제는_되돌릴_수_없다() {
         Homework online = Fixtures.homework(700L, classRoom, OffsetDateTime.now().plusDays(2));
         Submission cell = Fixtures.submission(11L, online, Fixtures.student(1L, "가나다"));
+        /*
+         * 사진과 영상을 반드시 붙여 둔다. 빈 제출물로 두면 가드를 삭제 뒤로 옮겨도
+         * 지울 것이 없어 아래 never() 단정이 그대로 통과한다 — 단정이 허수가 된다.
+         * 가드가 먼저 실행되므로 photoRepository 목은 호출되지 않지만,
+         * 회귀 검증을 위해 준비해 둔다. 가드를 뒤로 옮기면 이 목이 호출되어 단정이 실패한다.
+         */
+        cell.submit(OffsetDateTime.now(), false);
+        cell.attachVideo("submissions/11/video.mov", 1024);
+        SubmissionPhoto photo = SubmissionPhoto.of(cell, "submissions/11/1.webp", (short) 0, 100);
         given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        lenient().when(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .thenReturn(List.of(photo));
 
         assertThatThrownBy(() -> submissionService.markNotDone(11L))
             .isInstanceOf(BusinessException.class)
