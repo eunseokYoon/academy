@@ -31,6 +31,7 @@ import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
+import com.njwenglish.entity.SubmissionPhoto;
 import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.LessonRepository;
@@ -705,5 +706,87 @@ class SubmissionServiceTest {
             .willReturn(List.of(recent));
 
         assertThat(submissionService.myHomeworkNotes()).isEmpty();
+    }
+
+    /**
+     * 8번. 재제출을 잘못 낸 학생을 선생님이 되돌린다. CLAUDE.md 4-5의
+     * "그리드에서 🔺·❌로 되돌려 줘야 다시 낼 수 있다"에 입구를 하나 더 낸 것이다.
+     */
+    @Test
+    @DisplayName("미흡으로 되돌리면 ❌가 되고 재제출 대상으로 돌아온다")
+    void 미흡으로_되돌린다() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "독해", (short) 0);
+        column.openResubmit(OffsetDateTime.now().plusDays(2), "다시", null);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        cell.submit(OffsetDateTime.now(), false);
+        cell.resolveByResubmission();
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(List.of());
+
+        submissionService.markNotDone(11L);
+
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.NOT_DONE);
+        // grade()가 자동으로 내린다. 안 내리면 ck_submissions_resolved에 걸려 저장이 실패한다
+        assertThat(cell.isResolvedByResubmission()).isFalse();
+        assertThat(cell.isResubmitTarget()).isTrue();
+    }
+
+    /**
+     * status는 SUBMITTED로 남긴다. 선생님이 T-7에서 사진을 볼 수 있는 근거가
+     * status <> NOT_SUBMITTED 하나뿐이라, 되돌리면 그 학생 칸으로 들어갈 길이 사라진다.
+     */
+    @Test
+    @DisplayName("미흡으로 되돌려도 status는 SUBMITTED로 남는다")
+    void 미흡은_제출_상태를_되돌리지_않는다() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "독해", (short) 0);
+        column.openResubmit(OffsetDateTime.now().plusDays(2), "다시", null);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        cell.submit(OffsetDateTime.now(), false);
+        cell.resolveByResubmission();
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(List.of());
+
+        submissionService.markNotDone(11L);
+
+        assertThat(cell.getStatus()).isEqualTo(SubmissionStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("미흡으로 되돌리면 사진과 영상을 S3에서도 지운다")
+    void 미흡은_제출물을_지운다() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "독해", (short) 0);
+        column.openResubmit(OffsetDateTime.now().plusDays(2), "다시", null);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        cell.submit(OffsetDateTime.now(), false);
+        cell.attachVideo("submissions/11/video.mov", 1024);
+        SubmissionPhoto photo = SubmissionPhoto.of(cell, "submissions/11/1.webp", (short) 0, 100);
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(List.of(photo));
+
+        submissionService.markNotDone(11L);
+
+        verify(photoRepository).delete(photo);
+        verify(presignedUrlProvider).deleteQuietly("submissions/11/1.webp");
+        verify(presignedUrlProvider).deleteQuietly("submissions/11/video.mov");
+        assertThat(cell.hasVideo()).isFalse();
+    }
+
+    /** GRID 열이 아니면 채점 축이 없다. 되돌릴 대상이 아니다. */
+    @Test
+    @DisplayName("ONLINE 숙제는 미흡으로 되돌릴 수 없다")
+    void 온라인_숙제는_되돌릴_수_없다() {
+        Homework online = Fixtures.homework(700L, classRoom, OffsetDateTime.now().plusDays(2));
+        Submission cell = Fixtures.submission(11L, online, Fixtures.student(1L, "가나다"));
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+
+        assertThatThrownBy(() -> submissionService.markNotDone(11L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 }

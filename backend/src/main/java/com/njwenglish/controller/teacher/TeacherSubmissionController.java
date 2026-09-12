@@ -6,6 +6,7 @@ import com.njwenglish.service.SubmissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,5 +30,15 @@ public class TeacherSubmissionController {
     @GetMapping("/{submissionId}")
     public ApiResponse<SubmissionDetailResponse> detail(@PathVariable Long submissionId) {
         return ApiResponse.ok(submissionService.detail(submissionId));
+    }
+
+    /**
+     * 「미흡」. 그 칸을 ❌로 되돌리고 <b>사진·영상을 지운다.</b> 되돌릴 수 없다 —
+     * 화면이 확인 한 단계를 띄운 뒤에 부른다.
+     */
+    @PostMapping("/{submissionId}/mark-not-done")
+    public ApiResponse<Void> markNotDone(@PathVariable Long submissionId) {
+        submissionService.markNotDone(submissionId);
+        return ApiResponse.ok();
     }
 }

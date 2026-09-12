@@ -31,6 +31,7 @@ import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.SubmissionPhoto;
+import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
@@ -341,7 +342,8 @@ public class SubmissionService {
             submission.getSubmittedAt(), submission.isLate(),
             photosOf(submissionId), videoOf(submission),
             index > 0 ? submitted.get(index - 1) : null,
-            nextSubmitted(submitted, index));
+            nextSubmitted(submitted, index),
+            submission.getHomework().isGrid());
     }
 
     // ---------- 학부모 (P-3) ----------
@@ -489,5 +491,40 @@ public class SubmissionService {
             return null;
         }
         return Duration.between(now, dueAt).toMinutes();
+    }
+
+    /**
+     * T-7에서 「미흡」. <b>❌로 되돌리고 사진·영상을 지운다</b>(2026-09-10).
+     * 재제출을 잘못 낸 학생을 다시 내게 하는 경로다 — CLAUDE.md 4-5의
+     * "선생님이 그리드에서 🔺·❌로 되돌려 줘야 다시 낼 수 있다"에 입구를 하나 더 냈다.
+     *
+     * <p><b>status는 SUBMITTED로 남긴다.</b> 선생님이 T-7에서 사진을 볼 수 있는 근거가
+     * status <> NOT_SUBMITTED 하나뿐이다. 되돌리면 그 학생 칸으로 다시 들어갈 길이
+     * 사라진다. 채점축(result)과 제출축(status)을 섞지 마라.
+     *
+     * <p>resolvedByResubmission은 {@code grade}가 알아서 내린다 — DONE이 아닌 값으로
+     * 바꾸면 ck_submissions_resolved 때문에 반드시 내려가야 한다.
+     *
+     * <p>지운 S3 객체는 되돌릴 수 없다. 화면이 확인 한 단계를 띄운다.
+     */
+    @Transactional
+    public void markNotDone(Long submissionId) {
+        Submission submission = submissionRepository.findById(submissionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!submission.getHomework().isGrid()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        submission.grade(HomeworkResult.NOT_DONE, null);
+
+        for (SubmissionPhoto photo : photoRepository
+            .findBySubmissionIdOrderBySortOrderAscIdAsc(submissionId)) {
+            photoRepository.delete(photo);
+            presignedUrlProvider.deleteQuietly(photo.getS3Key());
+        }
+        String videoKey = submission.detachVideo();
+        if (videoKey != null) {
+            presignedUrlProvider.deleteQuietly(videoKey);
+        }
     }
 }
