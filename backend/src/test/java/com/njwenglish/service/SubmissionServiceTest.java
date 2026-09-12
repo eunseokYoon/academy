@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -788,5 +789,10 @@ class SubmissionServiceTest {
         assertThatThrownBy(() -> submissionService.markNotDone(11L))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+
+        // 거절된 경로에서 아무것도 지워지지 않아야 한다. 가드가 삭제보다 뒤로
+        // 옮겨지는 회귀는 S3 객체를 영구히 날리고, 이 단정이 없으면 그때도 통과한다
+        verify(presignedUrlProvider, never()).deleteQuietly(anyString());
+        verify(photoRepository, never()).delete(any(SubmissionPhoto.class));
     }
 }
