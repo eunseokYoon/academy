@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SUBMISSION_LABELS } from "../../../shared/homework/types";
 import { getSubmission, markSubmissionNotDone } from "../api";
+import { errorMessage } from "../../../shared/api/errors";
+import { FormError } from "../../../shared/components/FormError";
 
 interface Props {
   submissionId: number;
@@ -24,6 +26,9 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
   const [zoomed, setZoomed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [marking, setMarking] = useState(false);
+  /* 되돌릴 수 없는 삭제다. 실패를 조용히 넘기면 선생님이 지워졌는지 모른 채
+     다시 누른다 — 이 저장소의 기존 패턴(errorMessage + FormError)을 그대로 쓴다 */
+  const [markError, setMarkError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const submission = useQuery({
@@ -40,10 +45,12 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
   }, [data?.submissionId]);
 
   function confirmMarkNotDone() {
+    setMarkError(null);
     setConfirming(true);
   }
 
   async function doMarkNotDone() {
+    setMarkError(null);
     setMarking(true);
     try {
       await markSubmissionNotDone(data!.submissionId);
@@ -52,6 +59,8 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
       await queryClient.invalidateQueries({ queryKey: ["teacher", "submissions"] });
       setConfirming(false);
       onClose();
+    } catch (e) {
+      setMarkError(errorMessage(e, "미흡으로 되돌리지 못했습니다."));
     } finally {
       setMarking(false);
     }
@@ -184,6 +193,7 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5">
             <p className="text-[15px] font-bold text-brand-900">미흡으로 되돌릴까요?</p>
+            {markError && <FormError message={markError} />}
             <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
               사진 {data.photos.length}장{data.video ? "과 영상" : ""}이 삭제됩니다.
               <br />
