@@ -13,6 +13,7 @@ import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
+import com.njwenglish.dto.homework.ParentSubmissionPhotosResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoRegisterResponse;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
@@ -349,7 +350,7 @@ public class SubmissionService {
     // ---------- 학부모 (P-3) ----------
 
     /**
-     * <b>제목과 채점 결과까지</b> 내려준다. 학생용 DTO를 재사용하면 사진 URL과 피드백이 따라 나간다.
+     * <b>제목·채점 결과·제출 사진까지</b> 내려준다. 학생용 DTO를 재사용하면 사진 URL과 피드백이 따라 나간다.
      *
      * <p>첫 줄이 권한 검증이다. 학부모가 URL의 숫자만 바꿔 남의 아이 숙제를 보는 걸 여기서 막는다.
      */
@@ -361,6 +362,9 @@ public class SubmissionService {
         Page<Submission> page = submissionRepository.findByStudent(
             child.getId(), status, monthStart(year, month), monthEnd(year, month), pageable);
 
+        List<Long> ids = page.getContent().stream().map(Submission::getId).toList();
+        Map<Long, Integer> photoCounts = photoCountsOf(ids);
+
         return PageResponse.from(page.map(submission -> {
             Homework homework = submission.getHomework();
             return new ParentHomeworkResponse(
@@ -369,8 +373,28 @@ public class SubmissionService {
                 homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
                 submission.getResult(), submission.getCompletionRate(),
                 submission.isResolvedByResubmission(),
-                homework.getDueAt(), submission.getStatus(), submission.isLate());
+                homework.getDueAt(), submission.getStatus(), submission.isLate(),
+                photoCounts.getOrDefault(submission.getId(), 0));
         }));
+    }
+
+    /**
+     * 자녀가 낸 숙제 사진. <b>첫 줄이 requireAccessible이다</b> —
+     * 학부모 A가 학부모 B의 자녀 studentId를 넣으면 여기서 403이다.
+     *
+     * <p>영상과 description은 담지 않는다. 열린 것은 사진뿐이다(2026-09-10).
+     */
+    @Transactional(readOnly = true)
+    public ParentSubmissionPhotosResponse childSubmissionPhotos(Long studentId,
+                                                                Long homeworkId) {
+        Student child = studentAccessGuard.requireAccessible(studentId);
+        Submission submission = submissionRepository
+            .findByHomeworkAndStudent(homeworkId, child.getId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        return new ParentSubmissionPhotosResponse(
+            submission.getHomework().getId(), submission.getHomework().getTitle(),
+            photosOf(submission.getId()));
     }
 
     // ---------- 내부 ----------

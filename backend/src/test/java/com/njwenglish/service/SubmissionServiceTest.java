@@ -22,6 +22,7 @@ import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
+import com.njwenglish.dto.homework.ParentSubmissionPhotosResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
 import com.njwenglish.dto.homework.SubmissionListItemResponse;
@@ -513,14 +514,15 @@ class SubmissionServiceTest {
     }
 
     @Test
-    @DisplayName("학부모 응답에는 사진·피드백·숙제 내용이 없다")
-    void 학부모_응답에는_사진과_피드백이_없다() {
+    @DisplayName("학부모 응답에는 description과 video가 없다")
+    void 학부모_응답에는_description과_video가_없다() {
         // 학생 DTO를 재사용하면 그대로 새어 나간다. 필드 목록 자체를 고정한다
+        // photoCount는 2026-09-10에 추가했지만 description·video는 아직 없다
         assertThat(Arrays.stream(ParentHomeworkResponse.class.getRecordComponents())
             .map(RecordComponent::getName))
             .containsExactly("homeworkId", "title", "classRoomName", "kind", "lessonDate",
                 "result", "completionRate", "resolvedByResubmission", "dueAt",
-                "status", "isLate");
+                "status", "isLate", "photoCount");
     }
 
     @Test
@@ -547,10 +549,49 @@ class SubmissionServiceTest {
         assertThat(item.result()).isEqualTo(HomeworkResult.PARTIAL);
         assertThat(item.completionRate()).isEqualTo((short) 50);
         assertThat(item.lessonDate()).isEqualTo(LocalDate.of(2026, 7, 29));
-        // 학부모 DTO에는 사진·피드백·숙제 내용 필드가 아예 없다
+        // 학부모 DTO에는 숙제 내용·피드백·영상이 없다. 사진은 2026-09-10에 열었다
         assertThat(ParentHomeworkResponse.class.getRecordComponents())
             .extracting(RecordComponent::getName)
-            .doesNotContain("photos", "photoCount", "thumbnailUrl", "feedback", "description");
+            .doesNotContain("photos", "thumbnailUrl", "feedback", "description", "video");
+    }
+
+    @Test
+    @DisplayName("학부모가 자녀의 숙제 사진을 본다")
+    void 학부모가_자녀_사진을_본다() {
+        ClassRoom classRoom = ClassRoom.create(Fixtures.teacherEntity(1L),
+            "동성고1 수요일반", "HK7F2Q", null);
+        ReflectionTestUtils.setField(classRoom, "id", 3L);
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "숙제", (short) 0);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(88L, "고연준"));
+        cell.submit(OffsetDateTime.now(), false);
+
+        given(studentAccessGuard.requireAccessible(88L))
+            .willReturn(Fixtures.student(88L, "고연준"));
+        given(submissionRepository.findByHomeworkAndStudent(700L, 88L))
+            .willReturn(java.util.Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(java.util.List.of(
+                SubmissionPhoto.of(cell, "submissions/11/1.webp", (short) 0, 100)));
+        given(presignedUrlProvider.readUrl("submissions/11/1.webp"))
+            .willReturn("https://s3/1.webp");
+
+        ParentSubmissionPhotosResponse response =
+            submissionService.childSubmissionPhotos(88L, 700L);
+
+        assertThat(response.photos()).hasSize(1);
+        assertThat(response.photos().get(0).url()).isEqualTo("https://s3/1.webp");
+    }
+
+    @Test
+    @DisplayName("남의 자녀 사진은 403이다")
+    void 남의_자녀_사진은_403이다() {
+        given(studentAccessGuard.requireAccessible(99L))
+            .willThrow(new BusinessException(ErrorCode.STUDENT_NOT_ACCESSIBLE));
+
+        assertThatThrownBy(() -> submissionService.childSubmissionPhotos(99L, 700L))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.STUDENT_NOT_ACCESSIBLE);
     }
 
 
