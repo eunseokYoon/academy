@@ -290,8 +290,8 @@ export default function OnlineTestDetailPage() {
                           </Badge>
                         </td>
                         <td className="px-3 py-2 text-right text-slate-700">
-                          {item.score != null
-                            ? `${item.score}점 (${item.correctCount}/${detail.questionCount})`
+                          {item.correctCount != null
+                            ? `${item.correctCount}/${detail.questionCount}`
                             : "—"}
                         </td>
                         {internalTotal != null && (

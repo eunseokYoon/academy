@@ -194,9 +194,19 @@ public class OnlineTestSubmissionService {
                 i + 1, picked, correct[i], picked != null && picked.equals(correct[i])));
         }
 
+        Short internalCount = test.getInternalQuestionCount();
+        // 집계는 OnlineTestService.countCorrect 한 곳이다. 여기서 다시 세지 마라 —
+        // 선생님 결과 화면과 숫자가 갈라지면 어느 쪽이 맞는지 알 수 없다
+        Short internalCorrect = internalCount == null
+            ? null : OnlineTestService.countCorrect(correct, chosen, 0, internalCount);
+        Short externalCorrect = internalCount == null
+            ? null : OnlineTestService.countCorrect(correct, chosen, internalCount,
+                correct.length);
+
         return new OnlineTestResultResponse(
             test.getId(), test.getTitle(), submission.getScore(), submission.getCorrectCount(),
-            test.getQuestionCount(), submission.getSubmittedAt(),
+            test.getQuestionCount(), internalCount, internalCorrect, externalCorrect,
+            submission.getSubmittedAt(),
             test.getAnswerS3Key() == null
                 ? null : presignedUrlProvider.readUrl(test.getAnswerS3Key()),
             results);

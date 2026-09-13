@@ -19,9 +19,15 @@ export interface QuestionResult {
 export interface OnlineTestResult {
   testId: number;
   title: string;
+  /** <b>쓰지 마라</b>(2026-09-10). 환산 점수를 화면에 보이지 않기로 했다. */
   score: number;
   correctCount: number;
   questionCount: number;
+  /** 앞 N문항이 내부지문. null이면 나누지 않은 테스트다. */
+  internalQuestionCount: number | null;
+  /** internalQuestionCount가 null이면 null이다. */
+  internalCorrect: number | null;
+  externalCorrect: number | null;
   submittedAt: string;
   answerFileUrl: string | null;
   results: QuestionResult[];
