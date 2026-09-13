@@ -866,7 +866,7 @@ export interface OnlineTestResults {
      */
     clinicReflection: ClinicReflection;
   };
-  counts: { total: number; notStarted: number; inProgress: number; submitted: number };
+  counts: { total: number; notStarted: number; inProgress: number; submitted: number; offline: number };
   /** 제출자만으로 계산한다. 제출이 없으면 null. 선생님 화면에만 있는 값이다. */
   average: number | null;
   items: {

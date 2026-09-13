@@ -49,4 +49,27 @@ public interface WeeklyTestScoreRepository extends JpaRepository<WeeklyTestScore
         ORDER BY t.year, t.month, t.week, t.id
         """)
     List<WeeklyTestScore> findByStudentOrderedByWeek(@Param("studentId") Long studentId);
+
+    /**
+     * 그 반·그 주차 클리닉 칸에 성적이 적힌 학생 id. 온라인 테스트 결과 화면이
+     * <b>오프라인으로 본 학생</b>을 「미응시」에서 빼는 데 쓴다(2026-09-10).
+     *
+     * <p>종류는 CLINIC 하나만 본다 — 온라인 테스트가 대체하는 것이 그것이다.
+     * 주차는 online_tests가 (class_room_id, year, month, week)를 이미 갖고 있어
+     * 날짜에서 추론하지 않는다.
+     *
+     * <p>확정 상태를 저장하지 않는다. 파생으로 충분한 값을 테이블에 남기면 둘이 어긋난다.
+     */
+    @Query("""
+        SELECT s.student.id FROM WeeklyTestScore s
+        WHERE s.weeklyTest.classRoom.id = :classRoomId
+          AND s.weeklyTest.testType = 'CLINIC'
+          AND s.weeklyTest.year = :year
+          AND s.weeklyTest.month = :month
+          AND s.weeklyTest.week = :week
+        """)
+    List<Long> findStudentIdsWithClinicScore(@Param("classRoomId") Long classRoomId,
+                                             @Param("year") short year,
+                                             @Param("month") short month,
+                                             @Param("week") short week);
 }

@@ -240,9 +240,18 @@ export default function OnlineTestDetailPage() {
               선생님 화면까지 덮는다. 응답의 average 필드는 옛 화면 호환으로 남아 있지만
               쓰지 마라. 제출/전체는 개수라 그대로 둔다.
             */}
-            <span className="text-xs text-slate-500">
-              제출 {results.data.counts.submitted} / {results.data.counts.total}
-            </span>
+            <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+              <span>
+                제출 {results.data.counts.submitted} / {results.data.counts.total}
+              </span>
+              <span>미응시 {results.data.counts.notStarted}</span>
+              {results.data.counts.inProgress > 0 && (
+                <span>작성 중 {results.data.counts.inProgress}</span>
+              )}
+              {results.data.counts.offline > 0 && (
+                <span>오프라인 응시 {results.data.counts.offline}</span>
+              )}
+            </div>
           </div>
 
           <ClinicReflectionNotice
@@ -286,7 +295,9 @@ export default function OnlineTestDetailPage() {
                                 ? "ok"
                                 : item.status === "IN_PROGRESS"
                                   ? "warn"
-                                  : "neutral"
+                                  : item.status === "OFFLINE"
+                                    ? "brand"
+                                    : "neutral"
                             }
                           >
                             {TAKE_STATUS_LABELS[item.status]}
