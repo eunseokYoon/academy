@@ -235,10 +235,13 @@ export default function OnlineTestDetailPage() {
         <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm">
           <div className="flex items-baseline justify-between">
             <h3 className="text-sm font-semibold text-slate-900">응시 현황</h3>
-            {/* 제출자만으로 계산한다. 이 값은 선생님 화면에만 있다 */}
+            {/*
+              평균 점수는 2026-09-10에 지웠다 — 「환산 점수는 넣지 마라, 모두에게」가
+              선생님 화면까지 덮는다. 응답의 average 필드는 옛 화면 호환으로 남아 있지만
+              쓰지 마라. 제출/전체는 개수라 그대로 둔다.
+            */}
             <span className="text-xs text-slate-500">
               제출 {results.data.counts.submitted} / {results.data.counts.total}
-              {results.data.average != null && ` · 평균 ${results.data.average}점`}
             </span>
           </div>
 
@@ -255,7 +258,7 @@ export default function OnlineTestDetailPage() {
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">학생</th>
                   <th className="px-3 py-2 text-left font-medium">상태</th>
-                  <th className="px-3 py-2 text-right font-medium">점수</th>
+                  <th className="px-3 py-2 text-right font-medium">맞은 개수</th>
                   {results.data.test.internalQuestionCount != null && (
                     <>
                       <th className="px-3 py-2 text-right font-medium">내부</th>
