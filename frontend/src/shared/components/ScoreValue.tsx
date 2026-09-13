@@ -3,8 +3,12 @@ import type { StudentScoreItem } from "../score/types";
 /**
  * 성적 한 칸의 값과 배지. 성적 목록(S-7 · P-4)과 주간 레포트(P-6)가 같이 쓴다.
  *
- * <p>두 화면이 각자 형식을 만들면 같은 성적이 한 곳에서는 "23/25 92%",
+ * <p>두 화면이 각자 형식을 만들면 같은 성적이 한 곳에서는 "23/25",
  * 다른 곳에서는 "92점"으로 보인다. 여기가 정본이다.
+ *
+ * <p>정답률·환산 점수는 2026-09-10에 없앴다. 되살리지 마라 —
+ * 서버가 accuracy에 null을 내리므로 화면에서 계산해야 하는데, 그러면 규칙이
+ * 화면 쪽으로 옮겨 앉는다.
  */
 
 /**
@@ -24,9 +28,6 @@ export function ScoreValueText({ item }: { item: StudentScoreItem }) {
     return (
       <span className="tnum text-slate-700">
         {item.correctCount}/{item.totalCount}
-        {item.accuracy !== null && (
-          <span className="ml-1 text-xs text-slate-500">{item.accuracy}%</span>
-        )}
       </span>
     );
   }

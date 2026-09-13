@@ -1,5 +1,6 @@
 export type WeeklyTestType = "WORD" | "REVIEW" | "PRACTICE" | "CLINIC";
 export type TestResult = "PASS" | "FAIL";
+export type ScoreChartKind = "NONE" | "BAR" | "SPLIT_BAR";
 export type RegularExamSlot =
   | "S1_MIDTERM" | "S1_FINAL" | "S2_MIDTERM" | "S2_FINAL"
   | "MOCK_MAR" | "MOCK_JUN" | "MOCK_SEP" | "MOCK_NOV";
@@ -150,6 +151,7 @@ export interface StudentScoreItem {
   weekLabel: string;
   correctCount: number | null;
   totalCount: number | null;
+  /** <b>항상 null이다</b>(2026-09-10). 정답률·환산 점수를 전 화면에서 없앴다. 쓰지 마라. */
   accuracy: number | null;
   internalCorrect: number | null;
   internalTotal: number | null;
@@ -163,8 +165,11 @@ export interface StudentScoreItem {
 export interface StudentScoreSection {
   testType: WeeklyTestType;
   label: string;
-  /** true면 정답률 꺾은선을 그린다. 리뷰(P/F뿐)·클리닉(값이 둘)은 false다. */
-  chart: boolean;
+  /**
+   * 서버가 정한 그래프 종류. <b>testType으로 다시 분기하지 마라</b> —
+   * 성적 목록(S-7·P-4)과 주간 레포트(P-6)가 갈라진다.
+   */
+  chartKind: ScoreChartKind;
   /**
    * <b>year·month·week 오름차순</b>이다. 그래프가 그대로 쓰는 순서이고
    * 목록은 화면에서 뒤집어 그린다. 다시 정렬하지 마라.

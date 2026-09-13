@@ -1,5 +1,5 @@
 import type { StudentScoreData, StudentScoreSection } from "../score/types";
-import { AccuracyChart } from "./AccuracyChart";
+import { CorrectCountChart } from "./CorrectCountChart";
 import { SectionHead, TintBlock } from "./Section";
 import { ScoreResultBadge, ScoreValueText } from "./ScoreValue";
 
@@ -65,7 +65,9 @@ function Section({ section }: { section: StudentScoreSection }) {
     <section>
       <SectionHead tone="brand" title={section.label} />
       <TintBlock tone="neutral" className="space-y-3 p-4 [&>*+*]:border-0">
-        {section.chart && <AccuracyChart items={section.items} />}
+        {section.chartKind !== "NONE" && (
+          <CorrectCountChart items={section.items} chartKind={section.chartKind} />
+        )}
       {/*
         주차가 쌓이면 종류마다 수십 줄이 되어 화면이 끝없이 길어진다. 그래서 구획
         안에서만 스크롤한다. 높이는 5줄보다 조금 크게 잡아 다음 줄이 반쯤 걸치게
