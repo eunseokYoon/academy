@@ -71,8 +71,18 @@ export function CorrectCountChart({
   const plotHeight = height - padding.top - padding.bottom;
 
   const slot = plotWidth / points.length;
-  /* 막대 폭은 칸의 절반까지다. 주가 둘뿐일 때 막대가 판처럼 넓어지는 걸 막는다 */
-  const barWidth = Math.min(slot * 0.5, split ? 14 : 22);
+  /*
+    막대 폭의 상한이 두 갈래다. 주가 둘뿐일 때 막대가 판처럼 넓어지는 걸 막는 것이 14·22이고,
+    slot에 걸린 쪽이 인접 주차와의 충돌을 막는다.
+
+    split은 한 칸에 막대가 둘이라 `cx - barWidth - 1` ~ `cx + 1 + barWidth`를 차지한다 —
+    그룹 폭이 `2 * barWidth + 2`다. 그래서 `slot * 0.5`를 쓰면 그룹이 slot보다 2px 넓어져
+    10주차쯤부터 옆 주차와 붙는다(10주 slot 27.4 / 그룹 29.4). `(slot - 2) / 2`가
+    그 2px 간격까지 포함해 정확히 slot에 들어맞게 한다.
+  */
+  const barWidth = split
+    ? Math.min((slot - 2) / 2, 14)
+    : Math.min(slot * 0.5, 22);
   const y = (value: number) => padding.top + plotHeight * (1 - value / yMax);
   const centerX = (index: number) => padding.left + slot * (index + 0.5);
 
