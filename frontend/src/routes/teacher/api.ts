@@ -604,6 +604,7 @@ export interface SubmissionDetail {
   prevSubmissionId: number | null;
   /** 다음으로 볼 제출물. 제출한 것 전부를 이름순으로 훑는다. */
   nextSubmissionId: number | null;
+  canMarkNotDone: boolean;
 }
 
 export interface PendingHomework {
@@ -751,6 +752,10 @@ export const listSubmissions = (homeworkId: number) =>
 
 export const getSubmission = (submissionId: number) =>
   get<SubmissionDetail>(`/teacher/submissions/${submissionId}`);
+
+/** 그 칸을 ❌로 되돌리고 사진·영상을 지운다. 되돌릴 수 없다. */
+export const markSubmissionNotDone = (submissionId: number) =>
+  post<void>(`/teacher/submissions/${submissionId}/mark-not-done`, undefined);
 
 // ---------- 시험 일정 (T-11) ----------
 
