@@ -4,7 +4,7 @@ export type OnlineTestTakeStatus = "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" |
 export const TAKE_STATUS_LABELS: Record<OnlineTestTakeStatus, string> = {
   NOT_STARTED: "미응시",
   IN_PROGRESS: "작성 중",
-  SUBMITTED: "제출",
+  SUBMITTED: "제출 완료",
   /* 종이로 봤고 선생님이 성적에 적었다. 온라인 테스트는 그 대체본이다 */
   OFFLINE: "오프라인 응시",
 };
