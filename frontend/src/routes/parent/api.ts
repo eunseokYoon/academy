@@ -55,6 +55,7 @@ export interface ParentHomework {
   dueAt: string | null;
   status: SubmissionStatus;
   isLate: boolean;
+  photoCount: number;
 }
 
 /** year·month는 둘 다 보내야 걸린다. 학생 쪽(listMyHomeworks)과 같은 규칙이다. */
@@ -62,6 +63,21 @@ export const getChildHomeworks = (
   studentId: number,
   params: { status?: SubmissionStatus; year?: number; month?: number; page?: number },
 ) => get<PageResponse<ParentHomework>>(`/parent/children/${studentId}/homeworks`, params);
+
+export interface ChildSubmissionPhotos {
+  homeworkId: number;
+  title: string;
+  photos: { photoId: number; url: string; sortOrder: number }[];
+}
+
+export async function getChildSubmissionPhotos(
+  studentId: number,
+  homeworkId: number,
+): Promise<ChildSubmissionPhotos> {
+  return await get<ChildSubmissionPhotos>(
+    `/parent/children/${studentId}/homeworks/${homeworkId}/photos`,
+  );
+}
 
 // ---------- 주간 레포트 (P-6) ----------
 
