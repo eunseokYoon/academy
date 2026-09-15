@@ -12,7 +12,8 @@ import { getChildHome } from "./api";
 /**
  * P-1 포털 홈. <b>호출은 하나</b>다 — 자녀를 바꾸면 이 쿼리만 다시 돈다.
  *
- * <p>메뉴는 여섯이다. 수업영상, 수업 자료실, 수강 후기는 학부모 화면에서 제외됐다.
+ * <p>메뉴는 여섯이다. 수업영상은 학부모 화면에서 제외됐다.
+ * 수강 후기는 학생 전용이라 학부모 화면에 없다.
  * KW-Study(공부 시간·랭킹) 메뉴도 없다. 참고 디자인에 있더라도 넣지 마라.
  *
  * <p>값이 없는 칸은 <b>칸째로 숨긴다</b>. 0을 표시하면 "시험이 오늘"이나 "출석 0회"로 읽힌다.
@@ -52,26 +53,38 @@ export default function ParentHomePage() {
     nextExam,
     nextLessonDate,
     nextLessonTime,
+    nextLessonDDay,
     notices,
     pendingHomeworkCount,
     nextClinic,
     thisMonthAttendance,
   } = home.data;
 
-  /*
-    지면의 숫자 칸. 학생 홈과 달리 <b>다음 수업에 D-day가 없다</b> — 응답이 날짜만
-    내려준다. 없는 값을 여기서 세지 마라. 기기 시계로 계산하면 학생 화면과 하루 어긋난다.
-  */
+  const dDayLabel = (dDay: number) => (dDay === 0 ? "오늘" : `D-${dDay}`);
+  const dateLabel = (date: string, time?: string | null) =>
+    `${date.slice(5).replace("-", "/")}${time ? ` ${time}` : ""}`;
+
+  const clinicRow = nextClinic
+    ? {
+        label: "다음 클리닉",
+        value: dDayLabel(nextClinic.dDay),
+        sub: `${dateLabel(nextClinic.clinicDate)} ${nextClinic.arrivalTime} 도착`,
+      }
+    : undefined;
+
   const stats: HeroStat[] = [];
-  if (nextLessonDate) {
+  if (nextLessonDate && nextLessonDDay !== null) {
     stats.push({
       label: "다음 수업",
-      value: nextLessonDate.slice(5).replace("-", "/"),
-      sub: nextLessonTime ?? "시각 미정",
+      value: dDayLabel(nextLessonDDay),
+      sub: dateLabel(nextLessonDate, nextLessonTime),
+      extra: clinicRow,
     });
+  } else if (clinicRow) {
+    stats.push(clinicRow);
   }
   stats.push({
-    label: "안 낸 숙제",
+    label: "미완료 숙제",
     value: `${pendingHomeworkCount}`,
     sub: pendingHomeworkCount > 0 ? "확인 필요" : "다 냈어요",
     hot: pendingHomeworkCount > 0,
@@ -147,15 +160,9 @@ export default function ParentHomePage() {
           <div className="flex items-center gap-3 px-3.5 py-3.5">
             <p className="min-w-0 flex-1 text-[14px] font-bold text-brand-900">
               {pendingHomeworkCount > 0
-                ? `안 낸 숙제가 ${pendingHomeworkCount}건 있습니다`
-                : "안 낸 숙제가 없습니다"}
+                ? `미완료 숙제가 ${pendingHomeworkCount}건 있습니다`
+                : "미완료 숙제가 없습니다"}
             </p>
-            {nextClinic && (
-              <span className="tnum shrink-0 rounded-lg border border-brand-200 bg-white px-2 py-1
-                               text-[10.5px] font-bold text-brand-700">
-                클리닉 {nextClinic.clinicDate.slice(5).replace("-", "/")} {nextClinic.arrivalTime}
-              </span>
-            )}
           </div>
         </TintBlock>
       </section>

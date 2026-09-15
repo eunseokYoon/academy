@@ -233,10 +233,28 @@ function ResultView({ result }: { result: OnlineTestResult }) {
 
       <div className="rounded-2xl bg-white p-4 text-center shadow-card">
         <p className="text-sm text-slate-500">{result.title}</p>
-        <p className="mt-1 text-3xl font-bold text-brand-900">{result.score}점</p>
-        <p className="mt-1 text-sm text-slate-600">
-          {result.correctCount} / {result.questionCount}문항 정답
-        </p>
+        {/*
+          환산 점수를 보여주지 않는다(2026-09-10 회의). 30문항 만점이 99.99가 되는
+          문제와 별개로, 학원이 점수로 줄 세우지 않기로 한 방향이다.
+          내부·외부가 있으면 그것이 주인공이다 — 클리닉 테스트의 대체본이라
+          선생님이 성적 기입에 옮겨 적는 값이 그 둘이다.
+        */}
+        {result.internalCorrect !== null && result.externalCorrect !== null
+        && result.internalQuestionCount !== null ? (
+          <>
+            <p className="tnum mt-1 text-3xl font-bold text-brand-900">
+              내부 {result.internalCorrect}/{result.internalQuestionCount}
+            </p>
+            <p className="tnum mt-1 text-3xl font-bold text-brand-900">
+              외부 {result.externalCorrect}/
+              {result.questionCount - result.internalQuestionCount}
+            </p>
+          </>
+        ) : (
+          <p className="tnum mt-1 text-3xl font-bold text-brand-900">
+            {result.correctCount} / {result.questionCount}
+          </p>
+        )}
       </div>
 
       {result.answerFileUrl && (

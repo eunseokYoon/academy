@@ -9,11 +9,14 @@ import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.WeeklyTest;
 import com.njwenglish.entity.WeeklyTestScore;
+import com.njwenglish.entity.enums.ScoreChartKind;
 import com.njwenglish.entity.enums.TestResult;
 import com.njwenglish.entity.enums.WeeklyTestType;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
 import com.njwenglish.support.Fixtures;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +54,19 @@ class StudentScoreQueryServiceTest {
         WeeklyTest test = WeeklyTest.create(classRoom, WeeklyTestType.CLINIC,
             (short) 2026, (short) 5, week, null, (short) 10, (short) 5);
         return WeeklyTestScore.create(test, hanul, null, internal, external, null, false);
+    }
+
+    /** 리뷰는 Pass/Fail뿐이다 — ck_weekly_tests_shape가 total_count를 NULL로 못 박는다. */
+    private WeeklyTestScore reviewCell(short week, TestResult result) {
+        WeeklyTest test = WeeklyTest.create(classRoom, WeeklyTestType.REVIEW,
+            (short) 2026, (short) 5, week, null, null, null);
+        return WeeklyTestScore.create(test, hanul, null, null, null, result, false);
+    }
+
+    private WeeklyTestScore practiceCell(short week, short correct) {
+        WeeklyTest test = WeeklyTest.create(classRoom, WeeklyTestType.PRACTICE,
+            (short) 2026, (short) 5, week, (short) 45, null, null);
+        return WeeklyTestScore.create(test, hanul, correct, null, null, null, false);
     }
 
     @Test
@@ -110,17 +126,25 @@ class StudentScoreQueryServiceTest {
         assertThat(response.sections().get(0).items().get(0).retestScheduled()).isFalse();
     }
 
+    /**
+     * 환산 점수·정답률은 전 화면에서 없앤다(2026-09-10 선생님 회의).
+     * 필드를 지우지 않고 null을 내리는 이유는 배포 순서가 backend → web이라,
+     * 필드가 사라지면 옛 화면에서 accuracy !== null이 참이 되어 "undefined%"가 그려진다.
+     */
     @Test
-    @DisplayName("정답률은 서버가 계산한다 — 22/25는 88.0")
-    void 정답률은_서버가_계산한다() {
+    @DisplayName("정답률은 항상 null이다 - 맞힌 개수와 전체 문항 수만 내려간다")
+    void 정답률은_항상_null이다() {
         given(studentAccessGuard.requireAccessible(88L)).willReturn(hanul);
         given(weeklyTestScoreRepository.findByStudentOrderedByWeek(88L))
             .willReturn(List.of(wordCell((short) 3, (short) 22, TestResult.PASS, false)));
 
         StudentScoreResponse response = studentScoreQueryService.forStudent(88L);
 
-        assertThat(response.sections().get(0).items().get(0).accuracy())
-            .isEqualByComparingTo("88.0");
+        var item = response.sections().get(0).items().get(0);
+        assertThat(item.accuracy()).isNull();
+        // 원본은 그대로 내려간다. 화면이 "22/25"를 그린다
+        assertThat(item.correctCount()).isEqualTo((short) 22);
+        assertThat(item.totalCount()).isEqualTo((short) 25);
     }
 
     @Test
@@ -170,5 +194,30 @@ class StudentScoreQueryServiceTest {
         assertThat(response.retestScheduled())
             .extracting(StudentScoreResponse.RetestNotice::weekLabel)
             .containsExactly("5월 4주", "5월 1주");
+    }
+
+    /** 화면에서 testType으로 분기하면 S-7과 P-6이 갈라진다. 서버가 정한다. */
+    @Test
+    @DisplayName("종류마다 그래프 종류를 서버가 정한다")
+    void 종류마다_그래프_종류를_정한다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(hanul);
+        given(weeklyTestScoreRepository.findByStudentOrderedByWeek(88L))
+            .willReturn(List.of(
+                wordCell((short) 3, (short) 22, TestResult.PASS, false),
+                reviewCell((short) 3, TestResult.PASS),
+                practiceCell((short) 3, (short) 38),
+                clinicCell((short) 3, (short) 8, (short) 4)));
+
+        StudentScoreResponse response = studentScoreQueryService.forStudent(88L);
+
+        Map<WeeklyTestType, ScoreChartKind> kinds = response.sections().stream()
+            .collect(Collectors.toMap(
+                StudentScoreResponse.Section::testType,
+                StudentScoreResponse.Section::chartKind));
+
+        assertThat(kinds).containsEntry(WeeklyTestType.WORD, ScoreChartKind.NONE);
+        assertThat(kinds).containsEntry(WeeklyTestType.REVIEW, ScoreChartKind.NONE);
+        assertThat(kinds).containsEntry(WeeklyTestType.PRACTICE, ScoreChartKind.BAR);
+        assertThat(kinds).containsEntry(WeeklyTestType.CLINIC, ScoreChartKind.SPLIT_BAR);
     }
 }

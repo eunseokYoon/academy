@@ -7,6 +7,7 @@ import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.dto.lesson.LessonReportListItemResponse;
 import com.njwenglish.dto.lesson.LessonReportResponse;
+import com.njwenglish.dto.lesson.LessonVideoResponse;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
@@ -76,7 +77,7 @@ public class LessonReportService {
                 lesson.getLessonDate(),
                 lesson.getTitle(),
                 lesson.getClassRoom().getName(),
-                YoutubeUrls.videoId(lesson.getVideoUrl()) != null,
+                lesson.hasVideo(),
                 lesson.getPublishedAt().isAfter(newSince),
                 homework == null ? null : homework.getTitle());
         }));
@@ -87,7 +88,6 @@ public class LessonReportService {
         Student me = studentAccessGuard.requireSelf();
         Lesson lesson = findAccessible(lessonId, me.getId());
 
-        String videoId = YoutubeUrls.videoId(lesson.getVideoUrl());
         Homework homework = firstHomeworkByLesson(List.of(lesson.getId())).get(lesson.getId());
 
         return LessonReportResponse.forStudent(
@@ -95,11 +95,11 @@ public class LessonReportService {
             lesson.getLessonDate(),
             lesson.getTitle(),
             lesson.getClassRoom().getName(),
-            videoId,
-            YoutubeUrls.embedUrl(videoId),
+            lesson.getVideos().stream().map(LessonVideoResponse::from).toList(),
             lesson.getContent(),
             lesson.getKeyPoints(),
-            lesson.getNextPreview(),
+            lesson.getHomeworkNote(),
+            lesson.getClinicNote(),
             homework == null ? null : toHomework(homework, me.getId()),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), me.getId())
                 .map(a -> a.getStatus())
@@ -157,7 +157,8 @@ public class LessonReportService {
             lesson.getClassRoom().getName(),
             lesson.getContent(),
             lesson.getKeyPoints(),
-            lesson.getNextPreview(),
+            lesson.getHomeworkNote(),
+            lesson.getClinicNote(),
             homework == null ? null : toParentHomework(homework, child.getId()),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), child.getId())
                 .map(a -> a.getStatus())

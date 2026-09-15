@@ -7,7 +7,6 @@ import type {
   HomeworkResult,
   SubmissionStatus,
 } from "../../shared/homework/types";
-import type { MaterialCategory, MaterialVisibility } from "../../shared/material/types";
 import type { NoticeScope } from "../../shared/notice/api";
 import type { LessonChangeRequest } from "../../shared/lessonchange/types";
 import type { OnlineTestTakeStatus } from "../../shared/onlinetest/types";
@@ -18,6 +17,8 @@ import type {
   WeeklyTestGrid,
   WeeklyTestSaveBody,
 } from "../../shared/score/types";
+import type { QnaDetail, QnaSummary, QnaUploadUrl } from "../../shared/qna/types";
+import type { ReviewList } from "../../shared/review/types";
 
 export type StudentStatus = "ENROLLED" | "WITHDRAWN";
 export type ClassRoomStatus = "ACTIVE" | "CLOSED";
@@ -112,13 +113,22 @@ export interface LessonListItem {
   attendanceStatus: LessonAttendanceStatus;
 }
 
-export interface LessonDetail extends Omit<LessonListItem, "contentWritten" | "published"> {
-  videoUrl: string | null;
-  videoId: string | null;
+/**
+ * 선생님 화면용 영상 한 줄. 학생용과 달리 <b>원본 url이 온다</b> — 수정할 때 입력칸에
+ * 되돌려 넣어야 한다. embedUrl은 미리보기 iframe이 쓴다.
+ */
+export interface LessonVideoEdit {
+  url: string;
+  title: string | null;
   embedUrl: string | null;
+}
+
+export interface LessonDetail extends Omit<LessonListItem, "contentWritten" | "published"> {
+  videos: LessonVideoEdit[];
   content: string | null;
   keyPoints: string | null;
-  nextPreview: string | null;
+  homeworkNote: string | null;
+  clinicNote: string | null;
   publishedAt: string | null;
 }
 
@@ -272,10 +282,11 @@ export const updateLesson = (
     month: number;
     week: number;
     title: string;
-    videoUrl: string;
+    videos: { url: string; title: string | null }[];
     content: string;
     keyPoints: string;
-    nextPreview: string;
+    homeworkNote: string;
+    clinicNote: string;
   }>,
 ) => patch<LessonDetail>(`/teacher/lessons/${lessonId}`, body);
 
@@ -319,7 +330,7 @@ export interface PendingClinic {
   clinicDate: string;
   startTime: string;
   endTime: string;
-  /** 신청 인원. 수업의 재원 인원과 뜻이 다르다. */
+  /** 배정된 인원. 수업의 재원 인원과 뜻이 다르다. */
   studentCount: number;
 }
 
@@ -350,6 +361,28 @@ export const confirmAttendance = (lessonId: number, exceptions: AttendanceExcept
 export const listPendingAttendance = () =>
   get<PendingAttendance>("/teacher/attendance/pending");
 
+/** 주차 조회의 수업 한 줄. 확정된 것도 담긴다 — confirmed로 구분한다. */
+export interface WeekLesson {
+  lessonId: number;
+  classRoomId: number;
+  classRoomName: string;
+  lessonDate: string;
+  studentCount: number;
+  confirmed: boolean;
+}
+
+/**
+ * T-5 주차 조회. 클리닉은 T-13 목록(Clinic)과 같은 타입이다 —
+ * 같은 주차·같은 확정 판정이라 서버가 그대로 재사용한다.
+ */
+export interface WeekAttendance {
+  lessons: WeekLesson[];
+  clinics: Clinic[];
+}
+
+export const listWeekAttendance = (year: number, month: number, week: number) =>
+  get<WeekAttendance>("/teacher/attendance/week", { year, month, week });
+
 // ---------- 클리닉 (T-13) ----------
 
 export type ClinicStatus = "OPEN" | "CLOSED";
@@ -364,7 +397,12 @@ export interface Clinic {
   capacity: number | null;
   reservedCount: number;
   status: ClinicStatus;
+  /** 학생이 배정된 슬롯 전부가 확정됐는지(2026-09-01부터 슬롯 단위 확정 기준). */
   attendanceConfirmed: boolean;
+  /** 학생이 배정된 슬롯 수. 목록 배지의 분모다 — 전체 슬롯 수가 아니다. */
+  studentSlotCount: number;
+  /** 확정된 슬롯 수. 목록 배지의 분자다. */
+  confirmedSlotCount: number;
   /**
    * "8월 2주". 목록을 주차별로 묶는 데 쓴다.
    * <b>날짜로 여기서 다시 만들지 마라</b> — 학생 화면·수업·성적이 쓰는 주차 계산과 갈라진다.
@@ -384,10 +422,21 @@ export interface ClinicReservationRow {
    * 이미 약속된 시각을 말없이 바꾸면 학생이 헛걸음한다. 선생님이 보고 직접 처리한다.
    */
   outOfRange: boolean;
-  /** 학생 본인 신청인지 선생님 배정인지. "왜 여기 있냐"는 문의에 답하려면 필요하다. */
+  /**
+   * 선생님 배정인지 학생이 옮겨 온 것인지. "왜 여기 있냐"는 문의에 답하려면 필요하다.
+   * 학생 신청이 없어진 뒤(2026-09-01) false인 경로는 클리닉 이동 하나뿐이다.
+   */
   assignedByTeacher: boolean;
   attendStatus: AttendanceStatus | null;
   memo: string | null;
+}
+
+/** 도착 시각 슬롯 하나의 확정 상태. 출결은 슬롯(도착 시각) 단위로 따로 확정한다(2026-09-01부터). */
+export interface ClinicSlotState {
+  arrivalTime: string;
+  reservedCount: number;
+  /** 그 슬롯에 예약이 1명 이상이고 전원 확정됐는지. reservedCount === 0이면 항상 false다. */
+  confirmed: boolean;
 }
 
 export interface ClinicReservations {
@@ -399,6 +448,12 @@ export interface ClinicReservations {
   slots: string[];
   capacity: number | null;
   attendanceConfirmed: boolean;
+  /**
+   * Clinic.slots()와 실제 예약이 있는 시각의 합집합, 시각 오름차순.
+   * 시간대를 좁힌 뒤 범위 밖(outOfRange)으로 남은 예약의 시각도 여기 섞여 있을 수 있다 —
+   * 화면에서 빠뜨리면 그 학생을 확정할 방법이 사라진다.
+   */
+  slotStates: ClinicSlotState[];
   /** 도착 시각 → 이름 순으로 서버가 정렬해 준다. */
   students: ClinicReservationRow[];
 }
@@ -452,10 +507,15 @@ export const assignClinicStudents = (
 export const unassignClinicStudent = (clinicId: number, studentId: number) =>
   del<void>(`/teacher/clinics/${clinicId}/students/${studentId}`);
 
-export const confirmClinicAttendance = (clinicId: number, exceptions: AttendanceException[]) =>
+/** arrivalTime은 필수다 — 그 시각 예약만 확정된다. 다시 보내면 덮어쓴다(그게 수정이다). */
+export const confirmClinicAttendance = (
+  clinicId: number,
+  arrivalTime: string,
+  exceptions: AttendanceException[],
+) =>
   post<{ clinicId: number; confirmedAt: string; summary: AttendanceSummary }>(
     `/teacher/clinics/${clinicId}/attendance/confirm`,
-    { exceptions },
+    { arrivalTime, exceptions },
   );
 
 // ---------- 수업일 변경 (T-13) ----------
@@ -544,6 +604,7 @@ export interface SubmissionDetail {
   prevSubmissionId: number | null;
   /** 다음으로 볼 제출물. 제출한 것 전부를 이름순으로 훑는다. */
   nextSubmissionId: number | null;
+  canMarkNotDone: boolean;
 }
 
 export interface PendingHomework {
@@ -624,6 +685,7 @@ export interface GridColumn {
   resubmitTargetCount: number;
   /** 이미 내서 자동으로 ⭕가 된 수. 곧 선생님이 T-7에서 볼 사진·영상이 있는 수다. */
   resubmittedCount: number;
+  description: string | null;
   cells: GridCell[];
 }
 
@@ -668,11 +730,17 @@ export const getHomeworkGrid = (lessonId: number) =>
 export const saveHomeworkGrid = (body: HomeworkGridSaveBody) =>
   put<HomeworkGrid>("/teacher/homework-grid", body);
 
-/** 재제출 열기. dueAt을 생략하면 서버가 그 반의 다음 수업일 21:00으로 잡는다. */
-export const openResubmit = (homeworkId: number, dueAt: string | null) =>
+/**
+ * 재제출 열기. <b>dueAt은 필수다</b> — 서버 기본값(다음 수업일 21:00)을 없앴다.
+ * 화면에서만 필수로 두면 이 경로를 직접 치는 쪽에 기본값이 남아 규칙이 갈라진다.
+ */
+export const openResubmit = (
+  homeworkId: number,
+  body: { dueAt: string; title: string; description: string | null },
+) =>
   post<{ targetCount: number; dueAt: string }>(
     `/teacher/homeworks/${homeworkId}/resubmit-request`,
-    dueAt === null ? {} : { dueAt },
+    body,
   );
 
 /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */
@@ -684,6 +752,10 @@ export const listSubmissions = (homeworkId: number) =>
 
 export const getSubmission = (submissionId: number) =>
   get<SubmissionDetail>(`/teacher/submissions/${submissionId}`);
+
+/** 그 칸을 ❌로 되돌리고 사진·영상을 지운다. 되돌릴 수 없다. */
+export const markSubmissionNotDone = (submissionId: number) =>
+  post<void>(`/teacher/submissions/${submissionId}/mark-not-done`, undefined);
 
 // ---------- 시험 일정 (T-11) ----------
 
@@ -794,7 +866,7 @@ export interface OnlineTestResults {
      */
     clinicReflection: ClinicReflection;
   };
-  counts: { total: number; notStarted: number; inProgress: number; submitted: number };
+  counts: { total: number; notStarted: number; inProgress: number; submitted: number; offline: number };
   /** 제출자만으로 계산한다. 제출이 없으면 null. 선생님 화면에만 있는 값이다. */
   average: number | null;
   items: {
@@ -928,75 +1000,16 @@ export interface TeacherDashboard {
 
 export const getDashboard = () => get<TeacherDashboard>("/teacher/dashboard");
 
-// ---------- 자료실 (T-9) ----------
-
-export interface Material {
-  materialId: number;
-  title: string;
-  category: MaterialCategory;
-  fileName: string;
-  bytes: number | null;
-  visibility: MaterialVisibility;
-  /** PUBLIC이면 null이다. */
-  classRoomId: number | null;
-  classRoomName: string | null;
-  year: number;
-  month: number;
-  week: number;
-  createdAt: string;
-}
-
-export const listMaterials = (params: {
-  year?: number;
-  month?: number;
-  week?: number;
-  category?: MaterialCategory;
-  page?: number;
-}) => get<PageResponse<Material>>("/teacher/materials", params);
-
-/**
- * 확장자 허용 목록과 50MB 상한을 서버가 여기서 검사한다.
- * 응답의 contentType으로 PUT해야 서명이 맞는다.
- */
-export const issueMaterialUploadUrl = (body: { fileName: string; bytes: number }) =>
-  post<{ uploadUrl: string; s3Key: string; contentType: string }>(
-    "/teacher/materials/upload-url",
-    body,
-  );
-
-/**
- * 같은 파일을 여러 반에 주려면 <b>s3Key를 공유해 반마다 호출</b>한다.
- * S3에는 한 번만 올린다.
- */
-export const createMaterial = (body: {
-  title: string;
-  category: MaterialCategory;
-  s3Key: string;
-  fileName: string;
-  bytes: number | null;
-  classRoomId: number | null;
-  visibility: MaterialVisibility;
-  year: number;
-  month: number;
-  week: number;
-}) => post<Material>("/teacher/materials", body);
-
-/** 공개 범위와 파일은 못 바꾼다. 대상을 바꾸려면 지우고 다시 올린다. */
-export const updateMaterial = (
-  materialId: number,
-  body: Partial<{
-    title: string;
-    category: MaterialCategory;
-    year: number;
-    month: number;
-    week: number;
-  }>,
-) => patch<Material>(`/teacher/materials/${materialId}`, body);
-
-export const deleteMaterial = (materialId: number) =>
-  del<void>(`/teacher/materials/${materialId}`);
-
 // ---------- 공지 (T-10) ----------
+
+export type NoticeAudience = "ALL" | "STUDENT_ONLY" | "PARENT_ONLY";
+
+/** s3Key는 내려주지 않는다 — 다운로드는 별도 엔드포인트가 권한을 다시 확인한다. */
+export interface TeacherNoticeAttachment {
+  attachmentId: number;
+  fileName: string;
+  bytes: number;
+}
 
 /** publishedAt이 null이면 초안이다 — 학생·학부모에게 안 나간 글이다. */
 export interface TeacherNotice {
@@ -1010,8 +1023,10 @@ export interface TeacherNotice {
   studentId: number | null;
   studentName: string | null;
   pinned: boolean;
+  audience: NoticeAudience;
   publishedAt: string | null;
   createdAt: string;
+  attachments: TeacherNoticeAttachment[];
 }
 
 export const listTeacherNotices = (params: { page?: number }) =>
@@ -1020,6 +1035,13 @@ export const listTeacherNotices = (params: { page?: number }) =>
 export const getTeacherNotice = (noticeId: number) =>
   get<TeacherNotice>(`/teacher/notices/${noticeId}`);
 
+/** 등록용 첨부 값. s3Key는 업로드 URL 발급 응답에서 그대로 가져온다. */
+export interface NoticeAttachmentInput {
+  s3Key: string;
+  fileName: string;
+  bytes: number;
+}
+
 /** 만들면 초안이다. publish를 따로 호출해야 학생·학부모에게 보인다. */
 export const createNotice = (body: {
   title: string;
@@ -1027,6 +1049,8 @@ export const createNotice = (body: {
   scope: NoticeScope;
   classRoomId: number | null;
   pinned: boolean;
+  audience: NoticeAudience;
+  attachments: NoticeAttachmentInput[];
 }) => post<TeacherNotice>("/teacher/notices", body);
 
 export const updateNotice = (
@@ -1037,6 +1061,9 @@ export const updateNotice = (
     pinned: boolean;
     scope: NoticeScope;
     classRoomId: number | null;
+    audience: NoticeAudience;
+    /** 빼면(undefined) 기존 첨부를 그대로 둔다. 배열을 보내면 통째로 교체한다 — 빈 배열은 "전부 지운다"다. */
+    attachments: NoticeAttachmentInput[];
   }>,
 ) => patch<TeacherNotice>(`/teacher/notices/${noticeId}`, body);
 
@@ -1044,3 +1071,50 @@ export const publishNotice = (noticeId: number) =>
   post<TeacherNotice>(`/teacher/notices/${noticeId}/publish`);
 
 export const deleteNotice = (noticeId: number) => del<void>(`/teacher/notices/${noticeId}`);
+
+// ---------- T-15 질의응답 ----------
+
+export const fetchTeacherQnaList = (params: { classRoomId?: number; page?: number }) =>
+  get<PageResponse<QnaSummary>>("/teacher/qna", params);
+
+export const fetchTeacherQnaDetail = (postId: number) =>
+  get<QnaDetail>(`/teacher/qna/${postId}`);
+
+export const answerTeacherQna = (
+  postId: number,
+  body: { content: string; s3Keys: string[] },
+) => post<number>(`/teacher/qna/${postId}/comments`, body);
+
+/** 선생님은 본인 답글만 고친다. title·isPublic을 보내면 400이다. */
+export const updateTeacherQna = (id: number, body: { content: string }) =>
+  patch<void>(`/teacher/qna/${id}`, body);
+
+/** 질문을 지우면 답글과 사진이 함께 사라진다. */
+export const deleteTeacherQna = (id: number) => del<void>(`/teacher/qna/${id}`);
+
+export const issueTeacherQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
+  post<QnaUploadUrl>("/teacher/qna/photos/upload-url", body);
+
+// ---------- 수강 후기 ----------
+
+export const fetchTeacherReviews = (params: { classRoomId?: number; page?: number }) =>
+  get<ReviewList>("/teacher/reviews", params);
+
+/**
+ * 기간 안의 특정 요일에 클리닉을 한꺼번에 연다. dayOfWeek는 1=월 … 7=일이다.
+ * 이미 열려 있는 날짜와 skipDates는 건너뛰고 몇 건 만들었는지 돌려준다.
+ */
+export const bulkCreateClinics = (body: {
+  dayOfWeek: number;
+  from: string;
+  to: string;
+  startTime: string;
+  endTime: string;
+  capacity?: number | null;
+  memo?: string | null;
+  skipDates?: string[];
+}) =>
+  post<{ created: number; skipped: number; createdDates: string[] }>(
+    "/teacher/clinics/bulk",
+    body,
+  );

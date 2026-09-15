@@ -113,8 +113,16 @@ public class Homework extends BaseTimeEntity {
         return isGrid() && dueAt != null;
     }
 
-    public void openResubmit(OffsetDateTime dueAt) {
+    /**
+     * 재제출 열기. dueAt이 채워지는 순간부터 🔺·❌ 학생에게 제출 경로가 열린다.
+     *
+     * <p>제목·상세 내용을 함께 받는 이유는 <b>한 트랜잭션 안에서 같이 바뀌어야</b>
+     * 하기 때문이다. 따로 두면 선생님이 마감만 열고 설명을 못 적은 상태가 생긴다.
+     */
+    public void openResubmit(OffsetDateTime dueAt, String title, String description) {
         this.dueAt = dueAt;
+        this.title = title;
+        this.description = description;
     }
 
     /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 호출부가 먼저 409로 막는다. */

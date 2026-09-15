@@ -29,6 +29,13 @@ public record ParentHomeResponse(
     NextExamResponse nextExam,
     LocalDate nextLessonDate,
     @JsonFormat(pattern = "HH:mm") LocalTime nextLessonTime,
+    /**
+     * 다음 수업까지 며칠. 없으면 null, 오늘이면 0이다(2026-09-10 추가).
+     *
+     * <p><b>서버가 센다.</b> 프론트가 nextLessonDate로 계산하면 기기 시계에 따라
+     * 학생 화면과 하루 어긋난다. NextClinicResponse.dDay와 같은 기준(KST 오늘)이다.
+     */
+    Integer nextLessonDDay,
     HomeNoticesResponse notices,
     long pendingHomeworkCount,
     NextClinicResponse nextClinic,

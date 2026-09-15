@@ -6,17 +6,18 @@ import type {
   HomeworkResult,
   SubmissionStatus,
 } from "../../shared/homework/types";
-import type { MaterialCategory } from "../../shared/material/types";
+import type { MyReview } from "../../shared/review/types";
 import type { NoticeSummary } from "../../shared/notice/api";
 import type { OnlineTestResult, OnlineTestTakeStatus } from "../../shared/onlinetest/types";
 import type { ExamType, StudentExamSchedule, StudentScoreData } from "../../shared/score/types";
 import type { LessonChangeRequest, LessonSlot } from "../../shared/lessonchange/types";
+import type { QnaDetail, QnaSummary, QnaUploadUrl } from "../../shared/qna/types";
 
 export type ReservationStatus = "RESERVED" | "CANCELED" | "MOVED";
 export interface MyReservation {
   reservationId: number;
   status: ReservationStatus;
-  /** 내가 고른 도착 시각. "17:00" 형식이다. */
+  /** 배정받은 도착 시각. "17:00" 형식이고 변경으로 바꿀 수 있다. */
   arrivalTime: string;
   /**
    * null이면 결석이 아니라 <b>아직 출석 확정 전</b>이다.
@@ -65,9 +66,6 @@ interface ReservationResult {
   status: ReservationStatus;
 }
 
-export const reserveClinic = (clinicId: number, arrivalTime: string) =>
-  post<ReservationResult>(`/student/clinics/${clinicId}/reservation`, { arrivalTime });
-
 /**
  * 도착 시각 변경 · 다른 클리닉으로 이동. <b>선생님 승인이 없다</b> — 즉시 반영된다.
  * targetClinicId를 null로 두면 같은 클리닉 안에서 시각만 바꾼다.
@@ -110,6 +108,7 @@ export const requestLessonChange = (body: {
 export interface StudentHomeworkListItem {
   homeworkId: number;
   title: string;
+  description: string | null;
   classRoomName: string;
   kind: HomeworkKind;
   /** GRID 열은 어느 수업 숙제인지 보여준다. ONLINE은 수업이 없을 수 있다. */
@@ -159,8 +158,19 @@ export interface StudentHomeworkDetail {
   resubmitRequired: boolean;
 }
 
-export const listMyHomeworks = (params: { status?: SubmissionStatus; page?: number }) =>
-  get<PageResponse<StudentHomeworkListItem>>("/student/homeworks", params);
+/**
+ * year·month는 <b>둘 다 보내야</b> 달 필터가 걸린다. 서버가 수업일 기준으로 거른다 —
+ * 받아 온 뒤 프론트에서 거르면 한 페이지(20건) 안에서만 걸러져 지난 달 숙제가 사라진다.
+ *
+ * <p>달을 걸면 수업에 안 붙은 ONLINE 숙제(방학 과제)는 빠진다. 어느 달에도 속하지 않는다.
+ */
+export const listMyHomeworks = (params: {
+  status?: SubmissionStatus;
+  year?: number;
+  month?: number;
+  page?: number;
+}) => get<PageResponse<StudentHomeworkListItem>>("/student/homeworks", params);
+
 
 export const getMyHomework = (homeworkId: number) =>
   get<StudentHomeworkDetail>(`/student/homeworks/${homeworkId}`);
@@ -208,6 +218,21 @@ export const submitHomework = (homeworkId: number) =>
     photoCount: number;
   }>(`/student/homeworks/${homeworkId}/submit`);
 
+export interface StudentHomeworkNote {
+  lessonId: number;
+  lessonDate: string;
+  classRoomName: string;
+  weekLabel: string;
+  homeworkNote: string;
+}
+
+export async function listMyHomeworkNotes(): Promise<StudentHomeworkNote[]> {
+  // 새 배열 필드는 ?? []로 받는다. 계약상 항상 배열이어도,
+  // 계약을 어긴 쪽이 화면을 통째로 무너뜨리게 두지 마라
+  const data = await get<StudentHomeworkNote[]>("/student/homeworks/notes");
+  return data ?? [];
+}
+
 // ---------- 내 정보 (S-7 상단) ----------
 
 export interface StudentMe {
@@ -234,17 +259,27 @@ export interface StudentLessonListItem {
   homeworkTitle: string | null;
 }
 
+/**
+ * 수업 영상 한 줄. title은 비어 있을 수 있고, 그때 화면이 "영상 N"으로 채운다.
+ * videoId는 썸네일용이라 재생목록 링크면 null이다 — 그때도 embedUrl은 있다.
+ */
+export interface LessonVideo {
+  title: string | null;
+  videoId: string | null;
+  embedUrl: string | null;
+}
+
 export interface StudentLessonDetail {
   lessonId: number;
   lessonDate: string;
   title: string | null;
   classRoomName: string;
-  /** null이면 영상이 등록되지 않은 수업이다. 프론트는 영상 영역을 숨긴다. */
-  videoId: string | null;
-  embedUrl: string | null;
+  /** 수업 영상 목록. 비어 있으면 화면이 영상 영역을 숨긴다. */
+  videos: LessonVideo[];
   content: string | null;
   keyPoints: string | null;
-  nextPreview: string | null;
+  homeworkNote: string | null;
+  clinicNote: string | null;
   homework: {
     homeworkId: number;
     title: string;
@@ -283,36 +318,6 @@ export const getMyScores = () => get<StudentScoreData>("/student/scores");
 export const listMyExamSchedules = () =>
   get<StudentExamSchedule[]>("/student/exam-schedules");
 
-// ---------- 자료실 (S-8) ----------
-
-/**
- * 자료실은 <b>학생 전용</b>이다. 학부모 화면에 같은 목록을 붙이지 마라.
- * s3Key는 내려오지 않는다 — 다운로드는 별도 호출로 presigned URL을 받는다.
- */
-export interface StudentMaterial {
-  materialId: number;
-  title: string;
-  category: MaterialCategory;
-  fileName: string;
-  bytes: number | null;
-  year: number;
-  month: number;
-  week: number;
-  createdAt: string;
-}
-
-export const listMyMaterials = (params: { category?: MaterialCategory; page?: number }) =>
-  get<PageResponse<StudentMaterial>>("/student/materials", params);
-
-/**
- * 유효기간이 5분이라 <b>받은 즉시 이동</b>시킨다. 목록에 미리 담아두면 전부 만료된다.
- * 목록에 없는 materialId로 호출하면 403이다.
- */
-export const getMaterialDownloadUrl = (materialId: number) =>
-  get<{ downloadUrl: string; fileName: string; expiresIn: number }>(
-    `/student/materials/${materialId}/download-url`,
-  );
-
 // ---------- 홈 (S-1) ----------
 
 /**
@@ -334,6 +339,8 @@ export interface StudentHome {
     scopeNote: string | null;
     dDay: number;
   } | null;
+  /** 시각은 시간대 시작이 아니라 <b>학생이 배정받은 도착 시각</b>이다. */
+  nextClinic: { clinicId: number; clinicDate: string; arrivalTime: string; dDay: number } | null;
   /** 마감 지난 미제출도 들어 있다. 마감 이른 순이다. */
   currentHomeworks: {
     homeworkId: number;
@@ -351,10 +358,12 @@ export interface StudentHome {
     lessonId: number;
     lessonDate: string;
     title: string | null;
+    /** 첫 영상. 홈 카드는 하나만 쓰고 개수는 videoCount가 알린다. */
     videoId: string | null;
     embedUrl: string | null;
+    videoCount: number;
     content: string | null;
-    nextPreview: string | null;
+    homeworkNote: string | null;
   } | null;
   /** 학부모 홈과 같은 블록이다. recent는 배너에 펼치는 상단 몇 건. */
   notices: { totalCount: number; recent: NoticeSummary[] };
@@ -405,3 +414,46 @@ export const submitOnlineTest = (testId: number) =>
 
 export const getOnlineTestResult = (testId: number) =>
   get<OnlineTestResult>(`/student/online-tests/${testId}/result`);
+
+// ---------- S-9 질의응답 ----------
+
+export const fetchQnaList = (params: { classRoomId?: number; page?: number }) =>
+  get<PageResponse<QnaSummary>>("/student/qna", params);
+
+export const fetchQnaDetail = (postId: number) =>
+  get<QnaDetail>(`/student/qna/${postId}`);
+
+export const createQna = (body: {
+  classRoomId: number;
+  title: string;
+  content: string;
+  isPublic: boolean;
+  s3Keys: string[];
+}) => post<number>("/student/qna", body);
+
+export const answerQna = (postId: number, body: { content: string; s3Keys: string[] }) =>
+  post<number>(`/student/qna/${postId}/comments`, body);
+
+/** 질문과 답글 공통이다. 답글이면 title·isPublic을 빼야 400이 안 난다. */
+export const updateQna = (
+  id: number,
+  body: { title?: string; content: string; isPublic?: boolean },
+) => patch<void>(`/student/qna/${id}`, body);
+
+export const deleteQna = (id: number) => del<void>(`/student/qna/${id}`);
+
+export const issueQnaUploadUrl = (body: { contentType: string; bytes: number }) =>
+  post<QnaUploadUrl>("/student/qna/photos/upload-url", body);
+
+// ---------- 수강 후기 ----------
+
+/** 아직 후기를 안 썼으면 data가 null이다. 404가 아니다 */
+export const fetchMyReview = () => get<MyReview | null>("/student/reviews/me");
+
+export const createReview = (body: { rating: number; content: string }) =>
+  post<MyReview>("/student/reviews", body);
+
+export const updateReview = (body: { rating: number; content: string }) =>
+  patch<MyReview>("/student/reviews/me", body);
+
+export const deleteReview = () => del<void>("/student/reviews/me");

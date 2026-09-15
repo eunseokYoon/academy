@@ -2,6 +2,7 @@ package com.njwenglish.repository;
 
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.enums.SubmissionStatus;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -89,6 +90,18 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      *
      * <p>lesson은 반드시 LEFT JOIN이다. INNER로 들어가면 lesson_id가 null인 ONLINE 숙제가
      * 목록에서 통째로 사라진다 — 에러도 안 난다.
+     *
+     * <p>from·to는 화면의 달 필터다. <b>null이면 범위를 걸지 않는다</b> — 안 보내면 지금까지와
+     * 똑같이 전부 내려온다. 범위를 걸면 lessonDate가 null인 ONLINE 숙제(방학 과제처럼 수업에
+     * 안 붙은 것)는 비교가 NULL이 되어 빠진다. 의도한 동작이다 — 어느 달에도 속하지 않으므로
+     * "전체 월"에서만 보인다.
+     *
+     * <p>{@code CAST(:from AS date) IS NULL}의 캐스팅을 빼지 마라. 42P18로 이 목록 전체가
+     * 500이 된다 — 자세한 이유는 {@link #findOpenByStudent} 주석에 있다.
+     *
+     * <p>거르는 기준은 <b>lessonDate이지 lessons.year·month가 아니다.</b> 그 둘은
+     * changeWeek로 따로 고칠 수 있어 날짜와 어긋날 수 있는데, 화면은 lessonDate로 묶는다 —
+     * 기준이 갈리면 8월을 골랐는데 7월 날짜 그룹이 뜬다.
      */
     @Query(value = """
         SELECT s FROM Submission s
@@ -97,6 +110,8 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         LEFT JOIN FETCH h.lesson l
         WHERE s.student.id = :studentId
           AND (:status IS NULL OR CAST(s.status AS string) = :status)
+          AND (CAST(:from AS date) IS NULL OR l.lessonDate >= :from)
+          AND (CAST(:to AS date) IS NULL OR l.lessonDate <= :to)
         ORDER BY CASE WHEN (h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
                             AND h.dueAt IS NOT NULL
                             AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
@@ -116,11 +131,17 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
         """,
         countQuery = """
         SELECT COUNT(s) FROM Submission s
+        JOIN s.homework h
+        LEFT JOIN h.lesson l
         WHERE s.student.id = :studentId
           AND (:status IS NULL OR CAST(s.status AS string) = :status)
+          AND (CAST(:from AS date) IS NULL OR l.lessonDate >= :from)
+          AND (CAST(:to AS date) IS NULL OR l.lessonDate <= :to)
         """)
     Page<Submission> findByStudent(@Param("studentId") Long studentId,
                                    @Param("status") String status,
+                                   @Param("from") LocalDate from,
+                                   @Param("to") LocalDate to,
                                    Pageable pageable);
 
     /**
@@ -280,9 +301,12 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * (미제출 독려 발송 수단이 범위 밖이다). "최근 N일" 같은 기준을 넣으면 그 밖의 미제출이
      * 조용히 없는 일이 된다.
      *
-     * <p>파라미터로 열어 두지 않은 이유가 하나 더 있다. {@code (:from IS NULL OR h.dueAt >= :from)}에
-     * null을 넘기면 PostgreSQL이 파라미터 타입을 추론하지 못해 42P18로 실패한다
-     * (Short·LocalDate와 달리 OffsetDateTime은 통하지 않는다).
+     * <p>파라미터로 열어 두지 않은 이유가 하나 더 있다. {@code (:from IS NULL OR h.dueAt >= :from)}은
+     * PostgreSQL에서 42P18(could not determine data type)로 실패한다. Hibernate가 {@code :from}을
+     * 파라미터 <b>둘로</b> 전개하는데({@code $1 is null or ... >= $2}) 앞쪽은 타입 단서가 없어서다.
+     * <b>날짜·시각은 값이 있을 때 터진다</b> — null일 때는 드라이버가 타입을 실어 보내 통과하므로
+     * "안 보내면 되던" 필터가 값을 고르는 순간 500이 된다. 쓰려면 {@code CAST(:from AS date)}처럼
+     * IS NULL 쪽을 캐스팅해라(Short·String은 캐스팅 없이도 통한다).
      *
      * <p>정렬은 마감 오름차순이라 <b>가장 오래 밀린 것이 맨 위</b>다. S-2 목록과 같은 순서다.
      *

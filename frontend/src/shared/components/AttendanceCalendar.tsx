@@ -27,8 +27,7 @@ interface Props {
  * 그러면 클리닉만 있는 날은 색을 입힐 곳이 없어 점 같은 별도 표시로 밀려난다. 지금은
  * 칸을 비워 두고 그 안에 일정마다 칩을 넣는다 — 수업도 클리닉도 같은 색·같은 기호다.
  *
- * <p>일정이 없는 날은 아무 칩도 없다. homeworkRate가 null이면 하단 색띠를 그리지 않는다 —
- * Phase 5 전이거나 그날 숙제가 없던 날이다.
+ * <p>일정이 없는 날은 아무 칩도 없다.
  */
 export function AttendanceCalendar({ data, onPrev, onNext, clinics = [] }: Props) {
   const byDate = useMemo(() => {
@@ -105,7 +104,6 @@ export function AttendanceCalendar({ data, onPrev, onNext, clinics = [] }: Props
                 day={day}
                 lesson={entry?.status}
                 clinics={clinicsByDate.get(key) ?? []}
-                homeworkRate={entry?.homeworkRate ?? null}
               />
             );
           })}
@@ -145,7 +143,16 @@ function MonthButton({
  */
 function SummaryGrid({ data }: { data: CalendarData }) {
   const items = [
-    { label: "출석", value: data.summary.present, color: "text-emerald-600" },
+    // 대체 등원은 출석에 합친다(2026-09-01 확정). 4칸을 5칸으로 늘리면 360px에서 뭉개지고,
+    // 학부모가 여기서 보는 건 "몇 번 빠졌나"라 온 날은 한 칸이면 된다.
+    // 어느 날이 대체 등원이었는지는 캘린더 칸이 라벨로 그대로 보여준다
+    {
+      label: "출석",
+      // 배포 순서가 backend → web이지만, 옛 응답에 makeup이 없으면 NaN이 찍힌다.
+      // 계약상 항상 있어도 어긴 쪽이 화면을 망가뜨리게 두지 않는다(7-3)
+      value: data.summary.present + (data.summary.makeup ?? 0),
+      color: "text-emerald-600",
+    },
     { label: "지각", value: data.summary.late, color: "text-amber-600" },
     { label: "결석", value: data.summary.absent, color: "text-red-600" },
     { label: "병·공결", value: data.summary.sick + data.summary.excused, color: "text-sky-600" },
@@ -220,12 +227,10 @@ function DayCell({
   day,
   lesson,
   clinics,
-  homeworkRate,
 }: {
   day: number;
   lesson?: DayStatus;
   clinics: ClinicEntry[];
-  homeworkRate: number | null;
 }) {
   const empty = lesson === undefined && clinics.length === 0;
 
@@ -256,25 +261,6 @@ function DayCell({
           <SessionChip key={index} kind="클리닉" status={clinic.status} />
         ))}
       </div>
-
-      {/*
-        null이면 띠를 그리지 않는다. 0은 빨강이라 "숙제 없던 날"과 구분돼야 한다.
-        안 채워진 쪽을 회색으로 바꾼 이유는 칸 배경이 흰색이 됐기 때문이다 —
-        예전처럼 반투명 흰색으로 두면 띠가 통째로 안 보인다.
-      */}
-      {homeworkRate !== null && (
-        <span
-          // 칸 바닥이 아니라 칩 바로 아래다. 바닥에 붙이면 일정이 하나뿐인 날에
-          // 칩과 띠 사이가 벌어져 어느 날 것인지 모를 표시처럼 떠 보인다
-          className="mt-1 block h-1 w-full rounded-full"
-          style={{
-            background: `linear-gradient(90deg,
-              ${homeworkRate >= 50 ? "#10b981" : "#ef4444"} ${homeworkRate}%,
-              #e2e8f0 ${homeworkRate}%)`,
-          }}
-          aria-label={`숙제 ${homeworkRate}%`}
-        />
-      )}
     </div>
   );
 }

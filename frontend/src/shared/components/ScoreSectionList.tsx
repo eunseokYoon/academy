@@ -1,5 +1,5 @@
 import type { StudentScoreData, StudentScoreSection } from "../score/types";
-import { AccuracyChart } from "./AccuracyChart";
+import { CorrectCountChart } from "./CorrectCountChart";
 import { SectionHead, TintBlock } from "./Section";
 import { ScoreResultBadge, ScoreValueText } from "./ScoreValue";
 
@@ -23,7 +23,7 @@ export function ScoreSectionList({ data }: { data: StudentScoreData }) {
       {/*
         빨강이 아니라 주황이다. 빨강은 이 앱에서 "결석·위험" 하나만 뜻하기로 해 뒀고,
         재시험 예정은 위험이 아니라 <b>학생이 아직 처리 안 한 것</b>이다 —
-        안 낸 숙제와 같은 뜻이라 같은 색을 쓴다. tailwind.config의 accent 주석을 봐라.
+        미완료 숙제와 같은 뜻이라 같은 색을 쓴다. tailwind.config의 accent 주석을 봐라.
       */}
       {data.retestScheduled.length > 0 && (
         <section>
@@ -65,7 +65,9 @@ function Section({ section }: { section: StudentScoreSection }) {
     <section>
       <SectionHead tone="brand" title={section.label} />
       <TintBlock tone="neutral" className="space-y-3 p-4 [&>*+*]:border-0">
-        {section.chart && <AccuracyChart items={section.items} />}
+        {section.chartKind !== "NONE" && (
+          <CorrectCountChart items={section.items} chartKind={section.chartKind} />
+        )}
       {/*
         주차가 쌓이면 종류마다 수십 줄이 되어 화면이 끝없이 길어진다. 그래서 구획
         안에서만 스크롤한다. 높이는 5줄보다 조금 크게 잡아 다음 줄이 반쯤 걸치게

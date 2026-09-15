@@ -10,6 +10,26 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * <b>audience 조건은 넷 모두에 있어야 한다.</b> 목록·상세만 막으면 HomeService가
+ * 홈 배너에 쓰는 countForStudent·findRecentForStudent로 그대로 샌다.
+ * findForStudent 목록은 본문과 countQuery가 짝이라 실제로 다섯 군데다.
+ *
+ * <p>필터가 <b>양방향</b>이다(2026-09-10). 예전에는 학부모 쪽만 막았는데
+ * PARENT_ONLY가 생겨서 학생 쪽도 같은 자리에서 막아야 한다.
+ *
+ * <p>판정은 `NoticeService.parentView()` 하나이고 그건
+ * `CurrentUser.get().role() == PARENT`다. <b>studentId의 유무로 판정하지 마라</b> —
+ * 학생도 자기 studentId를 붙여 부를 수 있어서 「학생만 보기」 공지가 학생에게 사라진다.
+ *
+ * <p>조건을 n에 직접 건다. n.classRoom.id 같은 경로를 새로 만들지 마라 —
+ * 암묵적 INNER JOIN이 생겨 다른 scope의 공지가 통째로 사라진다.
+ *
+ * <p><b>정렬에 scope 절이 맨 앞에 있다</b>(2026-09-10). scope = STUDENT는 수업일·클리닉
+ * 변경이 자동 발행한 공지이고, 선생님이 직접 쓴 안내가 그 아래 묻히면 안 된다.
+ * 고정(pinned)은 각 덩어리 안에서 위로 온다 — 자동 공지가 고정되는 경로는 없다.
+ * 목록과 findRecentForStudent가 <b>같은 정렬</b>이어야 홈 배너와 공지 탭의 첫 줄이 같다.
+ */
 public interface NoticeRepository extends JpaRepository<Notice, Long> {
 
     /**
@@ -27,7 +47,8 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
      * <p><b>studentId 분기는 대상 그 자체다.</b> 호출부가 넘기는 값이 권한 검증을 통과한
      * 학생인지 반드시 확인해라 — 아무 숫자나 들어오면 남의 개인 공지가 보인다.
      *
-     * <p>정렬은 pinned DESC, publishedAt DESC다. 고정 공지가 항상 위에 온다.
+     * <p>정렬은 scope = STUDENT(자동 발행)가 맨 아래로 밀리고, pinned는 그 덩어리 안에서
+     * 위로 온다 — 순서는 클래스 주석을 봐라.
      *
      * <p>classRoomIds는 빈 컬렉션이면 안 된다. 호출부에서 더미 값을 넣는다.
      */
@@ -37,7 +58,11 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-        ORDER BY n.pinned DESC, n.publishedAt DESC, n.id DESC
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
+        ORDER BY CASE WHEN n.scope = 'STUDENT' THEN 1 ELSE 0 END,
+                 n.pinned DESC, n.publishedAt DESC, n.id DESC
         """,
         countQuery = """
         SELECT COUNT(n) FROM Notice n
@@ -45,9 +70,13 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         """)
     Page<Notice> findForStudent(@Param("studentId") Long studentId,
                                 @Param("classRoomIds") Collection<Long> classRoomIds,
+                                @Param("parentView") boolean parentView,
                                 Pageable pageable);
 
     /** P-1·S-1 홈의 공지 개수. 목록과 같은 조건이어야 숫자와 목록이 어긋나지 않는다. */
@@ -57,9 +86,13 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         """)
     long countForStudent(@Param("studentId") Long studentId,
-                         @Param("classRoomIds") Collection<Long> classRoomIds);
+                         @Param("classRoomIds") Collection<Long> classRoomIds,
+                         @Param("parentView") boolean parentView);
 
     /** 상세. 목록과 같은 조건이라 대상이 아닌 공지는 조회되지 않는다(404). */
     @Query("""
@@ -69,10 +102,14 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         WHERE n.id = :noticeId
           AND n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
         """)
     Optional<Notice> findForStudent(@Param("noticeId") Long noticeId,
                                     @Param("studentId") Long studentId,
-                                    @Param("classRoomIds") Collection<Long> classRoomIds);
+                                    @Param("classRoomIds") Collection<Long> classRoomIds,
+                                    @Param("parentView") boolean parentView);
 
     /**
      * T-10 목록. 초안까지 전부 보여준다 — 선생님이 작성 중인 글을 찾을 곳이 여기뿐이다.
@@ -101,9 +138,14 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
         LEFT JOIN n.student s
         WHERE n.publishedAt IS NOT NULL
           AND (n.scope = 'ALL' OR c.id IN :classRoomIds OR s.id = :studentId)
-        ORDER BY n.pinned DESC, n.publishedAt DESC, n.id DESC
+          AND (n.audience = 'ALL'
+               OR (:parentView = true  AND n.audience = 'PARENT_ONLY')
+               OR (:parentView = false AND n.audience = 'STUDENT_ONLY'))
+        ORDER BY CASE WHEN n.scope = 'STUDENT' THEN 1 ELSE 0 END,
+                 n.pinned DESC, n.publishedAt DESC, n.id DESC
         """)
     List<Notice> findRecentForStudent(@Param("studentId") Long studentId,
                                       @Param("classRoomIds") Collection<Long> classRoomIds,
+                                      @Param("parentView") boolean parentView,
                                       Pageable pageable);
 }

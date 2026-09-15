@@ -1,9 +1,11 @@
 package com.njwenglish.controller.teacher;
 
 import com.njwenglish.common.response.ApiResponse;
-import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
+import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
+import com.njwenglish.dto.clinic.ClinicBulkCreateRequest;
+import com.njwenglish.dto.clinic.ClinicBulkCreateResponse;
 import com.njwenglish.dto.clinic.ClinicCreateRequest;
 import com.njwenglish.dto.clinic.ClinicCreateResponse;
 import com.njwenglish.dto.clinic.ClinicListItemResponse;
@@ -55,6 +57,16 @@ public class TeacherClinicController {
         return ApiResponse.ok(clinicService.listForTeacher(year, month, week, status));
     }
 
+    /** 기간 안의 특정 요일에 한꺼번에 연다. 충돌하는 날짜는 건너뛰고 몇 건 만들었는지 돌려준다. */
+    // 클래스 매핑이 /api/teacher다. "/bulk"만 쓰면 /api/teacher/bulk가 되고,
+    // 프론트가 부르는 /api/teacher/clinics/bulk는 PATCH·DELETE /clinics/{clinicId}에
+    // clinicId="bulk"로 매칭돼 POST만 없는 상태가 된다 — 404가 아니라 405로 나온다
+    @PostMapping("/clinics/bulk")
+    public ApiResponse<ClinicBulkCreateResponse> bulkCreate(
+        @Valid @RequestBody ClinicBulkCreateRequest request) {
+        return ApiResponse.ok(clinicService.bulkCreate(request));
+    }
+
     @PostMapping("/clinics")
     public ApiResponse<ClinicCreateResponse> create(
         @Valid @RequestBody ClinicCreateRequest request) {
@@ -92,11 +104,11 @@ public class TeacherClinicController {
         return ApiResponse.ok();
     }
 
-    /** T-5와 같은 방식이다. 안 온 학생만 보낸다. */
+    /** T-5와 같은 방식이다. 안 온 학생만 보낸다. 단, <b>도착 시각 슬롯 하나</b>만 확정한다. */
     @PostMapping("/clinics/{clinicId}/attendance/confirm")
     public ApiResponse<ClinicAttendanceConfirmResponse> confirmAttendance(
         @PathVariable Long clinicId,
-        @Valid @RequestBody AttendanceConfirmRequest request) {
+        @Valid @RequestBody ClinicAttendanceConfirmRequest request) {
         return ApiResponse.ok(clinicReservationService.confirmAttendance(clinicId, request));
     }
 }

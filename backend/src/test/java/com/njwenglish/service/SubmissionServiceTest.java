@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -16,9 +18,11 @@ import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.homework.HomeworkCountsResponse;
+import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
+import com.njwenglish.dto.homework.ParentSubmissionPhotosResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
 import com.njwenglish.dto.homework.SubmissionListItemResponse;
@@ -30,8 +34,10 @@ import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
+import com.njwenglish.entity.SubmissionPhoto;
 import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
+import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
@@ -68,6 +74,8 @@ class SubmissionServiceTest {
     private StudentAccessGuard studentAccessGuard;
     @Mock
     private PresignedUrlProvider presignedUrlProvider;
+    @Mock
+    private LessonRepository lessonRepository;
 
     private SubmissionService submissionService;
 
@@ -87,7 +95,7 @@ class SubmissionServiceTest {
 
         submissionService = new SubmissionService(submissionRepository, photoRepository,
             homeworkService, studentAccessGuard, presignedUrlProvider,
-            new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"));
+            new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"), lessonRepository);
         Fixtures.login(Fixtures.studentUser(10L));
     }
 
@@ -275,7 +283,7 @@ class SubmissionServiceTest {
     void lateGridResubmissionStillResolves() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(PAST_DUE);
+        column.openResubmit(PAST_DUE, "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.NOT_DONE, null);
 
@@ -357,7 +365,7 @@ class SubmissionServiceTest {
         // 판정은 항상 이 학생 본인의 result여야 한다.
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.DONE, null);
 
@@ -376,7 +384,7 @@ class SubmissionServiceTest {
     void uploadUrlAllowedForResubmitTarget() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.NOT_DONE, null);
 
@@ -396,7 +404,7 @@ class SubmissionServiceTest {
     void uploadUrlAllowedForResubmitTargetWithPartialResult() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(HomeworkResult.PARTIAL, (short) 60);
 
@@ -468,7 +476,7 @@ class SubmissionServiceTest {
     void submissionsOfKeepsResubmissionResolvedGridSubmission() {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission resolved = Fixtures.submission(9L, column, Fixtures.student(88L, "고연준"));
         resolved.grade(HomeworkResult.NOT_DONE, null);
         resolved.submit(OffsetDateTime.now(), false);
@@ -497,23 +505,24 @@ class SubmissionServiceTest {
         given(studentAccessGuard.requireAccessible(999L))
             .willThrow(new BusinessException(ErrorCode.STUDENT_NOT_ACCESSIBLE));
 
-        assertThatThrownBy(() -> submissionService.childHomeworks(999L, null, null))
+        assertThatThrownBy(() -> submissionService.childHomeworks(999L, null, null, null, null))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.STUDENT_NOT_ACCESSIBLE);
 
         // 권한 검증이 첫 줄이라 조회 자체가 일어나지 않는다
-        verify(submissionRepository, never()).findByStudent(anyLong(), any(), any());
+        verify(submissionRepository, never()).findByStudent(anyLong(), any(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("학부모 응답에는 사진·피드백·숙제 내용이 없다")
-    void 학부모_응답에는_사진과_피드백이_없다() {
+    @DisplayName("학부모 응답에는 description과 video가 없다")
+    void 학부모_응답에는_description과_video가_없다() {
         // 학생 DTO를 재사용하면 그대로 새어 나간다. 필드 목록 자체를 고정한다
+        // photoCount는 2026-09-10에 추가했지만 description·video는 아직 없다
         assertThat(Arrays.stream(ParentHomeworkResponse.class.getRecordComponents())
             .map(RecordComponent::getName))
             .containsExactly("homeworkId", "title", "classRoomName", "kind", "lessonDate",
                 "result", "completionRate", "resolvedByResubmission", "dueAt",
-                "status", "isLate");
+                "status", "isLate", "photoCount");
     }
 
     @Test
@@ -529,21 +538,130 @@ class SubmissionServiceTest {
 
         given(studentAccessGuard.requireAccessible(88L))
             .willReturn(Fixtures.student(88L, "고연준"));
-        given(submissionRepository.findByStudent(eq(88L), any(), any()))
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
             .willReturn(new PageImpl<>(List.of(cell)));
 
         PageResponse<ParentHomeworkResponse> response =
-            submissionService.childHomeworks(88L, null, PageRequest.of(0, 20));
+            submissionService.childHomeworks(88L, null, null, null, PageRequest.of(0, 20));
 
         ParentHomeworkResponse item = response.items().get(0);
         assertThat(item.title()).isEqualTo("독해 5-8");
         assertThat(item.result()).isEqualTo(HomeworkResult.PARTIAL);
         assertThat(item.completionRate()).isEqualTo((short) 50);
         assertThat(item.lessonDate()).isEqualTo(LocalDate.of(2026, 7, 29));
-        // 학부모 DTO에는 사진·피드백·숙제 내용 필드가 아예 없다
+        // 학부모 DTO에는 숙제 내용·피드백·영상이 없다. 사진은 2026-09-10에 열었다
         assertThat(ParentHomeworkResponse.class.getRecordComponents())
             .extracting(RecordComponent::getName)
-            .doesNotContain("photos", "photoCount", "thumbnailUrl", "feedback", "description");
+            .doesNotContain("photos", "thumbnailUrl", "feedback", "description", "video");
+    }
+
+    @Test
+    @DisplayName("학부모가 자녀의 숙제 사진을 본다")
+    void 학부모가_자녀_사진을_본다() {
+        ClassRoom classRoom = ClassRoom.create(Fixtures.teacherEntity(1L),
+            "동성고1 수요일반", "HK7F2Q", null);
+        ReflectionTestUtils.setField(classRoom, "id", 3L);
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "숙제", (short) 0);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(88L, "고연준"));
+        cell.submit(OffsetDateTime.now(), false);
+
+        given(studentAccessGuard.requireAccessible(88L))
+            .willReturn(Fixtures.student(88L, "고연준"));
+        given(submissionRepository.findByHomeworkAndStudent(700L, 88L))
+            .willReturn(java.util.Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(java.util.List.of(
+                SubmissionPhoto.of(cell, "submissions/11/1.webp", (short) 0, 100)));
+        given(presignedUrlProvider.readUrl("submissions/11/1.webp"))
+            .willReturn("https://s3/1.webp");
+
+        ParentSubmissionPhotosResponse response =
+            submissionService.childSubmissionPhotos(88L, 700L);
+
+        assertThat(response.photos()).hasSize(1);
+        assertThat(response.photos().get(0).url()).isEqualTo("https://s3/1.webp");
+    }
+
+    @Test
+    @DisplayName("남의 자녀 사진은 403이다")
+    void 남의_자녀_사진은_403이다() {
+        given(studentAccessGuard.requireAccessible(99L))
+            .willThrow(new BusinessException(ErrorCode.STUDENT_NOT_ACCESSIBLE));
+
+        assertThatThrownBy(() -> submissionService.childSubmissionPhotos(99L, 700L))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.STUDENT_NOT_ACCESSIBLE);
+    }
+
+
+    // ---------- 달 필터 (S-2 · P-3) ----------
+
+    @Test
+    @DisplayName("연·월을 주면 그 달 1일~말일의 수업일 범위로 조회한다")
+    void 연월을_주면_그_달_범위로_조회한다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        submissionService.myHomeworks(null, 2026, 2, PageRequest.of(0, 20));
+
+        // 말일은 달마다 다르다. 28을 박아 두면 31일 수업의 숙제가 사라진다
+        verify(submissionRepository).findByStudent(eq(88L), eq(null),
+            eq(LocalDate.of(2026, 2, 1)), eq(LocalDate.of(2026, 2, 28)), any());
+    }
+
+    @Test
+    @DisplayName("연·월이 없으면 수업일 범위를 걸지 않는다")
+    void 연월이_없으면_범위를_걸지_않는다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        submissionService.myHomeworks(null, null, null, PageRequest.of(0, 20));
+
+        // null이면 지금까지와 똑같이 전부 내려온다 — 수업이 없는 ONLINE 숙제도 포함이다
+        verify(submissionRepository).findByStudent(eq(88L), eq(null), eq(null), eq(null), any());
+    }
+
+    @Test
+    @DisplayName("연·월 중 하나만 오면 범위를 걸지 않는다")
+    void 연월_중_하나만_오면_범위를_걸지_않는다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        // 화면이 연도만 바꾸는 순간이 있다. 여기서 달을 1월로 가정해 버리면
+        // 학생이 고르지 않은 달의 숙제만 보인다
+        submissionService.myHomeworks(null, 2026, null, PageRequest.of(0, 20));
+
+        verify(submissionRepository).findByStudent(eq(88L), eq(null), eq(null), eq(null), any());
+    }
+
+    @Test
+    @DisplayName("범위 밖 월은 400이다")
+    void 범위_밖_월은_400이다() {
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+
+        // YearMonth.of가 DateTimeException을 던지면 500이 된다. 잘못 만든 URL은 400이어야 한다
+        assertThatThrownBy(() -> submissionService.myHomeworks(null, 2026, 99, PageRequest.of(0, 20)))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        verify(submissionRepository, never()).findByStudent(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("학부모 조회도 같은 달 범위를 쓴다")
+    void 학부모_조회도_같은_달_범위를_쓴다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(seo);
+        given(submissionRepository.findByStudent(eq(88L), any(), any(), any(), any()))
+            .willReturn(new PageImpl<>(List.of()));
+
+        submissionService.childHomeworks(88L, null, 2026, 8, PageRequest.of(0, 20));
+
+        verify(submissionRepository).findByStudent(eq(88L), eq(null),
+            eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 31)), any());
     }
 
     // ---------- 헬퍼 ----------
@@ -559,7 +677,7 @@ class SubmissionServiceTest {
     private Submission givenResubmitTarget(HomeworkResult result, Short completionRate) {
         Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(FUTURE_DUE);
+        column.openResubmit(FUTURE_DUE, "복습", null);
         Submission cell = Fixtures.submission(1L, column, seo);
         cell.grade(result, completionRate);
 
@@ -576,5 +694,158 @@ class SubmissionServiceTest {
         given(submissionRepository.findByHomeworkAndStudent(720L, 88L))
             .willReturn(Optional.of(submission));
         return submission;
+    }
+
+    /**
+     * 숙제 탭 맨 위의 글. 기준은 가장 최근 공개된 수업이다 —
+     * 방금 한 수업에 적힌 숙제가 다음 수업까지 해올 것이다.
+     */
+    @Test
+    @DisplayName("반마다 가장 최근 공개 수업의 숙제 글을 내려준다")
+    void 반마다_최근_수업의_숙제_글을_준다() {
+        Student me = Fixtures.student(88L, "서동환");
+        Lesson recent = Fixtures.lesson(502L, classRoom, LocalDate.of(2026, 9, 3));
+        recent.writeContent("관계대명사", "내용", "중점", "p.144-152 (1,2번 제외)", "화 19:00");
+        recent.publish(OffsetDateTime.now());
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(lessonRepository.findLastPublishedPerClassRoom(me.getId(), LocalDate.now()))
+            .willReturn(List.of(recent));
+
+        List<HomeworkNoteResponse> notes = submissionService.myHomeworkNotes();
+
+        assertThat(notes).hasSize(1);
+        assertThat(notes.get(0).homeworkNote()).isEqualTo("p.144-152 (1,2번 제외)");
+        assertThat(notes.get(0).classRoomName()).isEqualTo(classRoom.getName());
+    }
+
+    /** 선생님이 숙제 칸을 비워 둔 수업은 목록에 넣지 않는다 — 빈 구획이 뜬다. */
+    @Test
+    @DisplayName("숙제 글이 빈 수업은 목록에서 빠진다")
+    void 숙제_글이_없으면_빠진다() {
+        Student me = Fixtures.student(88L, "서동환");
+        Lesson recent = Fixtures.lesson(502L, classRoom, LocalDate.of(2026, 9, 3));
+        recent.writeContent("관계대명사", "내용", "중점", null, "화 19:00");
+        recent.publish(OffsetDateTime.now());
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(lessonRepository.findLastPublishedPerClassRoom(me.getId(), LocalDate.now()))
+            .willReturn(List.of(recent));
+
+        assertThat(submissionService.myHomeworkNotes()).isEmpty();
+    }
+
+    /**
+     * 공백만 적힌 칸도 빼야 한다. 서버가 null과 isBlank() 둘 다로 걸러내는데
+     * null만 테스트하면 나머지 절반이 검증되지 않는다.
+     */
+    @Test
+    @DisplayName("숙제 글이 공백뿐인 수업도 목록에서 빠진다")
+    void 숙제_글이_공백뿐이면_빠진다() {
+        Student me = Fixtures.student(88L, "서동환");
+        Lesson recent = Fixtures.lesson(502L, classRoom, LocalDate.of(2026, 9, 3));
+        recent.writeContent("관계대명사", "내용", "중점", "   ", "화 19:00");
+        recent.publish(OffsetDateTime.now());
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(lessonRepository.findLastPublishedPerClassRoom(me.getId(), LocalDate.now()))
+            .willReturn(List.of(recent));
+
+        assertThat(submissionService.myHomeworkNotes()).isEmpty();
+    }
+
+    /**
+     * 8번. 재제출을 잘못 낸 학생을 선생님이 되돌린다. CLAUDE.md 4-5의
+     * "그리드에서 🔺·❌로 되돌려 줘야 다시 낼 수 있다"에 입구를 하나 더 낸 것이다.
+     */
+    @Test
+    @DisplayName("미흡으로 되돌리면 ❌가 되고 재제출 대상으로 돌아온다")
+    void 미흡으로_되돌린다() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "독해", (short) 0);
+        column.openResubmit(OffsetDateTime.now().plusDays(2), "다시", null);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        cell.submit(OffsetDateTime.now(), false);
+        cell.resolveByResubmission();
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(List.of());
+
+        submissionService.markNotDone(11L);
+
+        assertThat(cell.getResult()).isEqualTo(HomeworkResult.NOT_DONE);
+        // grade()가 자동으로 내린다. 안 내리면 ck_submissions_resolved에 걸려 저장이 실패한다
+        assertThat(cell.isResolvedByResubmission()).isFalse();
+        assertThat(cell.isResubmitTarget()).isTrue();
+    }
+
+    /**
+     * status는 SUBMITTED로 남긴다. 선생님이 T-7에서 사진을 볼 수 있는 근거가
+     * status <> NOT_SUBMITTED 하나뿐이라, 되돌리면 그 학생 칸으로 들어갈 길이 사라진다.
+     */
+    @Test
+    @DisplayName("미흡으로 되돌려도 status는 SUBMITTED로 남는다")
+    void 미흡은_제출_상태를_되돌리지_않는다() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "독해", (short) 0);
+        column.openResubmit(OffsetDateTime.now().plusDays(2), "다시", null);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        cell.submit(OffsetDateTime.now(), false);
+        cell.resolveByResubmission();
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(List.of());
+
+        submissionService.markNotDone(11L);
+
+        assertThat(cell.getStatus()).isEqualTo(SubmissionStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("미흡으로 되돌리면 사진과 영상을 S3에서도 지운다")
+    void 미흡은_제출물을_지운다() {
+        Lesson lesson = Fixtures.lesson(501L, classRoom, LocalDate.of(2026, 7, 29));
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "독해", (short) 0);
+        column.openResubmit(OffsetDateTime.now().plusDays(2), "다시", null);
+        Submission cell = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        cell.submit(OffsetDateTime.now(), false);
+        cell.attachVideo("submissions/11/video.mov", 1024);
+        SubmissionPhoto photo = SubmissionPhoto.of(cell, "submissions/11/1.webp", (short) 0, 100);
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        given(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .willReturn(List.of(photo));
+
+        submissionService.markNotDone(11L);
+
+        verify(photoRepository).delete(photo);
+        verify(presignedUrlProvider).deleteQuietly("submissions/11/1.webp");
+        verify(presignedUrlProvider).deleteQuietly("submissions/11/video.mov");
+        assertThat(cell.hasVideo()).isFalse();
+    }
+
+    /** GRID 열이 아니면 채점 축이 없다. 되돌릴 대상이 아니다. */
+    @Test
+    @DisplayName("ONLINE 숙제는 미흡으로 되돌릴 수 없다")
+    void 온라인_숙제는_되돌릴_수_없다() {
+        Homework online = Fixtures.homework(700L, classRoom, OffsetDateTime.now().plusDays(2));
+        Submission cell = Fixtures.submission(11L, online, Fixtures.student(1L, "가나다"));
+        /*
+         * 사진과 영상을 반드시 붙여 둔다. 빈 제출물로 두면 가드를 삭제 뒤로 옮겨도
+         * 지울 것이 없어 아래 never() 단정이 그대로 통과한다 — 단정이 허수가 된다.
+         * 가드가 먼저 실행되므로 photoRepository 목은 호출되지 않지만,
+         * 회귀 검증을 위해 준비해 둔다. 가드를 뒤로 옮기면 이 목이 호출되어 단정이 실패한다.
+         */
+        cell.submit(OffsetDateTime.now(), false);
+        cell.attachVideo("submissions/11/video.mov", 1024);
+        SubmissionPhoto photo = SubmissionPhoto.of(cell, "submissions/11/1.webp", (short) 0, 100);
+        given(submissionRepository.findById(11L)).willReturn(Optional.of(cell));
+        lenient().when(photoRepository.findBySubmissionIdOrderBySortOrderAscIdAsc(11L))
+            .thenReturn(List.of(photo));
+
+        assertThatThrownBy(() -> submissionService.markNotDone(11L))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
+
+        // 거절된 경로에서 아무것도 지워지지 않아야 한다. 가드가 삭제보다 뒤로
+        // 옮겨지는 회귀는 S3 객체를 영구히 날리고, 이 단정이 없으면 그때도 통과한다
+        verify(presignedUrlProvider, never()).deleteQuietly(anyString());
+        verify(photoRepository, never()).delete(any(SubmissionPhoto.class));
     }
 }

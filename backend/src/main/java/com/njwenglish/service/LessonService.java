@@ -7,11 +7,13 @@ import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.dto.lesson.LessonBulkCreateRequest;
 import com.njwenglish.dto.lesson.LessonBulkCreateResponse;
 import com.njwenglish.dto.lesson.LessonCreateRequest;
+import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.dto.lesson.LessonDetailResponse;
 import com.njwenglish.dto.lesson.LessonListItemResponse;
 import com.njwenglish.dto.lesson.LessonUpdateRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Lesson;
+import com.njwenglish.entity.LessonVideo;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.LessonRepository;
 import java.time.DayOfWeek;
@@ -57,10 +59,14 @@ public class LessonService {
         ClassRoom classRoom = findClassRoom(request.classRoomId());
         requireNewDate(classRoom.getId(), request.lessonDate());
 
+        // 링크 검증을 저장보다 먼저 한다. 잘못된 주소로 수업 행부터 만들 이유가 없다
+        List<LessonVideoRequest> videos = validVideos(request.videos());
+
         Lesson lesson = lessonRepository.save(Lesson.create(classRoom, request.lessonDate(),
             request.year(), validMonth(request.month()), validWeek(request.week())));
-        lesson.writeContent(request.title(), validVideoUrl(request.videoUrl()),
-            request.content(), request.keyPoints(), request.nextPreview());
+        lesson.writeContent(request.title(),
+            request.content(), request.keyPoints(), request.homeworkNote(), request.clinicNote());
+        lesson.replaceVideos(toVideos(lesson, videos));
 
         return LessonDetailResponse.from(lesson);
     }
@@ -119,11 +125,14 @@ public class LessonService {
         }
         lesson.writeContent(
             request.title() != null ? request.title() : lesson.getTitle(),
-            request.videoUrl() != null
-                ? validVideoUrl(request.videoUrl()) : lesson.getVideoUrl(),
             request.content() != null ? request.content() : lesson.getContent(),
             request.keyPoints() != null ? request.keyPoints() : lesson.getKeyPoints(),
-            request.nextPreview() != null ? request.nextPreview() : lesson.getNextPreview());
+            request.homeworkNote() != null ? request.homeworkNote() : lesson.getHomeworkNote(),
+            request.clinicNote() != null ? request.clinicNote() : lesson.getClinicNote());
+        // null이면 그대로 두고 빈 배열이면 전부 지운다. 같게 다루면 지울 방법이 없어진다
+        if (request.videos() != null) {
+            lesson.replaceVideos(toVideos(lesson, validVideos(request.videos())));
+        }
 
         return LessonDetailResponse.from(lesson);
     }
@@ -164,14 +173,50 @@ public class LessonService {
         }
     }
 
-    private String validVideoUrl(String videoUrl) {
-        if (videoUrl == null || videoUrl.isBlank()) {
-            return null;
+    /** 수업 하나에 붙일 수 있는 영상 수. 실수로 스무 개를 넣어도 막을 것이 없으면 화면이 무너진다. */
+    private static final int MAX_VIDEOS = 10;
+
+    /**
+     * 링크 목록을 검사하고 다듬는다. <b>저장보다 먼저 부른다</b> — 잘못된 주소로
+     * 수업 행부터 만들면 순서가 뒤집힌다.
+     *
+     * <p>빈 url은 조용히 건너뛴다. 화면에서 「링크 추가」를 누르고 안 채운 줄이 그대로
+     * 올라오는데, 그걸 400으로 막으면 선생님이 이유를 알기 어렵다.
+     */
+    private List<LessonVideoRequest> validVideos(List<LessonVideoRequest> requested) {
+        if (requested == null) {
+            return List.of();
         }
-        if (YoutubeUrls.videoId(videoUrl) == null) {
+        List<LessonVideoRequest> videos = new ArrayList<>();
+        for (LessonVideoRequest each : requested) {
+            if (each == null || each.url() == null || each.url().isBlank()) {
+                continue;
+            }
+            String url = each.url().trim();
+            if (YoutubeUrls.embedUrlOf(url) == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            String title = each.title() == null || each.title().isBlank()
+                ? null : each.title().trim();
+            videos.add(new LessonVideoRequest(url, title));
+        }
+        if (videos.size() > MAX_VIDEOS) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        return videoUrl.trim();
+        return videos;
+    }
+
+    /**
+     * 다듬어진 목록을 엔티티로 바꾼다. <b>순서는 배열 순서다</b> —
+     * 선생님이 화면에서 정렬한 그대로 학생에게 보여야 한다.
+     */
+    private List<LessonVideo> toVideos(Lesson lesson, List<LessonVideoRequest> videos) {
+        List<LessonVideo> entities = new ArrayList<>();
+        for (LessonVideoRequest each : videos) {
+            entities.add(LessonVideo.of(lesson, each.url(), each.title(),
+                (short) entities.size()));
+        }
+        return entities;
     }
 
     private short validMonth(Short month) {

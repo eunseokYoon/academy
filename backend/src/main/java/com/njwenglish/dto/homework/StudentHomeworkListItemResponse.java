@@ -15,6 +15,12 @@ import java.time.OffsetDateTime;
  */
 public record StudentHomeworkListItemResponse(Long homeworkId,
                                               String title,
+                                              /**
+                                               * 재제출 요청에 적힌 상세 내용. 없으면 null이다.
+                                               * 학생이 목록에서 눌러 모달로 본다.
+                                               * <b>학부모 응답에는 넣지 마라.</b>
+                                               */
+                                              String description,
                                               String classRoomName,
                                               HomeworkKind kind,
                                               LocalDate lessonDate,

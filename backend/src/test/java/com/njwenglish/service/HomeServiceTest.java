@@ -14,6 +14,7 @@ import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.home.ParentHomeResponse;
 import com.njwenglish.dto.home.StudentHomeResponse;
 import com.njwenglish.entity.ClassRoom;
+import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.User;
@@ -26,6 +27,7 @@ import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -144,6 +146,36 @@ class HomeServiceTest {
         assertThat(home.nextLesson().classRoomName()).isEqualTo("고2 심화반");
     }
 
+    @Test
+    @DisplayName("학생 홈도 다음 클리닉을 내려준다 — 학부모 홈과 같은 조회다")
+    void 학생_홈에_다음_클리닉이_있다() {
+        LocalDate clinicDate = LocalDate.now().plusDays(5);
+        // Fixtures.clinic의 종료 시각은 시작+1시간이다. 여기서는 상관없다 —
+        // NextClinicResponse.from은 클리닉의 시간대가 아니라 예약 행의 도착 시각을 읽는다
+        Clinic clinic = Fixtures.clinic(9L, clinicDate, LocalTime.of(17, 0), (short) 6);
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+        given(clinicReservationRepository.findNextReserved(eq(88L), any()))
+            .willReturn(Optional.of(Fixtures.reservationAt(
+                40L, clinic, me, Fixtures.teacherEntity(1L), LocalTime.of(19, 0))));
+
+        StudentHomeResponse home = homeService.studentHome();
+
+        assertThat(home.nextClinic()).isNotNull();
+        assertThat(home.nextClinic().clinicDate()).isEqualTo(clinicDate);
+        // 시간대 시작(17:00)이 아니라 이 학생의 도착 시각이다.
+        // 시간대 시작을 내려주면 22시에 가기로 한 학생을 학부모가 17시에 보낸다
+        assertThat(home.nextClinic().arrivalTime()).isEqualTo(LocalTime.of(19, 0));
+        assertThat(home.nextClinic().dDay()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("배정된 클리닉이 없으면 학생 홈의 nextClinic도 null이다")
+    void 학생_홈_클리닉이_없으면_null이다() {
+        given(studentAccessGuard.requireSelf()).willReturn(me);
+
+        assertThat(homeService.studentHome().nextClinic()).isNull();
+    }
+
     // ---------- P-1 ----------
 
     @Test
@@ -194,6 +226,28 @@ class HomeServiceTest {
         ParentHomeResponse home = homeService.parentHome(88L);
 
         assertThat(home.nextLessonDate()).isEqualTo(target);
+    }
+
+    /** 프론트가 날짜로 세면 기기 시계에 따라 학생 화면과 하루 어긋난다. 서버가 센다. */
+    @Test
+    @DisplayName("학부모 홈이 다음 수업 D-day를 내려준다")
+    void 학부모_홈에_수업_D_day가_있다() {
+        LocalDate target = LocalDate.now().plusDays(2);
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(me);
+        given(lessonRepository.findNextForStudent(eq(88L), any()))
+            .willReturn(Optional.of(Fixtures.lesson(501L, classRoom, target)));
+
+        ParentHomeResponse home = homeService.parentHome(88L);
+
+        assertThat(home.nextLessonDDay()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("다음 수업이 없으면 D-day는 null이다")
+    void 수업이_없으면_D_day는_null이다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(me);
+
+        assertThat(homeService.parentHome(88L).nextLessonDDay()).isNull();
     }
 
     @Test

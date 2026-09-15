@@ -1,8 +1,10 @@
 package com.njwenglish.dto.notice;
 
 import com.njwenglish.entity.Notice;
+import com.njwenglish.entity.enums.NoticeAudience;
 import com.njwenglish.entity.enums.NoticeScope;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * T-10 선생님 목록·상세. <b>초안까지 전부 보인다</b> —
@@ -10,6 +12,9 @@ import java.time.OffsetDateTime;
  *
  * <p>scope가 STUDENT면 수업일 변경 승인이 만든 개인 공지다. 그 학생과 학부모만 본다.
  * 목록에서 반 공지와 구분되도록 studentName을 함께 내려준다.
+ *
+ * <p>attachments는 엔티티에서 바로 꺼낼 수 없다 — 별도 조회라 {@link #from}이
+ * 인자로 받는다.
  */
 public record NoticeResponse(
     Long noticeId,
@@ -21,10 +26,12 @@ public record NoticeResponse(
     Long studentId,
     String studentName,
     boolean pinned,
+    NoticeAudience audience,
     OffsetDateTime publishedAt,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    List<NoticeAttachmentResponse> attachments
 ) {
-    public static NoticeResponse from(Notice notice) {
+    public static NoticeResponse from(Notice notice, List<NoticeAttachmentResponse> attachments) {
         return new NoticeResponse(
             notice.getId(), notice.getTitle(), notice.getContent(), notice.getScope(),
             notice.getClassRoom() == null ? null : notice.getClassRoom().getId(),
@@ -32,6 +39,7 @@ public record NoticeResponse(
             notice.getStudent() == null ? null : notice.getStudent().getId(),
             // 학생 이름은 students.name이다. users.name이 아니다 — 미가입 학생은 users 행이 없다
             notice.getStudent() == null ? null : notice.getStudent().getName(),
-            notice.isPinned(), notice.getPublishedAt(), notice.getCreatedAt());
+            notice.isPinned(), notice.getAudience(), notice.getPublishedAt(),
+            notice.getCreatedAt(), attachments);
     }
 }

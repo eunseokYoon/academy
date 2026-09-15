@@ -10,6 +10,7 @@ import { TextField } from "../../../shared/components/TextField";
 import {
   assignClinicStudents,
   confirmClinicAttendance,
+  bulkCreateClinics,
   createClinic,
   decideLessonChangeRequest,
   deleteClinic,
@@ -21,10 +22,12 @@ import {
   updateClinic,
 } from "../api";
 import { formatLessonSlot } from "../../../shared/lessonchange/types";
-import type { AttendanceException, Clinic, ClinicReservationRow } from "../api";
+import type { AttendanceException, Clinic, ClinicReservationRow, ClinicSlotState } from "../api";
 import { dayLabel } from "../../../shared/date";
 import { today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
+import { CLINIC_EXCEPTION_STATUSES } from "../../../shared/attendance/types";
+import { currentWeekOfMonth } from "../../../shared/date";
 
 const NOW = new Date();
 
@@ -42,7 +45,7 @@ const NOW = new Date();
 export default function ClinicPage() {
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth() + 1);
-  const [week, setWeek] = useState(Math.floor((NOW.getDate() - 1) / 7) + 1);
+  const [week, setWeek] = useState(currentWeekOfMonth(NOW));
   const [creating, setCreating] = useState(false);
   const [detailOf, setDetailOf] = useState<Clinic | null>(null);
 
@@ -140,10 +143,12 @@ export default function ClinicPage() {
                           clinic.reservedCount >= clinic.capacity && (
                             <Badge tone="warn">정원 참</Badge>
                           )}
-                        {clinic.attendanceConfirmed ? (
-                          <Badge tone="ok">출석 확정</Badge>
+                        {clinic.studentSlotCount === 0 ? null : clinic.attendanceConfirmed ? (
+                          <Badge tone="ok">출결 확정</Badge>
                         ) : (
-                          <Badge tone="neutral">출석 미확정</Badge>
+                          <Badge tone="neutral">
+                            {clinic.confirmedSlotCount}/{clinic.studentSlotCount} 확정
+                          </Badge>
                         )}
                       </div>
                       {clinic.memo && (
@@ -255,6 +260,12 @@ function groupByWeek(clinics: Clinic[]): [string, Clinic[]][] {
 
 function CreateClinicModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
+  /** 켜면 날짜 하나가 기간+요일로 바뀐다. 9~12월 매주 화요일을 18번 만들게 할 수 없다 */
+  const [repeat, setRepeat] = useState(false);
+  const [dayOfWeek, setDayOfWeek] = useState(2);
+  const [from, setFrom] = useState(today());
+  const [to, setTo] = useState(today());
+  const [bulkResult, setBulkResult] = useState<{ created: number; skipped: number } | null>(null);
   const [clinicDate, setClinicDate] = useState(today());
   const [startTime, setStartTime] = useState("17:00");
   const [endTime, setEndTime] = useState("18:00");
@@ -262,18 +273,31 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
   const [memo, setMemo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: () =>
-      createClinic({
-        clinicDate,
+  /** 반환을 정규화한다 — 일괄이면 결과, 단건이면 null. 둘을 그대로 두면 타입이 갈라진다 */
+  const mutation = useMutation<{ created: number; skipped: number } | null>({
+    mutationFn: async () => {
+      // 비워 두면 인원 제한 없음이다. 임의의 기본값을 넣지 않는다
+      const capacityValue = capacity.trim() === "" ? null : Number(capacity);
+      const common = {
         startTime,
         endTime,
-        // 비워 두면 인원 제한 없음이다. 임의의 기본값을 넣지 않는다
-        capacity: capacity.trim() === "" ? null : Number(capacity),
+        capacity: capacityValue,
         memo: memo.trim() || null,
-      }),
-    onSuccess: async () => {
+      };
+      if (repeat) {
+        const result = await bulkCreateClinics({ dayOfWeek, from, to, ...common });
+        return { created: result.created, skipped: result.skipped };
+      }
+      await createClinic({ clinicDate, ...common });
+      return null;
+    },
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["teacher", "clinics"] });
+      // 일괄은 건너뛴 날짜가 있을 수 있어 결과를 보여주고 모달을 남긴다
+      if (data) {
+        setBulkResult(data);
+        return;
+      }
       onClose();
     },
     onError: (e) => setError(errorMessage(e, "시간대를 만들지 못했습니다.")),
@@ -287,13 +311,51 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="클리닉 시간대 개설" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <TextField
-          label="날짜"
-          type="date"
-          value={clinicDate}
-          onChange={(e) => setClinicDate(e.target.value)}
-          required
-        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={repeat}
+            onChange={(e) => { setRepeat(e.target.checked); setBulkResult(null); }}
+          />
+          <span>
+            매주 반복
+            <span className="block text-xs text-slate-500">
+              기간 안의 그 요일에 한꺼번에 만듭니다. 이미 열려 있는 날은 건너뜁니다.
+            </span>
+          </span>
+        </label>
+
+        {repeat ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <TextField label="시작일" type="date" value={from}
+                onChange={(e) => setFrom(e.target.value)} required />
+              <TextField label="종료일" type="date" value={to}
+                onChange={(e) => setTo(e.target.value)} required />
+            </div>
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-600">요일</span>
+              <select
+                value={dayOfWeek}
+                onChange={(e) => setDayOfWeek(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                {[["1","월"],["2","화"],["3","수"],["4","목"],["5","금"],["6","토"],["7","일"]]
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>{label}요일</option>
+                  ))}
+              </select>
+            </label>
+          </>
+        ) : (
+          <TextField
+            label="날짜"
+            type="date"
+            value={clinicDate}
+            onChange={(e) => setClinicDate(e.target.value)}
+            required
+          />
+        )}
         <div className="grid grid-cols-2 gap-2">
           <TextField
             label="시작"
@@ -321,6 +383,12 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
         />
         <TextField label="메모" value={memo} onChange={(e) => setMemo(e.target.value)} />
         <FormError message={error} />
+        {bulkResult && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {bulkResult.created}개 생성
+            {bulkResult.skipped > 0 && ` · ${bulkResult.skipped}개 건너뜀(이미 열려 있음)`}
+          </p>
+        )}
         <SubmitButton pending={mutation.isPending}>개설</SubmitButton>
       </form>
     </Modal>
@@ -346,7 +414,7 @@ function ClinicDetailModal({ clinic, onClose }: { clinic: Clinic; onClose: () =>
         {(
           [
             ["roster", "명단"],
-            ["attendance", "출석 확정"],
+            ["attendance", "출결 확정"],
           ] as [DetailTab, string][]
         ).map(([value, label]) => (
           <button
@@ -378,7 +446,7 @@ function ClinicDetailModal({ clinic, onClose }: { clinic: Clinic; onClose: () =>
           <ClinicAttendanceTab
             clinic={clinic}
             students={reservations.data?.students ?? []}
-            confirmed={reservations.data?.attendanceConfirmed ?? false}
+            slotStates={reservations.data?.slotStates ?? []}
           />
         )}
       </div>
@@ -422,8 +490,8 @@ function RosterTab({
       await refresh();
       onClose();
     },
-    // 신청자가 있으면 지우지 못한다. 마감(CLOSED)으로 닫아야 한다
-    onError: (e) => setError(errorMessage(e, "신청자가 있어 삭제할 수 없습니다. 마감을 쓰세요.")),
+    // 배정된 학생이 있으면 지우지 못한다. 마감(CLOSED)으로 닫아야 한다
+    onError: (e) => setError(errorMessage(e, "배정된 학생이 있어 삭제할 수 없습니다. 마감을 쓰세요.")),
   });
 
   const close = useMutation({
@@ -439,11 +507,11 @@ function RosterTab({
     <div className="space-y-3">
       <p className="text-sm text-slate-600">
         {students.length}
-        {clinic.capacity === null ? "" : `/${clinic.capacity}`}명 신청
+        {clinic.capacity === null ? "" : `/${clinic.capacity}`}명
       </p>
 
       {students.length === 0 ? (
-        <p className="text-sm text-slate-400">아직 신청한 학생이 없습니다.</p>
+        <p className="text-sm text-slate-400">아직 배정된 학생이 없습니다.</p>
       ) : (
         <div className="space-y-3">
           {groupByArrival(students).map(([arrivalTime, rows]) => (
@@ -459,9 +527,13 @@ function RosterTab({
                   >
                     <span className="flex flex-wrap items-center gap-2 text-sm text-slate-900">
                       {student.name}
-                      {/* 신청과 배정을 구분해야 "왜 여기 있냐"는 문의에 답할 수 있다 */}
+                      {/*
+                        선생님 배정과 학생 이동을 구분해야 "왜 여기 있냐"는 문의에 답한다.
+                        학생 신청이 없어진 뒤(2026-09-01) assigned_by가 null인 경로는
+                        학생이 다른 클리닉에서 옮겨 온 것 하나뿐이다.
+                      */}
                       <Badge tone={student.assignedByTeacher ? "neutral" : "ok"}>
-                        {student.assignedByTeacher ? "배정" : "신청"}
+                        {student.assignedByTeacher ? "배정" : "이동"}
                       </Badge>
                       {/* 시간대를 좁힌 뒤 남은 예약. 서버가 말없이 옮기지 않는다 */}
                       {student.outOfRange && <Badge tone="danger">시간대 밖</Badge>}
@@ -496,7 +568,7 @@ function RosterTab({
           onClick={() => close.mutate()}
           className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
         >
-          {clinic.status === "OPEN" ? "신청 마감" : "다시 열기"}
+          {clinic.status === "OPEN" ? "마감" : "다시 열기"}
         </button>
       </div>
       {students.length === 0 && (
@@ -627,28 +699,41 @@ function AssignModal({
   );
 }
 
-/** 출석 확정은 T-5와 같은 UI를 그대로 쓴다. */
+/**
+ * 출석 확정은 <b>도착 시각 슬롯별로 따로</b> 낸다(2026-09-01 미팅에서 확정).
+ * 17시 명단을 먼저 닫고, 18시가 되면 그때 닫는 식이다 — 슬롯 하나를 골라 그 학생만
+ * {@link RosterEditor}에 넘기고, 확정 요청에도 그 슬롯의 시각을 함께 보낸다.
+ *
+ * <p>슬롯 버튼은 <b>{@link ClinicSlotState}(slotStates)를 그대로 순회</b>한다 —
+ * `Clinic.slots()`가 아니다. slotStates는 서버가 그 목록과 실제 예약 시각의 합집합으로
+ * 만들어 주므로, 시간대를 좁힌 뒤 범위 밖으로 남은 예약(outOfRange)의 시각도 여기 섞여
+ * 나온다. 여기서 빠뜨리면 그 학생을 확정할 방법이 화면에서 사라진다.
+ *
+ * <p>{@link RosterEditor} 자체는 건드리지 않는다 — T-5 수업 출석과 공유하는 컴포넌트라
+ * `rows`만 슬롯으로 걸러 넘긴다.
+ */
 function ClinicAttendanceTab({
   clinic,
   students,
-  confirmed,
+  slotStates,
 }: {
   clinic: Clinic;
-  students: {
-    studentId: number;
-    name: string;
-    attendStatus: "PRESENT" | "LATE" | "ABSENT" | "SICK" | "EXCUSED" | null;
-    memo: string | null;
-  }[];
-  confirmed: boolean;
+  students: ClinicReservationRow[];
+  slotStates: ClinicSlotState[];
 }) {
   const queryClient = useQueryClient();
+  const [slot, setSlot] = useState(
+    () => slotStates.find((s) => s.reservedCount > 0)?.arrivalTime ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  const current = slotStates.find((s) => s.arrivalTime === slot);
+  const rows = students.filter((student) => student.arrivalTime === slot);
+
   const mutation = useMutation({
     mutationFn: (exceptions: AttendanceException[]) =>
-      confirmClinicAttendance(clinic.clinicId, exceptions),
+      confirmClinicAttendance(clinic.clinicId, slot, exceptions),
     onSuccess: async (result) => {
       setError(null);
       setDone(`확정했습니다. 출석 ${result.summary.present} · 결석 ${result.summary.absent}`);
@@ -661,24 +746,59 @@ function ClinicAttendanceTab({
     },
   });
 
+  function selectSlot(arrivalTime: string) {
+    setSlot(arrivalTime);
+    setDone(null);
+    setError(null);
+  }
+
   return (
-    <div>
-      {done && (
-        <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{done}</p>
+    <div className="space-y-3">
+      {slotStates.every((s) => s.reservedCount === 0) ? (
+        <p className="text-sm text-slate-400">배정된 학생이 없습니다.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {slotStates.map((s) => (
+            <button
+              key={s.arrivalTime}
+              type="button"
+              disabled={s.reservedCount === 0}
+              onClick={() => selectSlot(s.arrivalTime)}
+              aria-pressed={slot === s.arrivalTime}
+              className={`rounded-lg px-2.5 py-1.5 text-sm disabled:cursor-not-allowed
+                          disabled:opacity-40 ${
+                slot === s.arrivalTime
+                  ? "bg-slate-900 font-medium text-white"
+                  : "border border-slate-300 text-slate-700"
+              }`}
+            >
+              {s.arrivalTime} · {s.reservedCount === 0 ? "배정 없음" : `${s.reservedCount}명`}
+              {s.confirmed ? " ✓" : ""}
+            </button>
+          ))}
+        </div>
       )}
-      <RosterEditor
-        rows={students.map((student) => ({
-          studentId: student.studentId,
-          name: student.name,
-          status: student.attendStatus ?? "PRESENT",
-          memo: student.memo,
-        }))}
-        confirmed={confirmed}
-        pending={mutation.isPending}
-        error={error}
-        variant="inline"
-        onConfirm={(exceptions) => mutation.mutate(exceptions)}
-      />
+
+      {done && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{done}</p>
+      )}
+
+      {slot && (
+        <RosterEditor
+          rows={rows.map((student) => ({
+            studentId: student.studentId,
+            name: student.name,
+            status: student.attendStatus ?? "PRESENT",
+            memo: student.memo,
+          }))}
+          confirmed={current?.confirmed ?? false}
+          pending={mutation.isPending}
+          error={error}
+          variant="inline"
+          statuses={CLINIC_EXCEPTION_STATUSES}
+          onConfirm={(exceptions) => mutation.mutate(exceptions)}
+        />
+      )}
     </div>
   );
 }

@@ -18,5 +18,11 @@ public record SubmissionDetailResponse(Long submissionId,
                                        List<SubmissionPhotoResponse> photos,
                                        SubmissionVideoResponse video,
                                        Long prevSubmissionId,
-                                       Long nextSubmissionId) {
+                                       Long nextSubmissionId,
+                                       /**
+                                        * 「미흡」 버튼을 그릴지. GRID 열에서만 true다.
+                                        * <b>화면에서 안 그리는 건 안내일 뿐이다</b> —
+                                        * 서버가 ONLINE을 400으로 막는다.
+                                        */
+                                       boolean canMarkNotDone) {
 }

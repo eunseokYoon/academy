@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "../../../shared/api/errors";
 import { FormError } from "../../../shared/components/FormError";
+import { Modal } from "../../../shared/components/Modal";
 import { formatDueAt } from "../../../shared/homework/types";
 import type { HomeworkResult } from "../../../shared/homework/types";
 import {
@@ -12,8 +13,16 @@ import {
   listLessons,
   openResubmit,
   saveHomeworkGrid,
+  type GridColumn,
 } from "../api";
 import { GradeCell } from "./GradeCell";
+
+/** 재제출 모달이 연 열. */
+interface ResubmitTarget {
+  homeworkId: number;
+  title: string;
+  targetCount: number;
+}
 
 /** 셀 초안. result가 null이면 미채점이다 — 0%와 구분해야 한다. */
 interface CellDraft {
@@ -122,10 +131,48 @@ export default function HomeworkGridPage() {
     onError: (e) => setError(errorMessage(e, "저장하지 못했습니다.")),
   });
 
+  /** 재제출 모달을 연 열. null이면 닫힌 상태다 */
+  const [resubmitTarget, setResubmitTarget] = useState<ResubmitTarget | null>(null);
+  const [resubmitTitle, setResubmitTitle] = useState("");
+  const [resubmitDescription, setResubmitDescription] = useState("");
+
+  /**
+   * 그 열의 🔺·❌ 수. <b>화면의 초안 기준</b>이라 저장 전이면 서버와 다를 수 있다 —
+   * 그래서 dirty면 모달이 저장을 먼저 요구한다. 서버 판정은 result를 실시간으로 보므로
+   * 저장만 되어 있으면 둘이 일치한다.
+   */
+  function countResubmitTargets(index: number): number {
+    return Object.values(drafts[index] ?? {}).filter(
+      (draft) => draft.result === "PARTIAL" || draft.result === "NOT_DONE",
+    ).length;
+  }
+
+  /* 다이얼로그를 열 때 그 열의 현재 값으로 채운다 */
+  function openResubmitDialog(column: GridColumn, index: number) {
+    setResubmitTarget({
+      homeworkId: column.homeworkId,
+      title: column.title,
+      targetCount: countResubmitTargets(index),
+    });
+    setResubmitTitle(column.title);
+    setResubmitDescription(column.description ?? "");
+  }
+
   const requestResubmit = useMutation({
-    mutationFn: (homeworkId: number) => openResubmit(homeworkId, null),
+    mutationFn: ({
+      homeworkId,
+      dueAt,
+      title,
+      description,
+    }: {
+      homeworkId: number;
+      dueAt: string;
+      title: string;
+      description: string | null;
+    }) => openResubmit(homeworkId, { dueAt, title, description }),
     onSuccess: () => {
       setError(null);
+      setResubmitTarget(null);
       void queryClient.invalidateQueries({ queryKey: ["teacher", "homework-grid", lessonId] });
     },
     onError: (e) => setError(errorMessage(e)),
@@ -288,10 +335,8 @@ export default function HomeworkGridPage() {
                             {server.resubmitDueAt === null ? (
                               <button
                                 type="button"
-                                disabled={requestResubmit.isPending}
-                                onClick={() => requestResubmit.mutate(server.homeworkId)}
-                                className="rounded bg-slate-900 px-2 py-1 text-[11px] text-white
-                                           disabled:opacity-50"
+                                onClick={() => openResubmitDialog(server, index)}
+                                className="rounded bg-slate-900 px-2 py-1 text-[11px] text-white"
                               >
                                 재제출 요청
                               </button>
@@ -395,6 +440,133 @@ export default function HomeworkGridPage() {
           </div>
         </>
       )}
+
+      {resubmitTarget && (
+        <ResubmitModal
+          target={resubmitTarget}
+          title={resubmitTitle}
+          description={resubmitDescription}
+          onTitleChange={setResubmitTitle}
+          onDescriptionChange={setResubmitDescription}
+          dirty={dirty}
+          pending={requestResubmit.isPending}
+          onClose={() => setResubmitTarget(null)}
+          onSubmit={(dueAt) =>
+            requestResubmit.mutate({
+              homeworkId: resubmitTarget.homeworkId,
+              dueAt,
+              title: resubmitTitle.trim(),
+              description: resubmitDescription.trim() || null,
+            })
+          }
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * 재제출 마감을 받는다. <b>마감은 선생님이 정한다</b> — 서버 기본값(다음 수업일 21:00)을
+ * 없앴으므로 비워 두고 보낼 수 없다.
+ *
+ * <p>저장 안 한 채점이 있으면 막는다. 화면의 🔺·❌ 수와 서버가 보는 수가 달라서,
+ * 그대로 보내면 "7명"이라고 띄워 놓고 서버가 409(대상 없음)를 돌려주는 일이 생긴다.
+ */
+function ResubmitModal({
+  target,
+  title,
+  description,
+  onTitleChange,
+  onDescriptionChange,
+  dirty,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  target: ResubmitTarget;
+  title: string;
+  description: string;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  dirty: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (dueAt: string) => void;
+}) {
+  const [dueAt, setDueAt] = useState("");
+
+  const blocked = dirty
+    ? "채점을 먼저 저장해 주세요."
+    : target.targetCount === 0
+      ? "이 열에는 🔺·❌를 받은 학생이 없습니다."
+      : dueAt === ""
+        ? "마감을 정해 주세요."
+        : null;
+
+  return (
+    <Modal title="재제출 요청" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-xs text-slate-500">
+          🔺·❌ {target.targetCount}명에게 제출 경로가 열립니다.
+        </p>
+
+        <label className="block text-sm">
+          제목
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            maxLength={200}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+        </label>
+
+        <label className="block text-sm">
+          상세 내용
+          <textarea
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            rows={5}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+          <span className="mt-1 block text-xs text-slate-400">
+            길이 제한이 없습니다. 학생이 숙제 목록에서 눌러 전문을 봅니다.
+          </span>
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-600">마감</span>
+          <input
+            type="datetime-local"
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+        </label>
+
+        {blocked && <p className="text-xs text-amber-700">{blocked}</p>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            disabled={blocked !== null || pending}
+            // datetime-local은 초·타임존이 없다. 서버가 OffsetDateTime을 받으므로
+            // 브라우저 타임존 기준으로 채워 보낸다 — 선생님과 서버가 같은 KST다
+            onClick={() => onSubmit(new Date(dueAt).toISOString())}
+            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white
+                       disabled:opacity-50"
+          >
+            {pending ? "요청 중…" : "재제출 요청"}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }

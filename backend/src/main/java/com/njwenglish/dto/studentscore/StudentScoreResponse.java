@@ -1,5 +1,6 @@
 package com.njwenglish.dto.studentscore;
 
+import com.njwenglish.entity.enums.ScoreChartKind;
 import com.njwenglish.entity.enums.TestResult;
 import com.njwenglish.entity.enums.WeeklyTestType;
 import java.math.BigDecimal;
@@ -26,7 +27,13 @@ public record StudentScoreResponse(
     public record Section(
         WeeklyTestType testType,
         String label,
+        /**
+         * <b>쓰지 마라.</b> chartKind가 대신한다(2026-09-10).
+         * 옛 화면 호환으로만 남았고 다음 배포에서 지운다.
+         */
         boolean chart,
+        /** 이 종류를 어떤 그래프로 그리는가. 화면에서 testType으로 다시 분기하지 마라. */
+        ScoreChartKind chartKind,
         List<Item> items
     ) {
     }
@@ -42,6 +49,11 @@ public record StudentScoreResponse(
         String weekLabel,
         Short correctCount,
         Short totalCount,
+        /**
+         * <b>항상 null이다</b>(2026-09-10). 환산 점수·정답률을 전 화면에서 없앤다.
+         * 필드를 지우지 마라 — 배포가 backend → web 순서라 옛 화면이 undefined를
+         * 받으면 "undefined%"를 그린다. 계산을 되살리려면 회의 결정을 먼저 뒤집어라.
+         */
         BigDecimal accuracy,
         Short internalCorrect,
         Short internalTotal,

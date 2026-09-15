@@ -37,13 +37,13 @@ const QUICK_ITEMS = (pendingHomework: number, noticeCount: number) => [
     count: pendingHomework,
     primary: true,
   },
-  { to: "/student/online-tests", icon: "test" as const, label: "테스트" },
-  { to: "/student/lessons", icon: "video" as const, label: "수업영상" },
-  { to: "/student/scores", icon: "chart" as const, label: "성적" },
-  { to: "/student/attendances", icon: "calendar" as const, label: "출석" },
+  { to: "/student/lessons", icon: "video" as const, label: "수업" },
   { to: "/student/clinics", icon: "clock" as const, label: "스케줄" },
-  { to: "/student/materials", icon: "folder" as const, label: "자료실" },
+  { to: "/student/scores", icon: "chart" as const, label: "성적" },
+  { to: "/student/online-tests", icon: "test" as const, label: "테스트" },
+  { to: "/student/attendances", icon: "calendar" as const, label: "출석" },
   { to: "/student/notices", icon: "megaphone" as const, label: "공지", count: noticeCount },
+  { to: "/student/qna", icon: "question" as const, label: "질문" },
 ];
 
 export default function StudentHomePage() {
@@ -53,29 +53,48 @@ export default function StudentHomePage() {
     return <p className="hero-lift card p-6 text-sm text-slate-400">불러오는 중…</p>;
   }
 
-  const { student, nextLesson, nextExam, currentHomeworks, lastLesson, notices } = home.data;
+  const { student, nextLesson, nextExam, nextClinic, currentHomeworks, lastLesson, notices }
+    = home.data;
 
   const pending = currentHomeworks.length;
+
+  /* "D-2" · "오늘". dDay가 음수인 값은 서버가 안 내려준다 */
+  const dDayLabel = (dDay: number) => (dDay === 0 ? "오늘" : `D-${dDay}`);
+  /* "09/12 14:00" — 연도를 뺀다. 360px에서 잘린다 */
+  const dateLabel = (date: string, time?: string | null) =>
+    `${date.slice(5).replace("-", "/")}${time ? ` ${time}` : ""}`;
+
+  const clinicRow = nextClinic
+    ? {
+        label: "다음 클리닉",
+        value: dDayLabel(nextClinic.dDay),
+        sub: `${dateLabel(nextClinic.clinicDate)} ${nextClinic.arrivalTime} 도착`,
+      }
+    : undefined;
 
   /*
     지면의 숫자 칸. 값이 없는 건 "미정"으로 채우지 않고 <b>칸째로 뺀다</b> —
     없는 시험에 D-0을 넣으면 시험이 오늘로 읽힌다. 그래서 길이가 1~3으로 변한다.
 
-    안 낸 숙제만 항상 있다. 0도 뜻이 있는 값이라서다("다 냈다"). 대신 0일 때는
+    미완료 숙제만 항상 있다. 0도 뜻이 있는 값이라서다("다 냈다"). 대신 0일 때는
     주황을 끈다 — 처리할 게 없는데 주황이면 그 색이 뜻을 잃는다.
   */
   const stats: HeroStat[] = [];
   if (nextLesson) {
     stats.push({
       label: "다음 수업",
-      value: nextLesson.dDay === 0 ? "오늘" : `D-${nextLesson.dDay}`,
-      sub: `${nextLesson.lessonDate.slice(5).replace("-", "/")}${
-        nextLesson.startTime ? ` ${nextLesson.startTime}` : ""
-      }`,
+      value: dDayLabel(nextLesson.dDay),
+      sub: dateLabel(nextLesson.lessonDate, nextLesson.startTime),
+      /* 같은 종류의 일정이라 한 칸에 묶는다. 칸을 넷으로 늘리면 360px에서 깨진다 */
+      extra: clinicRow,
     });
+  } else if (clinicRow) {
+    /* 수업이 없는데 클리닉만 있으면 클리닉이 그 칸의 주인이 된다.
+       extra만 있는 칸을 만들면 첫 줄이 비어 칸이 깨진다 */
+    stats.push(clinicRow);
   }
   stats.push({
-    label: "안 낸 숙제",
+    label: "미완료 숙제",
     value: `${pending}`,
     sub: pending > 0 ? "확인하세요" : "다 냈어요",
     hot: pending > 0,
@@ -98,7 +117,7 @@ export default function StudentHomePage() {
             {/* 이름 한 곳만 주황이다. 장식용 세 곳 중 하나 — tailwind.config의 accent 주석 */}
             <span className="text-accent-300">{student.name}</span> 학생,
             <br />
-            {pending > 0 ? `안 낸 숙제가 ${pending}개 있어요` : "안 낸 숙제가 없어요"}
+            {pending > 0 ? `미완료 숙제가 ${pending}개 있어요` : "미완료 숙제가 없어요"}
           </>
         }
         stats={stats}
@@ -127,7 +146,7 @@ export default function StudentHomePage() {
         {pending === 0 ? (
           <TintBlock tone="neutral">
             <p className="px-4 py-6 text-center text-sm text-slate-500">
-              안 낸 숙제가 없습니다. 잘하고 있어요.
+              미완료 숙제가 없습니다. 잘하고 있어요.
             </p>
           </TintBlock>
         ) : (
@@ -151,7 +170,7 @@ export default function StudentHomePage() {
                 {/*
                   주황 면 위에서는 옅은 배지가 배경에 묻힌다. 흰 바탕에 주황 테두리로
                   뒤집어야 읽힌다. 마감이 지난 것도 빨강으로 올리지 않는다 —
-                  빨강은 이 앱에서 "결석·위험"만 뜻하고, 안 낸 숙제는 위험이 아니다.
+                  빨강은 이 앱에서 "결석·위험"만 뜻하고, 미완료 숙제는 위험이 아니다.
                 */}
                 <span
                   className="tnum shrink-0 rounded-lg border border-accent-200 bg-white px-2 py-1

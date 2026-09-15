@@ -18,6 +18,9 @@ public enum ErrorCode {
     ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 출석입니다."),
     DUE_DATE_PASSED(HttpStatus.CONFLICT, "마감 시간이 지났습니다."),
     PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 10장까지 첨부할 수 있습니다."),
+    /** 게시판은 5장이다. 숙제(10장)와 상한이 달라서 메시지를 공유할 수 없다. */
+    QNA_PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 5장까지 첨부할 수 있습니다."),
+    ATTACHMENT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "첨부 파일은 최대 5개까지 올릴 수 있습니다."),
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),
     SUBMISSION_EXISTS(HttpStatus.CONFLICT, "제출한 학생이 있어 삭제할 수 없습니다."),
     NO_RESUBMIT_TARGET(HttpStatus.CONFLICT, "다시 제출할 학생이 없습니다."),
@@ -28,6 +31,8 @@ public enum ErrorCode {
         "공개된 테스트의 정답과 문항 수는 수정할 수 없습니다. 삭제 후 다시 출제해 주세요."),
     CLASS_ROOM_HAS_RECORDS(HttpStatus.CONFLICT, "수업·배정 기록이 있어 삭제할 수 없습니다. 종료 처리를 사용해 주세요."),
     LESSON_HAS_RECORDS(HttpStatus.CONFLICT, "출석·숙제 기록이 있어 삭제할 수 없습니다."),
+    CLINIC_HAS_RECORDS(HttpStatus.CONFLICT,
+        "배정·변경 기록이 있어 삭제할 수 없습니다. 닫기를 사용해 주세요."),
     INVITE_CODE_INVALID(HttpStatus.BAD_REQUEST, "초대코드가 유효하지 않습니다."),
     INVITE_CODE_USED(HttpStatus.BAD_REQUEST, "이미 사용된 초대코드입니다."),
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "이미 존재하는 데이터입니다."),

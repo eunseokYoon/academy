@@ -14,6 +14,38 @@
     <title>남지원영어LAB</title>
 
     <!--
+      검색 결과에 제목 아래 뜨는 줄. 없으면 검색엔진이 본문에서 아무 문장이나 골라 쓰는데,
+      이 앱은 로그인 화면이 유일한 색인 대상이라 고를 문장이 "전화번호로 로그인합니다"뿐이다.
+    -->
+    <meta
+      name="description"
+      content="남지원영어LAB 학생·학부모 전용 서비스. 숙제, 출석, 성적, 클리닉 일정을 확인합니다."
+    />
+
+    <!--
+      소유 확인용. 네이버·구글 서치 콘솔이 각각 발급한 값이고 지우면 등록이 풀린다.
+      확인이 끝난 뒤에도 <b>남겨 둬야 한다</b> — 주기적으로 다시 검사한다.
+    -->
+    <meta name="naver-site-verification" content="771d7888a71183f84d080bde05a232657c7545bd" />
+    <!-- 구글 서치 콘솔에서 받은 값을 여기 채운다 -->
+    <!-- <meta name="google-site-verification" content="" /> -->
+
+    <!--
+      카카오톡·페이스북 공유 미리보기. <b>검색보다 이게 체감이 크다</b> —
+      선생님이 단톡방에 링크를 뿌리는 서비스라, 없으면 학부모에게 맨 URL만 보인다.
+      og:image는 절대 URL이어야 한다. 상대 경로면 카카오가 못 읽는다.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="남지원영어LAB" />
+    <meta property="og:title" content="남지원영어LAB" />
+    <meta property="og:description" content="숙제 · 출석 · 성적 · 클리닉을 한 곳에서" />
+    <meta property="og:url" content="https://njwenglish.com" />
+    <meta property="og:image" content="https://njwenglish.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!--
       Pretendard. dynamic-subset은 한글 글리프를 100여 개 파일로 쪼개서
       실제 쓰인 글자만 받아온다 — 전체 폰트(2MB+)를 통으로 받지 않는다. 모바일에 중요하다.
       로드 실패해도 tailwind.config.js의 fallback 스택(-apple-system 등)으로 떨어진다.

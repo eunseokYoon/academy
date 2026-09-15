@@ -2,6 +2,7 @@ package com.njwenglish.controller.student;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.common.response.PageResponse;
+import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoRegisterResponse;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
 
 /**
  * S-2 · S-3 · S-4.
@@ -39,11 +41,25 @@ public class StudentHomeworkController {
 
     private final SubmissionService submissionService;
 
+    /** S-2 맨 위의 「이번 주에 낼 것」. 반마다 한 건이고, 없으면 빈 배열이다. */
+    @GetMapping("/notes")
+    public ApiResponse<List<HomeworkNoteResponse>> notes() {
+        return ApiResponse.ok(submissionService.myHomeworkNotes());
+    }
+
+    /**
+     * year·month는 화면의 달 필터다. 둘 다 있어야 걸린다 — 안 보내면 전부 내려간다.
+     *
+     * <p>필터를 프론트에서 하지 마라. 한 페이지(20건) 안에서만 걸러져서
+     * 지난 달 숙제가 조용히 사라진다.
+     */
     @GetMapping
     public ApiResponse<PageResponse<StudentHomeworkListItemResponse>> list(
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) Integer year,
+        @RequestParam(required = false) Integer month,
         @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.ok(submissionService.myHomeworks(status, pageable));
+        return ApiResponse.ok(submissionService.myHomeworks(status, year, month, pageable));
     }
 
     @GetMapping("/{homeworkId}")

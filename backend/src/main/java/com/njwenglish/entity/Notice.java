@@ -1,6 +1,7 @@
 package com.njwenglish.entity;
 
 import com.njwenglish.common.entity.BaseTimeEntity;
+import com.njwenglish.entity.enums.NoticeAudience;
 import com.njwenglish.entity.enums.NoticeScope;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -62,6 +63,10 @@ public class Notice extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean pinned;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private NoticeAudience audience;
+
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
 
@@ -76,13 +81,15 @@ public class Notice extends BaseTimeEntity {
      * (ck_notices_target). 호출부에서 검증한 뒤 넘긴다.
      */
     public static Notice draft(String title, String content, NoticeScope scope,
-                               ClassRoom classRoom, boolean pinned, Teacher createdBy) {
+                               ClassRoom classRoom, boolean pinned, NoticeAudience audience,
+                               Teacher createdBy) {
         Notice notice = new Notice();
         notice.title = title;
         notice.content = content;
         notice.scope = scope;
         notice.classRoom = classRoom;
         notice.pinned = pinned;
+        notice.audience = audience;
         notice.createdBy = createdBy;
         return notice;
     }
@@ -92,6 +99,9 @@ public class Notice extends BaseTimeEntity {
      * 목적이라 선생님이 발행 버튼을 한 번 더 누를 이유가 없다. 안 누르면 아무에게도 안 간다.
      *
      * <p>pinned는 false 고정이다. 개인 공지가 반 공지 위로 올라가면 목록 정렬이 뒤집힌다.
+     *
+     * <p>audience는 ALL로 못 박는다. 개인 공지는 학생과 학부모가 둘 다 봐야 하는 알림이고,
+     * ck_notices_audience_scope가 DB에서도 막는다.
      */
     public static Notice publishedForStudent(String title, String content, Student student,
                                              Teacher createdBy, OffsetDateTime now) {
@@ -101,15 +111,17 @@ public class Notice extends BaseTimeEntity {
         notice.scope = NoticeScope.STUDENT;
         notice.student = student;
         notice.pinned = false;
+        notice.audience = NoticeAudience.ALL;
         notice.createdBy = createdBy;
         notice.publishedAt = now;
         return notice;
     }
 
-    public void edit(String title, String content, boolean pinned) {
+    public void edit(String title, String content, boolean pinned, NoticeAudience audience) {
         this.title = title;
         this.content = content;
         this.pinned = pinned;
+        this.audience = audience;
     }
 
     /**

@@ -36,3 +36,15 @@ export function todayLabel(now: Date = new Date()): string {
     DAY_LABELS[now.getDay() || 7]
   }요일`;
 }
+
+/**
+ * 화면을 열었을 때 기본으로 고를 주차. 달 안에서 1일부터 7일씩 끊는다 —
+ * 서버의 MonthWeeks와 같은 규칙이다.
+ *
+ * <p><b>이 값으로 데이터를 묶지 마라.</b> 주차 라벨과 날짜 범위는 서버가 정본이고
+ * (CLAUDE.md 9-2), 여기 있는 건 "셀렉트의 초깃값"뿐이다. T-5·T-13이 같이 쓴다 —
+ * 화면마다 복사하면 기본 선택이 서로 달라진다.
+ */
+export function currentWeekOfMonth(now: Date = new Date()): number {
+  return Math.floor((now.getDate() - 1) / 7) + 1;
+}

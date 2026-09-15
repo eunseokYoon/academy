@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -77,6 +78,11 @@ public class HomeService {
                 .map(lesson -> NextLessonResponse.from(lesson, today))
                 .orElse(null),
             examScheduleService.findNextExam(me.getId()).orElse(null),
+            // 학부모 홈과 같은 조회다. 시각은 예약 행의 arrival_time이라
+            // 클리닉만 받으면 시간대 시작을 쓰게 된다 — 실제로 그렇게 틀려 있었다
+            clinicReservationRepository.findNextReserved(me.getId(), today)
+                .map(reservation -> NextClinicResponse.from(reservation, today))
+                .orElse(null),
             homeworks,
             lessonRepository.findLastForStudent(me.getId(), today)
                 .map(HomeLessonResponse::from)
@@ -114,6 +120,10 @@ public class HomeService {
             nextLesson
                 .flatMap(lesson -> lesson.getClassRoom().scheduleOn(lesson.getLessonDate()))
                 .map(ClassRoomSchedule::getStartTime)
+                .orElse(null),
+            // D-day는 서버가 센다. NextClinicResponse.from과 같은 today 기준이다
+            nextLesson
+                .map(lesson -> (int) ChronoUnit.DAYS.between(today, lesson.getLessonDate()))
                 .orElse(null),
             new HomeNoticesResponse(
                 noticeService.countFor(child.getId()),

@@ -7,6 +7,7 @@ import com.njwenglish.dto.attendance.AttendanceCorrectRequest;
 import com.njwenglish.dto.attendance.AttendanceDetailResponse;
 import com.njwenglish.dto.attendance.AttendanceRosterResponse;
 import com.njwenglish.dto.attendance.PendingAttendanceResponse;
+import com.njwenglish.dto.attendance.WeekAttendanceResponse;
 import com.njwenglish.service.AttendanceService;
 import com.njwenglish.service.ClinicService;
 import jakarta.validation.Valid;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -65,5 +67,22 @@ public class TeacherAttendanceController {
     public ApiResponse<PendingAttendanceResponse> pending() {
         return ApiResponse.ok(new PendingAttendanceResponse(
             attendanceService.pending(), clinicService.pendingAttendance()));
+    }
+
+    /**
+     * 주차 조회. <b>확정된 것도 함께</b> 내려준다(2026-09-01 확정) — 지난 출석을 고치려면
+     * 들어갈 입구가 있어야 한다. 미확정 목록(위)은 그대로 둔다. 매일 여는 화면에서
+     * "무엇이 남았는지"가 첫 줄이어야 하는 성질을 주차 선택으로 바꾸지 마라.
+     *
+     * <p>클리닉은 T-13 목록을 그대로 쓴다. 같은 주차·같은 확정 판정이라 새로 만들면
+     * 두 화면이 갈라진다.
+     */
+    @GetMapping("/attendance/week")
+    public ApiResponse<WeekAttendanceResponse> week(@RequestParam int year,
+                                                    @RequestParam int month,
+                                                    @RequestParam int week) {
+        return ApiResponse.ok(new WeekAttendanceResponse(
+            attendanceService.week(year, month, week),
+            clinicService.listForTeacher(year, month, week, null)));
     }
 }

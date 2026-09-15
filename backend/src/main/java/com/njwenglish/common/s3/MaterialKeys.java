@@ -15,13 +15,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 자료실 파일의 s3Key 발급·대조. {@link SubmissionMediaKeys}와 같은 방식이다 —
+ * 공지 첨부 파일의 s3Key 발급·대조. {@link SubmissionMediaKeys}와 같은 방식이다 —
  * 발급한 키에 서명을 박아 두고 등록 시 대조해서, 클라이언트가 버킷 내 임의 경로를
- * 자료로 등록하는 것을 막는다.
+ * 첨부로 등록하는 것을 막는다.
  *
  * <p><b>서명은 선생님 id에 묶는다.</b> 제출물과 달리 등록 시점에 자료 행이 아직 없고,
  * 같은 파일을 여러 반에 줄 때 하나의 s3Key로 여러 행을 만들어야 하기 때문이다
- * (자료 id에 묶으면 두 번째 반 등록에서 대조가 깨진다).
+ * (공지가 만들어지기 전에 올라가므로 묶을 공지가 없다).
  *
  * <p><b>허용 목록은 확장자 기준이다.</b> hwp·hwpx·zip은 브라우저가 보내는 MIME이
  * 제각각이라 Content-Type으로 걸러낼 수 없다. 대신 presign에 쓸 Content-Type을
@@ -29,6 +29,9 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>exe·sh·bat·js·html은 목록에 없다.</b> HTML은 저장 후 서빙 시 XSS 경로가 된다.
  * 다운로드가 항상 Content-Disposition: attachment라도 목록을 늘리지 마라.
+ *
+ * <p><b>클래스명과 materials/ 프리픽스는 자료실 시절 그대로다.</b> 바꾸지 마라 —
+ * "materials/에는 S3 수명주기를 걸지 않는다"는 규칙이 이 프리픽스에 걸려 있다.
  */
 @Component
 public class MaterialKeys {

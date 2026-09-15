@@ -29,7 +29,11 @@ public record OnlineTestResultsResponse(
                        ClinicReflection clinicReflection) {
     }
 
-    public record Counts(int total, int notStarted, int inProgress, int submitted) {
+    /**
+     * offline은 <b>온라인 제출이 없지만 그 주차 클리닉 칸에 성적이 있는</b> 학생이다.
+     * notStarted에서 빠진다 — 오프라인으로 본 학생을 안 본 것으로 세면 화면이 거짓말을 한다.
+     */
+    public record Counts(int total, int notStarted, int inProgress, int submitted, int offline) {
     }
 
     /**

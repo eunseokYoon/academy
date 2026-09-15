@@ -28,13 +28,16 @@ import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.OnlineTestRepository;
 import com.njwenglish.repository.OnlineTestSubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.repository.WeeklyTestScoreRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +67,7 @@ public class OnlineTestService {
     private final WeeklyTestService weeklyTestService;
     private final OnlineTestAnswerKeys answerKeys;
     private final PresignedUrlProvider presignedUrlProvider;
+    private final WeeklyTestScoreRepository weeklyTestScoreRepository;
 
     @Transactional(readOnly = true)
     public List<OnlineTestListItemResponse> list(Long classRoomId, Short year, Short month,
@@ -196,14 +200,24 @@ public class OnlineTestService {
         Short internalCount = test.getInternalQuestionCount();
         Short[] correct = test.getCorrectChoices();
 
+        // 오프라인으로 본 학생. 온라인 테스트는 오프라인 테스트의 대체본이라
+        // 반 전체가 종이로 본 주에는 아무도 온라인으로 내지 않는다
+        Set<Long> offlineTaken = new HashSet<>(
+            weeklyTestScoreRepository.findStudentIdsWithClinicScore(
+                test.getClassRoom().getId(), test.getYear(), test.getMonth(), test.getWeek()));
+
         List<OnlineTestResultsResponse.Item> items = students.stream()
             .map(student -> {
                 OnlineTestSubmission submission = submissions.get(student.getId());
                 boolean submitted = submission != null && submission.isSubmitted();
                 if (!submitted) {
+                    // 실제로 온라인에 낸 것이 우선이다. 안 냈을 때만 성적 칸을 본다
+                    OnlineTestTakeStatus status = submission == null
+                        && offlineTaken.contains(student.getId())
+                        ? OnlineTestTakeStatus.OFFLINE
+                        : OnlineTestTakeStatus.of(submission);
                     return new OnlineTestResultsResponse.Item(
-                        student.getId(), student.getName(),
-                        OnlineTestTakeStatus.of(submission),
+                        student.getId(), student.getName(), status,
                         null, null, null, null, List.of(), null);
                 }
                 Short[] chosen = submission.getChosenChoices();
@@ -226,13 +240,16 @@ public class OnlineTestService {
             .filter(i -> i.status() == OnlineTestTakeStatus.SUBMITTED).count();
         int inProgress = (int) items.stream()
             .filter(i -> i.status() == OnlineTestTakeStatus.IN_PROGRESS).count();
+        int offline = (int) items.stream()
+            .filter(i -> i.status() == OnlineTestTakeStatus.OFFLINE).count();
 
         return new OnlineTestResultsResponse(
             new OnlineTestResultsResponse.Test(test.getId(), test.getTitle(),
                 test.getQuestionCount(), internalCount, test.getClassRoom().getName(),
                 clinicReflectionOf(test)),
             new OnlineTestResultsResponse.Counts(items.size(),
-                items.size() - submitted - inProgress, inProgress, submitted),
+                items.size() - submitted - inProgress - offline,
+                inProgress, submitted, offline),
             average(items),
             items);
     }

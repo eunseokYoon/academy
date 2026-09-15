@@ -311,6 +311,29 @@ class StudentServiceTest {
             verify(studentRepository, never()).delete(any());
         }
 
+        /**
+         * hasOperationalRecords는 네이티브 쿼리라 이 목 기반 테스트는 SQL 문자열(qna_posts EXISTS
+         * 절)까지 검증하지 못한다. 여기서 고정하는 건 서비스 계약이다 — 그 쿼리가 true를
+         * 돌려주면 delete는 반드시 STUDENT_HAS_RECORDS로 막아야 하고 studentRepository.delete를
+         * 호출해선 안 된다. 게시판에 글이 있는데도 hasOperationalRecords가 false를 돌려주면
+         * (예: qna_posts EXISTS 절이 빠지면) students 삭제가 그대로 진행되다가
+         * qna_posts.student_id의 FK(ON DELETE 없음, RESTRICT)에 걸려 처리되지 않은 500이 난다.
+         * 그 SQL 자체는 실제 DB에 붙여 수동으로 확인했다(report 참고).
+         */
+        @Test
+        @DisplayName("게시판에 글이 있는 학생은 삭제되지 않는다 — qna_posts도 hasOperationalRecords 대상이다")
+        void 게시판_글이_있으면_거부한다() {
+            given(studentAccessGuard.requireAccessible(91L))
+                .willReturn(Fixtures.student(91L, "제3자"));
+            given(studentRepository.hasOperationalRecords(91L)).willReturn(true);
+
+            assertThatThrownBy(() -> studentService.delete(91L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.STUDENT_HAS_RECORDS);
+
+            verify(studentRepository, never()).delete(any());
+        }
+
         @Test
         @DisplayName("유일한 자녀였으면 학부모 계정도 함께 지운다 — 자녀 없는 유령 계정을 남기지 않는다")
         void 단독_자녀면_학부모도_지운다() {

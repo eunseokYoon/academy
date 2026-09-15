@@ -4,10 +4,9 @@ import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.studentscore.StudentScoreResponse;
 import com.njwenglish.entity.WeeklyTest;
 import com.njwenglish.entity.WeeklyTestScore;
+import com.njwenglish.entity.enums.ScoreChartKind;
 import com.njwenglish.entity.enums.WeeklyTestType;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -70,7 +69,8 @@ public class StudentScoreQueryService {
                 continue;
             }
             sections.add(new StudentScoreResponse.Section(type, LABELS.get(type),
-                type.usesCount(), typeCells.stream().map(this::toItem).toList()));
+                type.usesCount(), chartKindOf(type),
+                typeCells.stream().map(this::toItem).toList()));
         }
 
         List<StudentScoreResponse.RetestNotice> notices = cells.stream()
@@ -95,24 +95,25 @@ public class StudentScoreQueryService {
         return new StudentScoreResponse.Item(
             test.getYear(), test.getMonth(), test.getWeek(), test.weekLabel(),
             cell.getCorrectCount(), test.getTotalCount(),
-            accuracy(cell.getCorrectCount(), test.getTotalCount()),
+            // 정답률은 2026-09-10에 없앤다. 환산 점수를 어느 화면에도 보이지 않기로 했다.
+            // 필드를 지우지 않는 이유는 배포가 backend → web 순서라 옛 화면이
+            // undefined를 받으면 "undefined%"를 그리기 때문이다. 다음 배포에서 지운다
+            null,
             cell.getInternalCorrect(), test.getInternalTotal(),
             cell.getExternalCorrect(), test.getExternalTotal(),
             cell.getResult(), cell.isRetestPassed(), cell.isRetestScheduled());
     }
 
     /**
-     * 맞힌 개수 / 전체 문항 수 × 100, 소수 첫째 자리.
-     *
-     * <p>환산 점수를 저장하지 않으므로 조회 시점에 계산한다 — 선생님이 나중에
-     * 전체 문항 수를 고쳐도 정답률이 따라온다.
+     * 그래프 종류. 단어·리뷰는 그래프가 없다(2026-09-10 회의) — 단어는 "12/15" 텍스트,
+     * 리뷰는 통과 배지뿐이다. 리뷰에 개수가 없는 이유는 ck_weekly_tests_shape가
+     * REVIEW의 total_count를 NULL로 못 박고 있어서다.
      */
-    private BigDecimal accuracy(Short correctCount, Short totalCount) {
-        if (correctCount == null || totalCount == null || totalCount == 0) {
-            return null;
-        }
-        return BigDecimal.valueOf(correctCount)
-            .multiply(BigDecimal.valueOf(100))
-            .divide(BigDecimal.valueOf(totalCount), 1, RoundingMode.HALF_UP);
+    private ScoreChartKind chartKindOf(WeeklyTestType type) {
+        return switch (type) {
+            case WORD, REVIEW -> ScoreChartKind.NONE;
+            case PRACTICE -> ScoreChartKind.BAR;
+            case CLINIC -> ScoreChartKind.SPLIT_BAR;
+        };
     }
 }

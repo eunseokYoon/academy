@@ -1,0 +1,21 @@
+# 크롤러에게 열어 줄 곳과 막을 곳.
+#
+# 이 앱은 로그인 벽 뒤에 있어서 실제로 색인될 수 있는 건 로그인 화면 하나뿐이다.
+# 그래도 명시적으로 막아 둔다 — 나중에 누군가 공개 페이지를 늘렸을 때
+# 학생 화면 경로가 딸려 들어가는 걸 여기서 잡는다.
+#
+# Disallow는 "크롤링 금지"지 접근 통제가 아니다. 실제 보호는 서버의 인증이 한다.
+
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /terms
+Allow: /privacy
+
+# 개인정보가 있는 경로. 인증이 막지만 크롤러가 두드리게 둘 이유도 없다.
+Disallow: /student/
+Disallow: /parent/
+Disallow: /teacher/
+Disallow: /api/
+
+Sitemap: https://njwenglish.com/sitemap.xml

@@ -1,8 +1,9 @@
 export type WeeklyTestType = "WORD" | "REVIEW" | "PRACTICE" | "CLINIC";
 export type TestResult = "PASS" | "FAIL";
+export type ScoreChartKind = "NONE" | "BAR" | "SPLIT_BAR";
 export type RegularExamSlot =
   | "S1_MIDTERM" | "S1_FINAL" | "S2_MIDTERM" | "S2_FINAL"
-  | "MOCK_MAR" | "MOCK_JUN" | "MOCK_SEP";
+  | "MOCK_MAR" | "MOCK_JUN" | "MOCK_SEP" | "MOCK_NOV";
 export type ExamType = "MIDTERM" | "FINAL";
 
 /**
@@ -21,17 +22,25 @@ export const WEEKLY_TEST_LABELS: Record<WeeklyTestType, string> = {
 /** 정기고사 열 순서. <b>선생님만 보는 화면에서만 쓴다.</b> */
 export const REGULAR_EXAM_SLOTS: RegularExamSlot[] = [
   "S1_MIDTERM", "S1_FINAL", "S2_MIDTERM", "S2_FINAL",
-  "MOCK_MAR", "MOCK_JUN", "MOCK_SEP",
+  "MOCK_MAR", "MOCK_JUN", "MOCK_SEP", "MOCK_NOV",
 ];
+
+/**
+ * 등수를 받는 슬롯. <b>내신만 학교 석차가 나온다</b> — 모의고사에는 칸을 그리지 마라.
+ * 서버가 `RegularExamSlot.hasSchoolRank()`로 같은 판정을 하고 DB의 ck_res_rank_slot이
+ * 한 번 더 막는다. 셋이 갈라지면 화면에만 있는 칸이 저장에서 400으로 튕긴다.
+ */
+export const hasSchoolRank = (slot: RegularExamSlot) => !slot.startsWith("MOCK_");
 
 export const REGULAR_EXAM_LABELS: Record<RegularExamSlot, string> = {
   S1_MIDTERM: "1학기 중간",
   S1_FINAL: "1학기 기말",
   S2_MIDTERM: "2학기 중간",
   S2_FINAL: "2학기 기말",
-  MOCK_MAR: "3월 모의",
-  MOCK_JUN: "6월 모의",
-  MOCK_SEP: "9월 모의",
+  MOCK_MAR: "3월 모의고사",
+  MOCK_JUN: "6월 모의고사",
+  MOCK_SEP: "9월 모의고사",
+  MOCK_NOV: "11월 모의고사",
 };
 
 export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
@@ -103,14 +112,28 @@ export interface RegularExamGrid {
   classRoomId: number;
   year: number;
   students: WeeklyTestStudentRow[];
-  scores: { studentId: number; examSlot: RegularExamSlot; rawScore: number }[];
+  scores: {
+    studentId: number;
+    examSlot: RegularExamSlot;
+    rawScore: number | null;
+    grade: number | null;
+    /** 내신 슬롯에만 값이 온다. */
+    schoolRank: number | null;
+  }[];
 }
 
 export interface RegularExamSaveBody {
   classRoomId: number;
   year: number;
-  /** rawScore가 null이면 그 칸의 행을 삭제한다. */
-  scores: { studentId: number; examSlot: RegularExamSlot; rawScore: number | null }[];
+  /** <b>셋 다 null이면</b> 그 칸의 행을 삭제한다. */
+  scores: {
+    studentId: number;
+    examSlot: RegularExamSlot;
+    rawScore: number | null;
+    grade: number | null;
+    /** 모의고사에 값을 실어 보내면 400이다. hasSchoolRank로 걸러라. */
+    schoolRank: number | null;
+  }[];
 }
 
 // ── 학생 · 학부모 (같은 응답을 쓴다) ────────────────────────
@@ -128,6 +151,7 @@ export interface StudentScoreItem {
   weekLabel: string;
   correctCount: number | null;
   totalCount: number | null;
+  /** <b>항상 null이다</b>(2026-09-10). 정답률·환산 점수를 전 화면에서 없앴다. 쓰지 마라. */
   accuracy: number | null;
   internalCorrect: number | null;
   internalTotal: number | null;
@@ -141,8 +165,11 @@ export interface StudentScoreItem {
 export interface StudentScoreSection {
   testType: WeeklyTestType;
   label: string;
-  /** true면 정답률 꺾은선을 그린다. 리뷰(P/F뿐)·클리닉(값이 둘)은 false다. */
-  chart: boolean;
+  /**
+   * 서버가 정한 그래프 종류. <b>testType으로 다시 분기하지 마라</b> —
+   * 성적 목록(S-7·P-4)과 주간 레포트(P-6)가 갈라진다.
+   */
+  chartKind: ScoreChartKind;
   /**
    * <b>year·month·week 오름차순</b>이다. 그래프가 그대로 쓰는 순서이고
    * 목록은 화면에서 뒤집어 그린다. 다시 정렬하지 마라.

@@ -85,6 +85,17 @@ class OnlineTestSubmissionServiceTest {
         return test;
     }
 
+    /** 5문항, 앞 3문항이 내부지문. 정답은 {1,2,3,1,2}다. */
+    private OnlineTest splitTest() {
+        OnlineTest test = OnlineTest.create(classRoom, teacher, "6월 2주차 클리닉",
+            (short) 5, (short) 5, new Short[] {1, 2, 3, 1, 2}, null,
+            "online-tests/2026/06/key.pdf", (short) 3,
+            (short) 2026, (short) 6, (short) 2, null, null);
+        ReflectionTestUtils.setField(test, "id", 55L);
+        test.publish(OffsetDateTime.now().minusDays(1));
+        return test;
+    }
+
     private void openTest(OnlineTest test) {
         given(onlineTestRepository.findOpenForStudent(any(), any(), any()))
             .willReturn(Optional.of(test));
@@ -205,5 +216,53 @@ class OnlineTestSubmissionServiceTest {
         assertThat(items).hasSize(1);
         assertThat(items.get(0).remainingMinutes()).isBetween(118L, 120L);
         assertThat(items.get(0).answeredCount()).isZero();
+    }
+
+    /**
+     * 11번. 점수 대신 개수를 보여주려면 내부·외부가 응답에 있어야 한다.
+     * 집계는 OnlineTestService.countCorrect 한 곳이다 — 두 곳에서 세면 갈라진다.
+     */
+    @Test
+    @DisplayName("학생 결과에 내부·외부 맞은 개수가 들어간다")
+    void 학생_결과에_내부_외부가_있다() {
+        // 정답 {1,2,3,1,2} / 학생 {1,2,9,1,9} → 내부(앞 3) 2개, 외부(뒤 2) 1개
+        OnlineTest test = splitTest();
+        OnlineTestSubmission submission = OnlineTestSubmission.start(test, me, (short) 5);
+        submission.saveAnswers(new Short[] {1, 2, 9, 1, 9});
+        submission.submit(OffsetDateTime.now(), new BigDecimal("60.00"), (short) 3);
+        openTest(test);
+        given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
+            .willReturn(Optional.of(submission));
+
+        OnlineTestResultResponse result = onlineTestSubmissionService.result(55L);
+
+        assertThat(result.internalQuestionCount()).isEqualTo((short) 3);
+        assertThat(result.internalCorrect()).isEqualTo((short) 2);
+        assertThat(result.externalCorrect()).isEqualTo((short) 1);
+    }
+
+    /**
+     * 내부지문 문항 수가 없으면 둘 다 null이다. <b>0으로 채우지 마라</b> —
+     * "0개 맞음"으로 읽힌다. 화면은 총 개수만 보여준다.
+     */
+    @Test
+    @DisplayName("내부지문 문항 수가 없으면 내부·외부는 null이다")
+    void 내부지문_수가_없으면_null이다() {
+        // test(null)은 내부지문 문항 수가 없는 25문항 테스트다
+        OnlineTest test = test(null);
+        OnlineTestSubmission submission = OnlineTestSubmission.start(test, me, (short) 25);
+        submission.saveAnswers(answers(25, 3));
+        submission.submit(OffsetDateTime.now(), new BigDecimal("100.00"), (short) 25);
+        openTest(test);
+        given(onlineTestSubmissionRepository.findByOnlineTestIdAndStudentId(55L, 88L))
+            .willReturn(Optional.of(submission));
+
+        OnlineTestResultResponse result = onlineTestSubmissionService.result(55L);
+
+        // 0으로 채우지 마라 — "0개 맞음"으로 읽힌다. 화면은 총 개수만 보여준다
+        assertThat(result.internalQuestionCount()).isNull();
+        assertThat(result.internalCorrect()).isNull();
+        assertThat(result.externalCorrect()).isNull();
+        assertThat(result.correctCount()).isEqualTo((short) 25);
     }
 }

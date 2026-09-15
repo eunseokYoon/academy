@@ -12,6 +12,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.dto.lesson.LessonBulkCreateRequest;
 import com.njwenglish.dto.lesson.LessonBulkCreateResponse;
 import com.njwenglish.dto.lesson.LessonCreateRequest;
+import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.dto.lesson.LessonDetailResponse;
 import com.njwenglish.dto.lesson.LessonUpdateRequest;
 import com.njwenglish.entity.ClassRoom;
@@ -75,7 +76,7 @@ class LessonServiceTest {
 
         LessonDetailResponse response = lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
-            "관계대명사", null, "내용", "중점", "다음"));
+            "관계대명사", null, "내용", "중점", "다음", null));
 
         // 5월 20일은 달력상 3주차지만 선생님이 고른 4를 저장한다
         assertThat(response.week()).isEqualTo((short) 4);
@@ -92,7 +93,7 @@ class LessonServiceTest {
 
         assertThatThrownBy(() -> lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
-            null, null, null, null, null)))
+            null, null, null, null, null, null)))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.DUPLICATE_RESOURCE);
     }
@@ -104,23 +105,33 @@ class LessonServiceTest {
 
         assertThatThrownBy(() -> lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
-            null, "https://vimeo.com/12345678", null, null, null)))
+            null, List.of(new LessonVideoRequest("https://vimeo.com/12345678", null)),
+            null, null, null, null)))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
 
     @Test
-    @DisplayName("videoUrl에서 videoId·embedUrl을 파싱해 내려준다")
+    @DisplayName("링크 목록에서 embedUrl을 파싱해 내려준다 — 순서는 보낸 순서다")
     void 영상_id를_내려준다() {
         given(classRoomRepository.findById(3L)).willReturn(Optional.of(thursdayClass()));
         given(lessonRepository.save(any())).willAnswer(i -> i.getArgument(0));
 
         LessonDetailResponse response = lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
-            null, "https://www.youtube.com/watch?v=dQw4w9WgXcQ", null, null, null));
+            null, List.of(
+                new LessonVideoRequest("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "1교시"),
+                new LessonVideoRequest("https://youtu.be/im83SqpKKJ0", null)),
+            null, null, null, null));
 
-        assertThat(response.videoId()).isEqualTo("dQw4w9WgXcQ");
-        assertThat(response.embedUrl()).isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ");
+        assertThat(response.videos()).hasSize(2);
+        assertThat(response.videos().get(0).title()).isEqualTo("1교시");
+        assertThat(response.videos().get(0).embedUrl())
+            .isEqualTo("https://www.youtube.com/embed/dQw4w9WgXcQ");
+        // 이름을 안 적으면 null이다. "영상 2"는 화면이 채운다
+        assertThat(response.videos().get(1).title()).isNull();
+        assertThat(response.videos().get(1).embedUrl())
+            .isEqualTo("https://www.youtube.com/embed/im83SqpKKJ0");
     }
 
     @Test
@@ -130,7 +141,7 @@ class LessonServiceTest {
 
         assertThatThrownBy(() -> lessonService.create(new LessonCreateRequest(
             3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 6,
-            null, null, null, null, null)))
+            null, null, null, null, null, null)))
             .isInstanceOf(BusinessException.class)
             .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
@@ -196,7 +207,7 @@ class LessonServiceTest {
         lessonService.publish(501L);
         var publishedAt = lesson.getPublishedAt();
         lessonService.update(501L, new LessonUpdateRequest(
-            null, null, null, "제목 수정", null, null, null, null));
+            null, null, null, "제목 수정", null, null, null, null, null));
 
         assertThat(lesson.getPublishedAt()).isEqualTo(publishedAt);
         assertThat(lesson.getTitle()).isEqualTo("제목 수정");
@@ -221,17 +232,50 @@ class LessonServiceTest {
     void 보낸_필드만_바꾼다() {
         Lesson lesson = Lesson.create(thursdayClass(), LocalDate.of(2026, 5, 20),
             (short) 2026, (short) 5, (short) 4);
-        lesson.writeContent("원래 제목", null, "원래 내용", "원래 중점", null);
+        lesson.writeContent("원래 제목", "원래 내용", "원래 중점", "원래 숙제", "원래 클리닉");
         given(lessonRepository.findWithClassRoom(501L)).willReturn(Optional.of(lesson));
 
         lessonService.update(501L, new LessonUpdateRequest(
-            null, null, (short) 3, null, null, null, null, "다음 시간 예고"));
+            null, null, (short) 3, null, null, null, null, null, "다음 시간 클리닉"));
 
         assertThat(lesson.getWeek()).isEqualTo((short) 3);
         assertThat(lesson.getYear()).isEqualTo((short) 2026);
         assertThat(lesson.getTitle()).isEqualTo("원래 제목");
         assertThat(lesson.getContent()).isEqualTo("원래 내용");
-        assertThat(lesson.getNextPreview()).isEqualTo("다음 시간 예고");
+        assertThat(lesson.getHomeworkNote()).isEqualTo("원래 숙제");
+        assertThat(lesson.getClinicNote()).isEqualTo("다음 시간 클리닉");
+    }
+
+    @Test
+    @DisplayName("수업 숙제와 클리닉을 따로 저장한다")
+    void 숙제와_클리닉을_따로_저장한다() {
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(thursdayClass()));
+        given(lessonRepository.save(any())).willAnswer(i -> i.getArgument(0));
+
+        LessonDetailResponse response = lessonService.create(new LessonCreateRequest(
+            3L, LocalDate.of(2026, 5, 20), (short) 2026, (short) 5, (short) 4,
+            "관계대명사", null, "내용", "중점",
+            "p.144-152 (1,2번 제외)", "화 19:00 도착"));
+
+        // 한 칸에 섞여 있던 것을 나눈 것이 이 태스크의 전부다. 섞이면 학생이 골라 읽어야 한다
+        assertThat(response.homeworkNote()).isEqualTo("p.144-152 (1,2번 제외)");
+        assertThat(response.clinicNote()).isEqualTo("화 19:00 도착");
+    }
+
+    /** 부분 수정이다. null은 "안 바꾼다"다 — 빈 문자열을 보내면 지워진다. */
+    @Test
+    @DisplayName("수정에서 클리닉만 보내면 숙제는 그대로 남는다")
+    void 한_칸만_수정하면_나머지는_남는다() {
+        Lesson lesson = Lesson.create(thursdayClass(), LocalDate.of(2026, 5, 20),
+            (short) 2026, (short) 5, (short) 4);
+        lesson.writeContent("관계대명사", "내용", "중점", "먼저 적어 둔 숙제", "옛 클리닉");
+        given(lessonRepository.findWithClassRoom(501L)).willReturn(Optional.of(lesson));
+
+        lessonService.update(501L, new LessonUpdateRequest(
+            null, null, null, null, null, null, null, null, "바뀐 클리닉 안내"));
+
+        assertThat(lesson.getHomeworkNote()).isEqualTo("먼저 적어 둔 숙제");
+        assertThat(lesson.getClinicNote()).isEqualTo("바뀐 클리닉 안내");
     }
 
     @Test

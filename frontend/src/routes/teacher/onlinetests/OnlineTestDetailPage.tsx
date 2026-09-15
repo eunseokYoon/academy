@@ -1,9 +1,12 @@
 import { Fragment, useState } from "react";
+import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { errorMessage } from "../../../shared/api/errors";
 import { Badge } from "../../../shared/components/Badge";
 import { FormError } from "../../../shared/components/FormError";
+import { Modal } from "../../../shared/components/Modal";
+import { SubmitButton } from "../../../shared/components/SubmitButton";
 import { TAKE_STATUS_LABELS } from "../../../shared/onlinetest/types";
 import {
   deleteOnlineTest,
@@ -11,6 +14,7 @@ import {
   getOnlineTestResults,
   getOnlineTestStudentDetail,
   publishOnlineTest,
+  updateOnlineTest,
 } from "../api";
 import type { ClinicReflection } from "../api";
 
@@ -100,6 +104,16 @@ export default function OnlineTestDetailPage() {
     },
   });
 
+  const [editingDeadline, setEditingDeadline] = useState(false);
+
+  const updateDeadline = useMutation({
+    mutationFn: (closesAt: string) => updateOnlineTest(id, { closesAt }),
+    onSuccess: async () => {
+      setEditingDeadline(false);
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "online-test", id] });
+    },
+  });
+
   if (test.isPending) return <p className="text-sm text-slate-400">불러오는 중…</p>;
   if (test.isError || !test.data) {
     return (
@@ -182,6 +196,13 @@ export default function OnlineTestDetailPage() {
           >
             삭제
           </button>
+          <button
+            type="button"
+            onClick={() => setEditingDeadline(true)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+          >
+            마감 수정
+          </button>
         </div>
 
         {publish.isError && <FormError message={errorMessage(publish.error)} />}
@@ -214,11 +235,23 @@ export default function OnlineTestDetailPage() {
         <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm">
           <div className="flex items-baseline justify-between">
             <h3 className="text-sm font-semibold text-slate-900">응시 현황</h3>
-            {/* 제출자만으로 계산한다. 이 값은 선생님 화면에만 있다 */}
-            <span className="text-xs text-slate-500">
-              제출 {results.data.counts.submitted} / {results.data.counts.total}
-              {results.data.average != null && ` · 평균 ${results.data.average}점`}
-            </span>
+            {/*
+              평균 점수는 2026-09-10에 지웠다 — 「환산 점수는 넣지 마라, 모두에게」가
+              선생님 화면까지 덮는다. 응답의 average 필드는 옛 화면 호환으로 남아 있지만
+              쓰지 마라. 제출/전체는 개수라 그대로 둔다.
+            */}
+            <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+              <span>
+                제출 {results.data.counts.submitted} / {results.data.counts.total}
+              </span>
+              <span>미응시 {results.data.counts.notStarted}</span>
+              {results.data.counts.inProgress > 0 && (
+                <span>작성 중 {results.data.counts.inProgress}</span>
+              )}
+              {results.data.counts.offline > 0 && (
+                <span>오프라인 응시 {results.data.counts.offline}</span>
+              )}
+            </div>
           </div>
 
           <ClinicReflectionNotice
@@ -234,7 +267,7 @@ export default function OnlineTestDetailPage() {
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">학생</th>
                   <th className="px-3 py-2 text-left font-medium">상태</th>
-                  <th className="px-3 py-2 text-right font-medium">점수</th>
+                  <th className="px-3 py-2 text-right font-medium">맞은 개수</th>
                   {results.data.test.internalQuestionCount != null && (
                     <>
                       <th className="px-3 py-2 text-right font-medium">내부</th>
@@ -262,15 +295,17 @@ export default function OnlineTestDetailPage() {
                                 ? "ok"
                                 : item.status === "IN_PROGRESS"
                                   ? "warn"
-                                  : "neutral"
+                                  : item.status === "OFFLINE"
+                                    ? "brand"
+                                    : "neutral"
                             }
                           >
                             {TAKE_STATUS_LABELS[item.status]}
                           </Badge>
                         </td>
                         <td className="px-3 py-2 text-right text-slate-700">
-                          {item.score != null
-                            ? `${item.score}점 (${item.correctCount}/${detail.questionCount})`
+                          {item.correctCount != null
+                            ? `${item.correctCount}/${detail.questionCount}`
                             : "—"}
                         </td>
                         {internalTotal != null && (
@@ -334,6 +369,74 @@ export default function OnlineTestDetailPage() {
           </div>
         </section>
       )}
+
+      {editingDeadline && (
+        <DeadlineModal
+          closesAt={detail.closesAt}
+          pending={updateDeadline.isPending}
+          errorMessage={updateDeadline.isError ? errorMessage(updateDeadline.error) : null}
+          onClose={() => setEditingDeadline(false)}
+          onSubmit={(closesAt) => updateDeadline.mutate(closesAt)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * 마감 수정 전용 모달. 공개 후에도 열 수 있다 — 정답·문항 수와 달리 마감은
+ * 소급 변경이어도 학생 점수에 영향이 없다.
+ *
+ * <p>「마감 없음으로 되돌리기」는 만들지 않는다. `PATCH`가 `closesAt: null`을
+ * "안 보냄"으로 읽어서 기존 값이 유지된다 — 그 버튼을 두면 눌러도 아무 일이
+ * 안 일어나는 버튼이 된다.
+ */
+function DeadlineModal({
+  closesAt,
+  pending,
+  errorMessage,
+  onClose,
+  onSubmit,
+}: {
+  closesAt: string | null;
+  pending: boolean;
+  errorMessage: string | null;
+  onClose: () => void;
+  onSubmit: (closesAt: string) => void;
+}) {
+  // datetime-local은 오프셋을 못 받는다. 앞 16자만 쓰면 KST 그대로다
+  const [value, setValue] = useState(closesAt === null ? "" : closesAt.slice(0, 16));
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (value === "") return;
+    // datetime-local은 초·타임존이 없다. 서버가 OffsetDateTime을 받으므로
+    // 브라우저 타임존 기준으로 채워 보낸다 — 선생님과 서버가 같은 KST다
+    onSubmit(new Date(value).toISOString());
+  }
+
+  return (
+    <Modal title="마감 수정" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-600">마감</span>
+          <input
+            type="datetime-local"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+        </label>
+
+        <p className="mt-2 text-xs text-slate-500">
+          공개된 뒤에도 마감은 고칠 수 있습니다. 정답과 문항 수는 고칠 수 없습니다.
+        </p>
+
+        <FormError message={errorMessage} />
+
+        <SubmitButton pending={pending}>저장</SubmitButton>
+      </form>
+    </Modal>
   );
 }

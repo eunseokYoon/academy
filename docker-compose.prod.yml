@@ -1,6 +1,17 @@
 # 운영 (EC2 한 대). 컨테이너 4개: web · web-reloader · backend · certbot
 # DB는 여기 없다. 관리형(Supabase/RDS)이다. 컨테이너로 띄우면 인스턴스가 죽을 때 데이터가 같이 간다.
 #
+# 이미지를 굽는 건 backend 하나뿐이다. 화면은 로컬에서 `npm run build`한 dist를
+# /opt/academy/web/releases/ 로 올리고 심볼릭 링크만 바꾼다 — 그래서 TAG는 backend 전용이다.
+# 프론트 롤백은 링크를 되돌리는 것이고, 절차는 deploy/README.md 3장에 있다.
+#
+# 서버 디렉터리 구조 (/opt/academy):
+#   .env                              DOMAIN / TAG / REGISTRY
+#   docker-compose.prod.yml
+#   nginx/templates/default.conf.template
+#   web/releases/{타임스탬프}/         업로드된 dist
+#   web/current -> releases/{타임스탬프}   상대 링크여야 한다 (절대 경로면 컨테이너 안에서 깨진다)
+#
 # 사용법:
 #   .env 에 DOMAIN / TAG / REGISTRY  (배포 디렉터리, 커밋 금지)
 #   /etc/academy/env 에 DB·JWT·S3    (chmod 600, 커밋 금지 — deploy/academy.env.example 참고)
@@ -30,24 +41,44 @@ services:
       driver: json-file
       options: { max-size: "20m", max-file: "5" }
 
+  # 공식 nginx 이미지를 그대로 쓴다. 설정과 화면은 전부 마운트다 — 이미지를 굽지 않는다.
   web:
-    image: "${REGISTRY:-academy}/academy-frontend:${TAG:?TAG를 .env에 지정하세요}"
+    image: nginx:1.27-alpine
     container_name: academy-web
     restart: always
     # nginx가 PID 1이다 (이미지 기본 ENTRYPOINT). command로 덮어쓰지 마라 — 6절 참고.
     environment:
       DOMAIN: "${DOMAIN:?DOMAIN을 .env에 지정하세요}"
+      # 액세스 로그 시각을 KST로 남긴다. 공식 nginx alpine 이미지에 tzdata가 들어 있어서
+      # 이 한 줄이면 되고, /etc/localtime을 호스트에서 빌려올 필요가 없다
+      # (빌려오면 호스트 시간대가 틀어질 때 컨테이너까지 같이 틀어진다).
+      # 없으면 UTC라 마감 시각 조사할 때 로그가 9시간 어긋난다.
+      TZ: Asia/Seoul
     ports:
       - "80:80"
       - "443:443"
     volumes:
+      # 마운트하는 건 web 디렉터리 전체다. current 링크를 직접 마운트하면 도커가
+      # 마운트 시점에 링크를 풀어 버려서 배포·롤백이 조용히 안 먹는다.
+      - ./web:/srv/web:ro
+      # 엔트리포인트가 시작할 때 이 템플릿을 읽어 ${DOMAIN}을 치환한다. 읽기만 하므로 ro다.
+      - ./nginx/templates:/etc/nginx/templates:ro
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
     depends_on:
       - backend
     # 프로세스가 살아 있는 것과 요청에 응답하는 것은 다르다. 502만 뱉는 상태도 잡아야 한다.
+    #
+    # 주소가 localhost가 아니라 127.0.0.1인 것이 핵심이다. 이미지의 /etc/hosts에는 ::1이
+    # 있고 busybox wget이 그걸 먼저 무는데, 우리 템플릿은 `listen 80`뿐이라(IPv6 미리슨)
+    # "Connection refused"가 난다 — 서비스는 멀쩡한데 컨테이너만 영원히 unhealthy다.
+    # 템플릿에 `listen [::]:80`을 추가해서 풀지 마라. 공개 포트를 늘리는 쪽이 아니라
+    # 헬스체크 주소를 좁히는 쪽이 맞다.
+    #
+    # 이 이미지에는 curl도 들어 있다. 그래도 wget을 쓰는 건 busybox에 항상 딸려 와서
+    # 태그를 올릴 때 사라질 일이 없기 때문이다.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -63,7 +94,7 @@ services:
   # HUP 시그널을 직접 보내는 것이 reload가 내부에서 하는 일과 동일하다.
   # web이 재생성되면 네임스페이스가 사라져 이 컨테이너도 죽는다 → restart: always가 복구한다.
   web-reloader:
-    image: "${REGISTRY:-academy}/academy-frontend:${TAG:?TAG를 .env에 지정하세요}"
+    image: nginx:1.27-alpine
     container_name: academy-web-reloader
     restart: always
     pid: "service:web"

@@ -6,11 +6,14 @@ import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.common.s3.SubmissionMediaKeys;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.dto.homework.HomeworkBriefResponse;
 import com.njwenglish.dto.homework.HomeworkCountsResponse;
+import com.njwenglish.dto.homework.HomeworkNoteResponse;
 import com.njwenglish.dto.homework.HomeworkSubmissionsResponse;
 import com.njwenglish.dto.homework.MediaUploadUrlResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
+import com.njwenglish.dto.homework.ParentSubmissionPhotosResponse;
 import com.njwenglish.dto.homework.PhotoRegisterRequest;
 import com.njwenglish.dto.homework.PhotoRegisterResponse;
 import com.njwenglish.dto.homework.PhotoUploadUrlRequest;
@@ -29,12 +32,15 @@ import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.SubmissionPhoto;
+import com.njwenglish.entity.enums.HomeworkResult;
+import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
 import com.njwenglish.repository.SubmissionRepository;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -75,15 +81,22 @@ public class SubmissionService {
     private final StudentAccessGuard studentAccessGuard;
     private final PresignedUrlProvider presignedUrlProvider;
     private final SubmissionMediaKeys mediaKeys;
+    private final LessonRepository lessonRepository;
 
     // ---------- 학생 (S-2 · S-3 · S-4) ----------
 
-    /** 미제출이면서 마감 임박한 것이 위로 온다. 남은 시간은 서버가 계산한다. */
+    /**
+     * 미제출이면서 마감 임박한 것이 위로 온다. 남은 시간은 서버가 계산한다.
+     *
+     * <p>year·month는 화면의 달 필터다. 걸면 <b>그 달에 수업이 있는 숙제만</b> 내려간다.
+     */
     @Transactional(readOnly = true)
     public PageResponse<StudentHomeworkListItemResponse> myHomeworks(String status,
+                                                                     Integer year, Integer month,
                                                                      Pageable pageable) {
         Student me = studentAccessGuard.requireSelf();
-        Page<Submission> page = submissionRepository.findByStudent(me.getId(), status, pageable);
+        Page<Submission> page = submissionRepository.findByStudent(
+            me.getId(), status, monthStart(year, month), monthEnd(year, month), pageable);
 
         List<Long> ids = page.getContent().stream().map(Submission::getId).toList();
         Map<Long, Integer> photoCounts = photoCountsOf(ids);
@@ -92,7 +105,7 @@ public class SubmissionService {
         return PageResponse.from(page.map(submission -> {
             Homework homework = submission.getHomework();
             return new StudentHomeworkListItemResponse(
-                homework.getId(), homework.getTitle(), homework.getClassRoom().getName(),
+                homework.getId(), homework.getTitle(), homework.getDescription(), homework.getClassRoom().getName(),
                 homework.getKind(),
                 homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
                 submission.getResult(), submission.getCompletionRate(),
@@ -251,6 +264,30 @@ public class SubmissionService {
             submission.getSubmittedAt(), submission.isLate(), photoCount);
     }
 
+    /**
+     * S-2 맨 위의 「이번 주에 낼 것」. 선생님이 수업에 적은 숙제 글이다.
+     *
+     * <p>숙제 <b>줄</b> 목록이 아니다 — 그건 아래 두 구획(다시 제출 필요 / 지난 숙제)이
+     * 맡는다. 종이로 해오는 숙제라 학생이 읽어야 하는 건 글이다.
+     *
+     * <p>글이 빈 수업은 넣지 않는다. 빈 구획이 뜨면 "낼 것이 없다"로 읽힌다.
+     */
+    @Transactional(readOnly = true)
+    public List<HomeworkNoteResponse> myHomeworkNotes() {
+        Student me = studentAccessGuard.requireSelf();
+        return lessonRepository
+            .findLastPublishedPerClassRoom(me.getId(), LocalDate.now())
+            .stream()
+            .filter(lesson -> lesson.getHomeworkNote() != null
+                && !lesson.getHomeworkNote().isBlank())
+            .map(lesson -> new HomeworkNoteResponse(
+                lesson.getId(), lesson.getLessonDate(),
+                lesson.getClassRoom().getName(),
+                MonthWeeks.label(lesson.getMonth(), lesson.getWeek()),
+                lesson.getHomeworkNote()))
+            .toList();
+    }
+
     // ---------- 선생님 (T-7) ----------
 
     /**
@@ -306,22 +343,27 @@ public class SubmissionService {
             submission.getSubmittedAt(), submission.isLate(),
             photosOf(submissionId), videoOf(submission),
             index > 0 ? submitted.get(index - 1) : null,
-            nextSubmitted(submitted, index));
+            nextSubmitted(submitted, index),
+            submission.getHomework().isGrid());
     }
 
     // ---------- 학부모 (P-3) ----------
 
     /**
-     * <b>제목과 채점 결과까지</b> 내려준다. 학생용 DTO를 재사용하면 사진 URL과 피드백이 따라 나간다.
+     * <b>제목·채점 결과·제출 사진까지</b> 내려준다. 학생용 DTO를 재사용하면 사진 URL과 피드백이 따라 나간다.
      *
      * <p>첫 줄이 권한 검증이다. 학부모가 URL의 숫자만 바꿔 남의 아이 숙제를 보는 걸 여기서 막는다.
      */
     @Transactional(readOnly = true)
     public PageResponse<ParentHomeworkResponse> childHomeworks(Long studentId, String status,
+                                                               Integer year, Integer month,
                                                                Pageable pageable) {
         Student child = studentAccessGuard.requireAccessible(studentId);
-        Page<Submission> page = submissionRepository
-            .findByStudent(child.getId(), status, pageable);
+        Page<Submission> page = submissionRepository.findByStudent(
+            child.getId(), status, monthStart(year, month), monthEnd(year, month), pageable);
+
+        List<Long> ids = page.getContent().stream().map(Submission::getId).toList();
+        Map<Long, Integer> photoCounts = photoCountsOf(ids);
 
         return PageResponse.from(page.map(submission -> {
             Homework homework = submission.getHomework();
@@ -331,11 +373,61 @@ public class SubmissionService {
                 homework.getLesson() == null ? null : homework.getLesson().getLessonDate(),
                 submission.getResult(), submission.getCompletionRate(),
                 submission.isResolvedByResubmission(),
-                homework.getDueAt(), submission.getStatus(), submission.isLate());
+                homework.getDueAt(), submission.getStatus(), submission.isLate(),
+                photoCounts.getOrDefault(submission.getId(), 0));
         }));
     }
 
+    /**
+     * 자녀가 낸 숙제 사진. <b>첫 줄이 requireAccessible이다</b> —
+     * 학부모 A가 학부모 B의 자녀 studentId를 넣으면 여기서 403이다.
+     *
+     * <p>영상과 description은 담지 않는다. 열린 것은 사진뿐이다(2026-09-10).
+     */
+    @Transactional(readOnly = true)
+    public ParentSubmissionPhotosResponse childSubmissionPhotos(Long studentId,
+                                                                Long homeworkId) {
+        Student child = studentAccessGuard.requireAccessible(studentId);
+        Submission submission = submissionRepository
+            .findByHomeworkAndStudent(homeworkId, child.getId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        return new ParentSubmissionPhotosResponse(
+            submission.getHomework().getId(), submission.getHomework().getTitle(),
+            photosOf(submission.getId()));
+    }
+
     // ---------- 내부 ----------
+
+    /**
+     * 화면이 고른 달. <b>연·월 중 하나라도 없으면 null</b>이고 그러면 범위를 안 건다 —
+     * 화면이 연도만 바꾸는 순간이 있어서, 빠진 쪽을 1월이나 올해로 채우면 학생이 고르지도
+     * 않은 달의 숙제만 보인다.
+     *
+     * <p>값을 검사하는 이유는 YearMonth.of가 DateTimeException을 던져 <b>500이 되기</b>
+     * 때문이다. 잘못 만든 URL은 400이어야 한다. AttendanceService.validMonth와 같은 기준이다.
+     */
+    private static YearMonth filterMonth(Integer year, Integer month) {
+        if (year == null || month == null) {
+            return null;
+        }
+        if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return YearMonth.of(year, month);
+    }
+
+    /** 달 필터의 시작일. 안 걸었으면 null이다. */
+    private static LocalDate monthStart(Integer year, Integer month) {
+        YearMonth filter = filterMonth(year, month);
+        return filter == null ? null : filter.atDay(1);
+    }
+
+    /** 달 필터의 마지막 날. 말일은 달마다 다르므로 YearMonth가 계산한다. */
+    private static LocalDate monthEnd(Integer year, Integer month) {
+        YearMonth filter = filterMonth(year, month);
+        return filter == null ? null : filter.atEndOfMonth();
+    }
 
     /** 이 숙제의 대상이 아니면 애초에 행이 없다. 그때는 404다. */
     private Submission findMySubmission(Long homeworkId) {
@@ -423,5 +515,40 @@ public class SubmissionService {
             return null;
         }
         return Duration.between(now, dueAt).toMinutes();
+    }
+
+    /**
+     * T-7에서 「미흡」. <b>❌로 되돌리고 사진·영상을 지운다</b>(2026-09-10).
+     * 재제출을 잘못 낸 학생을 다시 내게 하는 경로다 — CLAUDE.md 4-5의
+     * "선생님이 그리드에서 🔺·❌로 되돌려 줘야 다시 낼 수 있다"에 입구를 하나 더 냈다.
+     *
+     * <p><b>status는 SUBMITTED로 남긴다.</b> 선생님이 T-7에서 사진을 볼 수 있는 근거가
+     * status <> NOT_SUBMITTED 하나뿐이다. 되돌리면 그 학생 칸으로 다시 들어갈 길이
+     * 사라진다. 채점축(result)과 제출축(status)을 섞지 마라.
+     *
+     * <p>resolvedByResubmission은 {@code grade}가 알아서 내린다 — DONE이 아닌 값으로
+     * 바꾸면 ck_submissions_resolved 때문에 반드시 내려가야 한다.
+     *
+     * <p>지운 S3 객체는 되돌릴 수 없다. 화면이 확인 한 단계를 띄운다.
+     */
+    @Transactional
+    public void markNotDone(Long submissionId) {
+        Submission submission = submissionRepository.findById(submissionId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!submission.getHomework().isGrid()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        submission.grade(HomeworkResult.NOT_DONE, null);
+
+        for (SubmissionPhoto photo : photoRepository
+            .findBySubmissionIdOrderBySortOrderAscIdAsc(submissionId)) {
+            photoRepository.delete(photo);
+            presignedUrlProvider.deleteQuietly(photo.getS3Key());
+        }
+        String videoKey = submission.detachVideo();
+        if (videoKey != null) {
+            presignedUrlProvider.deleteQuietly(videoKey);
+        }
     }
 }

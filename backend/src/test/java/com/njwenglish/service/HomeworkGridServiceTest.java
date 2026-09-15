@@ -14,6 +14,7 @@ import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.dto.homework.HomeworkGridResponse;
 import com.njwenglish.dto.homework.HomeworkGridSaveRequest;
 import com.njwenglish.dto.homework.HomeworkUpdateRequest;
+import com.njwenglish.dto.homework.ResubmitOpenRequest;
 import com.njwenglish.dto.homework.ResubmitOpenResponse;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
@@ -134,7 +135,7 @@ class HomeworkGridServiceTest {
     @DisplayName("재제출을 연 열은 세모·X 학생 수를 대상 수로 센다")
     void resubmitTargetCount() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(LESSON_DATE.plusDays(7).atTime(21, 0).atOffset(java.time.ZoneOffset.ofHours(9)));
+        column.openResubmit(LESSON_DATE.plusDays(7).atTime(21, 0).atOffset(java.time.ZoneOffset.ofHours(9)), "복습", null);
         Submission done = Fixtures.submission(1L, column, goYeonJun);
         done.grade(HomeworkResult.DONE, null);
         Submission notDone = Fixtures.submission(2L, column, kwonTaeHo);
@@ -228,7 +229,7 @@ class HomeworkGridServiceTest {
         Student parkSeoJun = Fixtures.student(95L, "박서준");
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
         column.openResubmit(
-            LESSON_DATE.plusDays(7).atTime(21, 0).atOffset(java.time.ZoneOffset.ofHours(9)));
+            LESSON_DATE.plusDays(7).atTime(21, 0).atOffset(java.time.ZoneOffset.ofHours(9)), "복습", null);
 
         Submission partial = Fixtures.submission(1L, column, goYeonJun);
         partial.grade(HomeworkResult.PARTIAL, (short) 70);
@@ -271,7 +272,7 @@ class HomeworkGridServiceTest {
     void resubmitTargetCountExcludesOffRosterCells() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
         column.openResubmit(
-            LESSON_DATE.plusDays(7).atTime(21, 0).atOffset(java.time.ZoneOffset.ofHours(9)));
+            LESSON_DATE.plusDays(7).atTime(21, 0).atOffset(java.time.ZoneOffset.ofHours(9)), "복습", null);
 
         // 고연준은 재원생 명단에 있고 이미 통과했다.
         Submission onRoster = Fixtures.submission(1L, column, goYeonJun);
@@ -485,7 +486,8 @@ class HomeworkGridServiceTest {
         given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of(partial));
 
         OffsetDateTime dueAt = OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9));
-        ResubmitOpenResponse response = homeworkService.openResubmit(720L, dueAt);
+        ResubmitOpenResponse response = homeworkService.openResubmit(720L,
+            new ResubmitOpenRequest(dueAt, "복습", null));
 
         assertThat(response.targetCount()).isEqualTo(1);
         assertThat(response.dueAt()).isEqualTo(dueAt);
@@ -495,42 +497,41 @@ class HomeworkGridServiceTest {
     }
 
     @Test
-    @DisplayName("마감을 생략하면 다음 수업일 21시로 잡는다")
-    void openResubmitDefaultsToNextLesson() {
+    @DisplayName("마감을 생략하면 400이다")
+    void openResubmitRequiresDueAt() {
+        // 기본값(다음 수업일 21:00)을 없앴다. 화면에서만 필수로 두면 이 경로를 직접 치는
+        // 쪽에 기본값이 남아 규칙이 두 곳으로 갈라진다
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
         Submission partial = Fixtures.submission(2L, column, kwonTaeHo);
         partial.grade(HomeworkResult.PARTIAL, (short) 50);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of(partial));
-        given(lessonRepository.findNextLessonDates(eq(3L), any(LocalDate.class)))
-            .willReturn(List.of(LocalDate.of(2026, 8, 5)));
 
-        ResubmitOpenResponse response = homeworkService.openResubmit(720L, null);
-
-        assertThat(response.dueAt().toLocalDate()).isEqualTo(LocalDate.of(2026, 8, 5));
-        assertThat(response.dueAt().toLocalTime().getHour()).isEqualTo(21);
+        assertThatThrownBy(() -> homeworkService.openResubmit(720L,
+            new ResubmitOpenRequest(null, "복습", null)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
     @Test
-    @DisplayName("다음 수업이 없으면 7일 뒤 21시로 잡는다")
-    void openResubmitFallsBackToSevenDaysWhenNoNextLesson() {
+    @DisplayName("선생님이 정한 마감이 그대로 저장된다")
+    void openResubmitUsesGivenDueAt() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
         Submission partial = Fixtures.submission(2L, column, kwonTaeHo);
         partial.grade(HomeworkResult.PARTIAL, (short) 50);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of(partial));
-        // 방학·학기 말처럼 앞으로 잡힌 수업일이 하나도 없는 경우 — FALLBACK_RESUBMIT_DAYS로 빠진다.
-        given(lessonRepository.findNextLessonDates(eq(3L), any(LocalDate.class)))
-            .willReturn(List.of());
 
-        ResubmitOpenResponse response = homeworkService.openResubmit(720L, null);
+        OffsetDateTime dueAt = LocalDate.of(2026, 8, 28)
+            .atTime(21, 0).atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime();
 
-        // 오늘 날짜를 테스트 안에서 계산한다. 달력 날짜를 박아 두면 해가 바뀌며 테스트가 썩는다.
-        LocalDate expected = LocalDate.now(ZoneId.of("Asia/Seoul")).plusDays(7);
-        assertThat(response.dueAt().toLocalDate()).isEqualTo(expected);
-        assertThat(response.dueAt().toLocalTime().getHour()).isEqualTo(21);
+        ResubmitOpenResponse response = homeworkService.openResubmit(720L,
+            new ResubmitOpenRequest(dueAt, "복습", null));
+
+        assertThat(response.dueAt()).isEqualTo(dueAt);
+        assertThat(response.targetCount()).isEqualTo(1);
     }
 
     @Test
@@ -541,7 +542,8 @@ class HomeworkGridServiceTest {
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.findResubmitTargets(720L)).willReturn(List.of());
 
-        assertThatThrownBy(() -> homeworkService.openResubmit(720L, null))
+        assertThatThrownBy(() -> homeworkService.openResubmit(720L,
+            new ResubmitOpenRequest(null, "복습", null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NO_RESUBMIT_TARGET);
     }
@@ -554,7 +556,8 @@ class HomeworkGridServiceTest {
 
         given(homeworkRepository.findWithClassRoom(700L)).willReturn(Optional.of(online));
 
-        assertThatThrownBy(() -> homeworkService.openResubmit(700L, null))
+        assertThatThrownBy(() -> homeworkService.openResubmit(700L,
+            new ResubmitOpenRequest(null, "복습", null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
@@ -563,7 +566,7 @@ class HomeworkGridServiceTest {
     @DisplayName("이미 열린 재제출의 마감을 앞당기면 400이다")
     void openResubmitCannotShortenDueAt() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
         Submission partial = Fixtures.submission(2L, column, kwonTaeHo);
         partial.grade(HomeworkResult.PARTIAL, (short) 50);
 
@@ -572,7 +575,8 @@ class HomeworkGridServiceTest {
 
         OffsetDateTime earlier = OffsetDateTime.of(2026, 8, 1, 20, 0, 0, 0, ZoneOffset.ofHours(9));
 
-        assertThatThrownBy(() -> homeworkService.openResubmit(720L, earlier))
+        assertThatThrownBy(() -> homeworkService.openResubmit(720L,
+            new ResubmitOpenRequest(earlier, "복습", null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
@@ -581,7 +585,7 @@ class HomeworkGridServiceTest {
     @DisplayName("재제출을 취소하면 마감이 사라진다")
     void closeResubmit() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.countByHomeworkIdAndStatusNot(720L, SubmissionStatus.NOT_SUBMITTED))
@@ -596,7 +600,7 @@ class HomeworkGridServiceTest {
     @DisplayName("이미 낸 학생이 있으면 재제출 취소는 409다")
     void closeResubmitBlockedBySubmission() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.countByHomeworkIdAndStatusNot(720L, SubmissionStatus.NOT_SUBMITTED))
@@ -611,7 +615,7 @@ class HomeworkGridServiceTest {
     @DisplayName("이미 닫힌 재제출을 다시 닫아도 에러 없이 닫힌 상태를 유지한다")
     void closeResubmitIsIdempotent() {
         Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
-        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)));
+        column.openResubmit(OffsetDateTime.of(2026, 8, 5, 20, 0, 0, 0, ZoneOffset.ofHours(9)), "복습", null);
 
         given(homeworkRepository.findWithClassRoom(720L)).willReturn(Optional.of(column));
         given(submissionRepository.countByHomeworkIdAndStatusNot(720L, SubmissionStatus.NOT_SUBMITTED))

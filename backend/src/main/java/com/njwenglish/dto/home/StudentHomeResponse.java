@@ -20,6 +20,14 @@ public record StudentHomeResponse(
     StudentRef student,
     NextLessonResponse nextLesson,
     NextExamResponse nextExam,
+    /**
+     * 배정받은 다음 클리닉. 없으면 null이다(2026-09-10 추가).
+     *
+     * <p><b>시각은 시간대 시작이 아니라 이 학생의 도착 시각이다.</b> 클리닉은
+     * 17:00~22:00처럼 다섯 시간짜리 시간대이고 학생은 그 안에서 한 시간에 배정된다.
+     * 학부모 홈과 같은 DTO·같은 조회를 쓴다 — 두 화면이 다른 시각을 보이면 문의가 생긴다.
+     */
+    NextClinicResponse nextClinic,
     List<HomeHomeworkResponse> currentHomeworks,
     HomeLessonResponse lastLesson,
     HomeNoticesResponse notices

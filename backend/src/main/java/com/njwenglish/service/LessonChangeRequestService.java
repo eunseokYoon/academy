@@ -207,10 +207,13 @@ public class LessonChangeRequestService {
      * 학생·학부모에게 갈 공지. <b>사유가 본문에 들어간다</b> — 그게 이 알림의 핵심이다.
      *
      * <p>scope는 STUDENT다. CLASS로 보내면 같은 반 20명이 이 학생의 사유를 읽는다.
+     *
+     * <p>말투는 <b>능동으로 통일했다</b>(2026-09-10) — 클리닉 변경 공지가
+     * "~학생이 클리닉 시간을 변경했습니다"였고 이쪽만 수동태였다. 한쪽만 고치지 마라.
      */
     private Notice publishNotice(LessonChangeRequest request, Teacher teacher) {
         String body = """
-            %s 학생의 수업일이 변경되었습니다.
+            %s 학생이 수업일을 변경했습니다.
 
             변경 전 · %s
             변경 후 · %s

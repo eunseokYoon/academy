@@ -29,13 +29,16 @@ import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.OnlineTestRepository;
 import com.njwenglish.repository.OnlineTestSubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.repository.WeeklyTestScoreRepository;
 import com.njwenglish.support.Fixtures;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +73,8 @@ class OnlineTestServiceTest {
     private OnlineTestAnswerKeys answerKeys;
     @Mock
     private PresignedUrlProvider presignedUrlProvider;
+    @Mock
+    private WeeklyTestScoreRepository weeklyTestScoreRepository;
 
     private OnlineTestService onlineTestService;
 
@@ -81,7 +86,7 @@ class OnlineTestServiceTest {
         onlineTestService = new OnlineTestService(onlineTestRepository,
             onlineTestSubmissionRepository, classRoomRepository, enrollmentRepository,
             teacherRepository, studentAccessGuard, weeklyTestService, answerKeys,
-            presignedUrlProvider);
+            presignedUrlProvider, weeklyTestScoreRepository);
 
         Fixtures.login(Fixtures.teacher(1L));
         given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
@@ -235,6 +240,62 @@ class OnlineTestServiceTest {
         given(onlineTestSubmissionRepository.findByOnlineTestId(55L)).willReturn(List.of());
 
         assertThat(onlineTestService.results(55L).average()).isNull();
+    }
+
+    /**
+     * 12번. 온라인 테스트는 오프라인 테스트의 대체본이다. 반 전체가 종이로 본 주에는
+     * 아무도 온라인으로 안 내는데, 그때 전원이 「미응시」로 뜨면 화면이 거짓말을 한다.
+     */
+    @Test
+    @DisplayName("그 주차 클리닉 칸이 있으면 미응시가 아니라 오프라인 응시다")
+    void 성적이_적혀_있으면_오프라인_응시다() {
+        // publishedTest()는 반 3L, 2026년 6월 2주차다
+        OnlineTest test = publishedTest();
+        Student paper = Fixtures.student(88L, "서동환");
+        Student absent = Fixtures.student(91L, "김하늘");
+        given(onlineTestRepository.findWithClassRoom(55L)).willReturn(Optional.of(test));
+        given(enrollmentRepository.findActiveStudents(anyLong(), any()))
+            .willReturn(List.of(paper, absent));
+        given(onlineTestSubmissionRepository.findByOnlineTestId(55L)).willReturn(List.of());
+        given(weeklyTestScoreRepository.findStudentIdsWithClinicScore(
+            3L, (short) 2026, (short) 6, (short) 2))
+            .willReturn(List.of(88L));
+
+        OnlineTestResultsResponse response = onlineTestService.results(55L);
+
+        Map<Long, OnlineTestTakeStatus> byStudent = response.items().stream()
+            .collect(Collectors.toMap(
+                OnlineTestResultsResponse.Item::studentId,
+                OnlineTestResultsResponse.Item::status));
+
+        assertThat(byStudent).containsEntry(88L, OnlineTestTakeStatus.OFFLINE);
+        assertThat(byStudent).containsEntry(91L, OnlineTestTakeStatus.NOT_STARTED);
+        assertThat(response.counts().offline()).isEqualTo(1);
+        // 오프라인으로 본 학생이 미응시에서 빠져야 한다. 안 빠지면 화면이 거짓말을 한다
+        assertThat(response.counts().notStarted()).isEqualTo(1);
+    }
+
+    /** 온라인으로 낸 학생은 성적 칸이 있어도 SUBMITTED다 — 실제로 낸 것이 우선이다. */
+    @Test
+    @DisplayName("온라인 제출이 있으면 성적 칸이 있어도 SUBMITTED다")
+    void 온라인_제출이_우선이다() {
+        OnlineTest test = publishedTest();
+        Student both = Fixtures.student(88L, "서동환");
+        given(onlineTestRepository.findWithClassRoom(55L)).willReturn(Optional.of(test));
+        given(enrollmentRepository.findActiveStudents(anyLong(), any()))
+            .willReturn(List.of(both));
+        given(onlineTestSubmissionRepository.findByOnlineTestId(55L))
+            .willReturn(List.of(submission(test, both, new BigDecimal("92.00"))));
+        // 성적 칸도 있다. 그래도 실제로 낸 것이 우선이다
+        given(weeklyTestScoreRepository.findStudentIdsWithClinicScore(
+            3L, (short) 2026, (short) 6, (short) 2))
+            .willReturn(List.of(88L));
+
+        OnlineTestResultsResponse response = onlineTestService.results(55L);
+
+        assertThat(response.items().get(0).status())
+            .isEqualTo(OnlineTestTakeStatus.SUBMITTED);
+        assertThat(response.counts().offline()).isZero();
     }
 
     @Test

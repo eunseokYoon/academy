@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { errorMessage } from "../api/errors";
+import { FormError } from "../components/FormError";
 import { Modal } from "../components/Modal";
 import { PageTitle, SectionHead, TintBlock } from "../components/Section";
-import { getNotice, listNotices } from "./api";
+import { formatBytes } from "./attachmentUpload";
+import { fetchAttachmentDownloadUrl, getNotice, listNotices } from "./api";
 
 /**
  * 학생·학부모 공용 공지 목록. 학부모는 studentId를 넘겨 자녀 기준으로 본다.
@@ -27,6 +30,33 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
     queryFn: () => getNotice(openId!, studentId),
     enabled: openId !== null,
   });
+
+  /**
+   * 다운로드 URL은 5분짜리다. 미리 받아 두지 말고 누를 때 받는다 —
+   * 상세를 열어 두고 한참 뒤에 누르면 만료된 URL을 쓰게 된다.
+   *
+   * <p>새 탭 요청(window.open)은 URL을 fetch로 받아온 <b>뒤</b>에 일어나서 클릭의
+   * 사용자 제스처와 묶이지 않을 수 있다 — 그러면 브라우저가 팝업을 조용히 막는다.
+   * 이때 fetch 자체는 성공했으므로 isError는 그대로 false라 "받기"를 눌러도 아무
+   * 일도 안 일어난 것처럼 보인다. 사파리·카카오톡 인앱 브라우저가 특히 엄격하다.
+   * window.open이 null을 돌려주면(차단됨) 같은 탭 이동으로 떨어뜨려
+   * 사용자가 파일을 받게 한다.
+   */
+  const download = useMutation({
+    mutationFn: (attachmentId: number) =>
+      fetchAttachmentDownloadUrl(openId!, attachmentId, studentId),
+    onSuccess: (data) => {
+      const win = window.open(data.downloadUrl, "_blank", "noopener");
+      if (!win) {
+        window.location.href = data.downloadUrl;
+      }
+    },
+  });
+
+  function openNotice(noticeId: number) {
+    setOpenId(noticeId);
+    download.reset();
+  }
 
   if (notices.isPending) {
     return (
@@ -55,7 +85,7 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
               <button
                 key={notice.noticeId}
                 type="button"
-                onClick={() => setOpenId(notice.noticeId)}
+                onClick={() => openNotice(notice.noticeId)}
                 className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left
                            transition-colors active:bg-brand-100/60"
               >
@@ -71,6 +101,13 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
                     <span className="truncate text-[14px] font-semibold text-brand-950">
                       {notice.title}
                     </span>
+                    {/* QnaListPage의 hasPhoto(· 사진)와 같은 언어 — 목록에서부터 자료 유무를 알린다 */}
+                    {notice.hasAttachment && (
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px]
+                                       font-bold text-slate-600">
+                        📎 자료
+                      </span>
+                    )}
                   </span>
                   <span className="tnum mt-0.5 block text-[11.5px] text-brand-600/70">
                     {notice.publishedAt.slice(5, 10).replace("-", "/")}
@@ -86,11 +123,17 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
       )}
 
       {openId !== null && (
-        <Modal title={detail.data?.title ?? "공지"} onClose={() => setOpenId(null)}>
+        <Modal
+          title={detail.data?.title ?? "공지"}
+          onClose={() => {
+            setOpenId(null);
+            download.reset();
+          }}
+        >
           {detail.isPending || !detail.data ? (
             <p className="text-sm text-slate-400">불러오는 중…</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-xs text-slate-500">
                 {detail.data.publishedAt.slice(0, 10).replace(/-/g, ".")}
               </p>
@@ -98,6 +141,45 @@ export function NoticeBoard({ studentId }: { studentId?: number }) {
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
                 {detail.data.content}
               </p>
+
+              {/*
+                ?? []가 방어하는 것은 <b>배포 스큐</b>다. 프론트가 백엔드보다 먼저 나가면
+                옛 응답에 attachments가 없어 .length가 던지고, 그러면 첨부 한 줄 때문에
+                공지 화면 전체가 "Unexpected Application Error"로 죽는다.
+                실제로 2026-08-24에 그렇게 터졌다 — 화면만 배포하고 API를 안 올렸을 때다.
+                응답 계약상으로는 항상 배열이지만, 계약을 어긴 쪽이 화면을 통째로 무너뜨리게
+                두지는 않는다. 배포 순서는 backend → web이다(deploy/README.md 3장).
+              */}
+              {(detail.data.attachments ?? []).length > 0 && (
+                <div className="space-y-1.5 border-t border-slate-100 pt-3">
+                  {download.isError && <FormError message={errorMessage(download.error)} />}
+                  {(detail.data.attachments ?? []).map((attachment) => (
+                    <button
+                      key={attachment.attachmentId}
+                      type="button"
+                      onClick={() => download.mutate(attachment.attachmentId)}
+                      disabled={download.isPending}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg
+                                 bg-slate-50 px-3 py-2 text-left transition-colors
+                                 active:bg-slate-100 disabled:opacity-60"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-slate-700">
+                        📎 {attachment.fileName}
+                        {attachment.bytes !== null && (
+                          <span className="tnum text-slate-400">
+                            {" "}
+                            ({formatBytes(attachment.bytes)})
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 rounded-lg border border-brand-200 bg-white
+                                       px-2 py-1 text-[11px] font-bold text-brand-700">
+                        받기
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </Modal>

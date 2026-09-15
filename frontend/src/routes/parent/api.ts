@@ -55,19 +55,36 @@ export interface ParentHomework {
   dueAt: string | null;
   status: SubmissionStatus;
   isLate: boolean;
+  photoCount: number;
 }
 
+/** year·month는 둘 다 보내야 걸린다. 학생 쪽(listMyHomeworks)과 같은 규칙이다. */
 export const getChildHomeworks = (
   studentId: number,
-  params: { status?: SubmissionStatus; page?: number },
+  params: { status?: SubmissionStatus; year?: number; month?: number; page?: number },
 ) => get<PageResponse<ParentHomework>>(`/parent/children/${studentId}/homeworks`, params);
+
+export interface ChildSubmissionPhotos {
+  homeworkId: number;
+  title: string;
+  photos: { photoId: number; url: string; sortOrder: number }[];
+}
+
+export async function getChildSubmissionPhotos(
+  studentId: number,
+  homeworkId: number,
+): Promise<ChildSubmissionPhotos> {
+  return await get<ChildSubmissionPhotos>(
+    `/parent/children/${studentId}/homeworks/${homeworkId}/photos`,
+  );
+}
 
 // ---------- 주간 레포트 (P-6) ----------
 
 /**
  * 학생 화면(S-5)과 <b>같은 응답</b>이다. 영상 값만 null로 내려온다.
  *
- * <p>videoId·embedUrl이 null인 것은 "영상이 없다"가 아니라 "학부모는 못 본다"는 뜻이다.
+ * <p>videos가 비어 있는 것은 "영상이 없다"가 아니라 "학부모는 못 본다"는 뜻이다.
  * 서버가 forParent 팩토리에서 고정해 보낸다. 프론트에서 이 값을 채워 재생을 붙이지 마라.
  */
 export interface ParentLessonListItem {
@@ -88,11 +105,12 @@ export interface ParentLessonDetail {
   title: string | null;
   classRoomName: string;
   /** 학부모 응답에서는 항상 null이다. 프론트는 영상 영역을 그리지 않는다. */
-  videoId: string | null;
-  embedUrl: string | null;
+  /** 학부모에게는 언제나 빈 배열이다. 서버가 forParent에서 고정한다. */
+  videos: never[];
   content: string | null;
   keyPoints: string | null;
-  nextPreview: string | null;
+  homeworkNote: string | null;
+  clinicNote: string | null;
   homework: {
     homeworkId: number;
     title: string;
@@ -163,6 +181,8 @@ export interface ParentHome {
   nextLessonDate: string | null;
   /** 반에 그 요일 슬롯이 없으면 null이다. 그때는 날짜만 그린다. */
   nextLessonTime: string | null;
+  /** 옛 응답에는 없어서 undefined일 수 있다. `!== null` 검사 없이 라벨에 넣지 마라. */
+  nextLessonDDay: number | null;
   notices: { totalCount: number; recent: NoticeSummary[] };
   pendingHomeworkCount: number;
   /** 시각은 시간대 시작이 아니라 <b>자녀가 고른 도착 시각</b>이다. */

@@ -6,6 +6,7 @@ import com.njwenglish.dto.attendance.AttendanceCalendarResponse;
 import com.njwenglish.dto.clinic.ParentClinicResponse;
 import com.njwenglish.dto.home.ParentHomeResponse;
 import com.njwenglish.dto.homework.ParentHomeworkResponse;
+import com.njwenglish.dto.homework.ParentSubmissionPhotosResponse;
 import com.njwenglish.dto.lesson.LessonReportListItemResponse;
 import com.njwenglish.dto.lesson.LessonReportResponse;
 import com.njwenglish.dto.member.ChildResponse;
@@ -99,8 +100,11 @@ public class ParentChildController {
     public ApiResponse<PageResponse<ParentHomeworkResponse>> homeworks(
         @PathVariable Long studentId,
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) Integer year,
+        @RequestParam(required = false) Integer month,
         @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.ok(submissionService.childHomeworks(studentId, status, pageable));
+        return ApiResponse.ok(
+            submissionService.childHomeworks(studentId, status, year, month, pageable));
     }
 
     /**
@@ -141,5 +145,12 @@ public class ParentChildController {
     public ApiResponse<List<StudentExamScheduleResponse>> examSchedules(
         @PathVariable Long studentId) {
         return ApiResponse.ok(examScheduleService.childSchedules(studentId));
+    }
+
+    /** 자녀가 낸 숙제 사진. 영상·숙제 내용은 오지 않는다. */
+    @GetMapping("/{studentId}/homeworks/{homeworkId}/photos")
+    public ApiResponse<ParentSubmissionPhotosResponse> photos(
+        @PathVariable Long studentId, @PathVariable Long homeworkId) {
+        return ApiResponse.ok(submissionService.childSubmissionPhotos(studentId, homeworkId));
     }
 }

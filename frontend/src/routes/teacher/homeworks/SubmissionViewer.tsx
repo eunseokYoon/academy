@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SUBMISSION_LABELS } from "../../../shared/homework/types";
-import { getSubmission } from "../api";
+import { getSubmission, markSubmissionNotDone } from "../api";
+import { errorMessage } from "../../../shared/api/errors";
+import { FormError } from "../../../shared/components/FormError";
 
 interface Props {
   submissionId: number;
@@ -22,6 +24,12 @@ interface Props {
 export default function SubmissionViewer({ submissionId, onNavigate, onClose }: Props) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [marking, setMarking] = useState(false);
+  /* 되돌릴 수 없는 삭제다. 실패를 조용히 넘기면 선생님이 지워졌는지 모른 채
+     다시 누른다 — 이 저장소의 기존 패턴(errorMessage + FormError)을 그대로 쓴다 */
+  const [markError, setMarkError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const submission = useQuery({
     queryKey: ["teacher", "submission", submissionId],
@@ -35,6 +43,28 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
     setPhotoIndex(0);
     setZoomed(false);
   }, [data?.submissionId]);
+
+  function confirmMarkNotDone() {
+    setMarkError(null);
+    setConfirming(true);
+  }
+
+  async function doMarkNotDone() {
+    setMarkError(null);
+    setMarking(true);
+    try {
+      await markSubmissionNotDone(data!.submissionId);
+      /* 그리드와 목록이 같은 칸을 보고 있다. 둘 다 무효화해야 ⭕가 ❌로 바뀐다 */
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "homework-grid"] });
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "submissions"] });
+      setConfirming(false);
+      onClose();
+    } catch (e) {
+      setMarkError(errorMessage(e, "미흡으로 되돌리지 못했습니다."));
+    } finally {
+      setMarking(false);
+    }
+  }
 
   if (submission.isPending || !data) {
     return (
@@ -67,6 +97,17 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
             {current?.video && " · 영상"}
           </p>
         </div>
+        {data.canMarkNotDone && (
+          <button
+            type="button"
+            onClick={() => void confirmMarkNotDone()}
+            disabled={marking}
+            className="shrink-0 rounded-lg border border-red-400 px-2 py-1 text-xs
+                       font-semibold text-red-300 disabled:opacity-50"
+          >
+            {marking ? "처리 중…" : "미흡"}
+          </button>
+        )}
         <button type="button" onClick={onClose} className="shrink-0 text-sm text-slate-300">
           닫기
         </button>
@@ -147,6 +188,41 @@ export default function SubmissionViewer({ submissionId, onNavigate, onClose }: 
           다음 학생 →
         </button>
       </div>
+
+      {confirming && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5">
+            <p className="text-[15px] font-bold text-brand-900">미흡으로 되돌릴까요?</p>
+            {markError && <FormError message={markError} />}
+            <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+              사진 {data.photos.length}장{data.video ? "과 영상" : ""}이 삭제됩니다.
+              <br />
+              <b className="text-red-600">되돌릴 수 없습니다.</b>
+              <br />
+              학생은 이 숙제를 다시 제출해야 합니다.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="flex-1 rounded-xl border border-slate-300 py-2.5 text-sm font-bold
+                           text-slate-600"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void doMarkNotDone()}
+                disabled={marking}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white
+                           disabled:opacity-50"
+              >
+                되돌리기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

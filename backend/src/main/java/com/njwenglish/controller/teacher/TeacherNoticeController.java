@@ -2,6 +2,8 @@ package com.njwenglish.controller.teacher;
 
 import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.common.response.PageResponse;
+import com.njwenglish.dto.notice.MaterialUploadUrlRequest;
+import com.njwenglish.dto.notice.MaterialUploadUrlResponse;
 import com.njwenglish.dto.notice.NoticeCreateRequest;
 import com.njwenglish.dto.notice.NoticeResponse;
 import com.njwenglish.dto.notice.NoticeUpdateRequest;
@@ -47,6 +49,13 @@ public class TeacherNoticeController {
     @PostMapping
     public ApiResponse<NoticeResponse> create(@Valid @RequestBody NoticeCreateRequest request) {
         return ApiResponse.ok(noticeService.create(request));
+    }
+
+    /** 업로드 URL 발급. 파일은 서버를 거치지 않는다 — 클라이언트가 S3로 직접 PUT한다. */
+    @PostMapping("/attachments/upload-url")
+    public ApiResponse<MaterialUploadUrlResponse> attachmentUploadUrl(
+        @Valid @RequestBody MaterialUploadUrlRequest request) {
+        return ApiResponse.ok(noticeService.issueAttachmentUploadUrl(request));
     }
 
     @PatchMapping("/{noticeId}")

@@ -4,16 +4,16 @@ import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
-import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.attendance.AttendanceExceptionRequest;
 import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
+import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
-import com.njwenglish.dto.clinic.ClinicReservationCreateRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
 import com.njwenglish.dto.clinic.ClinicReservationStudentResponse;
+import com.njwenglish.dto.clinic.ClinicSlotState;
 import com.njwenglish.entity.Clinic;
 import com.njwenglish.entity.ClinicChangeLog;
 import com.njwenglish.entity.ClinicReservation;
@@ -36,16 +36,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 클리닉 신청·배정·변경·출석. 신청 경로가 두 가지다 —
- * 학생 본인 신청(S-9)은 assigned_by = NULL, 선생님 배정(T-13)은 배정자 id가 들어간다.
+ * 클리닉 배정·변경·출석. <b>학생은 클리닉을 신청하지 못한다</b>(2026-09-01 확정) —
+ * 배정은 선생님이 T-13에서 한다({@link #assign}). assigned_by에 배정한 선생님의 id가 들어간다.
+ * 학생이 스스로 다른 클리닉으로 옮길 때({@link #change})도 같은 경로를 타지만,
+ * 그때는 선생님이 배정한 게 아니므로 assigned_by가 NULL로 남는다.
  *
- * <p>정원 체크는 언제나 {@link #reserveLocked}를 거친다. 학생 신청, 선생님 일괄 배정,
- * 클리닉 이동 세 곳이 같은 경합에 노출되므로 같은 메서드를 써야 한다.
+ * <p>정원 체크는 언제나 {@link #reserveLocked}를 거친다. 선생님 일괄 배정과
+ * 클리닉 이동 두 곳이 같은 경합에 노출되므로 같은 메서드를 써야 한다.
  *
  * <p><b>변경에 선생님 승인이 없다</b>(2026-08-10 확정). 학생이 하면 즉시 반영된다.
  * 대신 사유를 받아 {@link ClinicChangeLog}를 남기고 공지를 한 건 발행한다 —
@@ -79,8 +83,9 @@ public class ClinicReservationService {
      * 두 트랜잭션이 같은 count를 읽고 둘 다 통과한다. 저부하에서는 통과하다가
      * 신청이 몰리는 순간 깨져서 테스트로 잡기도 어렵다.
      *
-     * <p>failOnDuplicate는 경로마다 다르다. 학생 신청은 "이미 신청하셨습니다"를 보여줘야 해서
-     * 409지만, 선생님 일괄 배정은 멱등이라 이미 있는 학생을 건너뛴다.
+     * <p>failOnDuplicate는 경로마다 다르다. 학생이 다른 클리닉에서 옮겨 올 때는
+     * "이미 그 시간대에 있습니다"를 보여줘야 해서 409지만, 선생님 일괄 배정은 멱등이라
+     * 이미 있는 학생을 건너뛴다.
      *
      * <p>arrivalTime이 null이면 클리닉 시작 시각이다(선생님 배정의 기본값).
      * <b>정원은 클리닉 전체 기준이다</b> — 슬롯별 정원은 만들지 않기로 확정했다.
@@ -123,18 +128,6 @@ public class ClinicReservationService {
             .toList();
     }
 
-    /** S-9 학생 본인 신청. assigned_by는 null이다. */
-    @Transactional
-    public ClinicReservationCreateResponse reserve(Long clinicId,
-                                                   ClinicReservationCreateRequest request) {
-        Student student = studentAccessGuard.requireSelf();
-        requireOpenForStudent(findClinic(clinicId));
-
-        List<ClinicReservation> created = reserveLocked(
-            clinicId, List.of(student), null, request.arrivalTime(), true);
-        return ClinicReservationCreateResponse.from(created.get(0));
-    }
-
     /**
      * S-9 도착 시각 변경 · 다른 클리닉으로 이동. <b>선생님 승인이 없다</b>(확정) —
      * 대신 사유를 받아 기록을 남긴다.
@@ -142,7 +135,8 @@ public class ClinicReservationService {
      * <p>targetClinicId가 없거나 지금 클리닉과 같으면 arrival_time만 UPDATE한다.
      * 다르면 기존 예약을 MOVED로 비우고 목표 클리닉에 새 RESERVED를 만든다 —
      * <b>먼저 비워야</b> 같은 학생이 두 시간대에 RESERVED로 남지 않는다.
-     * 정원 재확인은 학생 신청과 같은 reserveLocked를 탄다.
+     * 정원 재확인은 선생님 배정과 같은 reserveLocked를 탄다 — 정원 잠금·중복 검사·
+     * 슬롯 검증이 전부 거기 있다. 이동 전용 경로를 따로 만들지 마라.
      */
     @Transactional
     public ClinicReservationCreateResponse change(Long clinicId,
@@ -204,8 +198,40 @@ public class ClinicReservationService {
 
         return new ClinicReservationListResponse(clinic.getId(), clinic.getClinicDate(),
             clinic.getStartTime(), clinic.getEndTime(), clinic.slots(), clinic.getCapacity(),
-            reservations.stream().anyMatch(r -> r.getAttendStatus() != null),
-            students);
+            isAttendanceConfirmed(reservations),
+            students, slotStates(clinic, reservations));
+    }
+
+    /**
+     * 「학생이 있는 슬롯 전부 확정」(2026-09-01) — 목록 쪽 {@code findAttendanceConfirmedClinicIds}와
+     * 정확히 같은 뜻이어야 한다. RESERVED 예약이 1건도 없으면 확정할 학생이 없으므로 false다
+     * (allMatch는 빈 스트림에 vacuously true를 주므로 반드시 먼저 비어있는지 본다).
+     */
+    private boolean isAttendanceConfirmed(List<ClinicReservation> reservations) {
+        return !reservations.isEmpty()
+            && reservations.stream().allMatch(r -> r.getAttendStatus() != null);
+    }
+
+    /**
+     * 도착 시각별 상태. <b>Clinic.slots()와 실제 예약 시각의 합집합</b>이다(2026-09-01) —
+     * 선생님이 시간대를 좁혀 범위 밖으로 남은 예약(outOfRange)도 줄에 없으면 확정할 방법이
+     * 없어져 클리닉이 영영 미확정으로 남는다. 시각 오름차순으로 돌린다.
+     */
+    private List<ClinicSlotState> slotStates(Clinic clinic, List<ClinicReservation> reservations) {
+        Map<LocalTime, List<ClinicReservation>> byArrival = reservations.stream()
+            .collect(Collectors.groupingBy(ClinicReservation::getArrivalTime));
+
+        TreeSet<LocalTime> times = new TreeSet<>(clinic.slots());
+        times.addAll(byArrival.keySet());
+
+        return times.stream()
+            .map(time -> {
+                List<ClinicReservation> atTime = byArrival.getOrDefault(time, List.of());
+                boolean confirmed = !atTime.isEmpty()
+                    && atTime.stream().allMatch(r -> r.getAttendStatus() != null);
+                return new ClinicSlotState(time, atTime.size(), confirmed);
+            })
+            .toList();
     }
 
     /**
@@ -234,17 +260,30 @@ public class ClinicReservationService {
     }
 
     /**
-     * 클리닉 출석 확정. T-5와 같은 방식이라 <b>안 온 학생만</b> 보낸다.
+     * T-13 출결 확정. <b>도착 시각 슬롯 하나를 확정한다</b>(2026-09-01 확정).
      *
-     * <p>기록은 clinic_reservations.attend_status다.
-     * attendances 테이블은 class_room_id가 NOT NULL인데 클리닉은 반이 없어서 못 쓴다.
+     * <p>다시 부르면 덮어쓴다 — 그게 "수정"이다. 되돌리기용 엔드포인트를 따로 만들지 마라.
+     * 예약이 0명인 슬롯은 확정할 학생이 없어 아무것도 하지 않고 200이다.
      */
     @Transactional
-    public ClinicAttendanceConfirmResponse confirmAttendance(Long clinicId,
-                                                             AttendanceConfirmRequest request) {
+    public ClinicAttendanceConfirmResponse confirmAttendance(
+        Long clinicId, ClinicAttendanceConfirmRequest request) {
         Clinic clinic = findClinic(clinicId);
         List<ClinicReservation> reservations =
-            reservationRepository.findReservedWithStudent(clinicId);
+            reservationRepository.findReservedWithStudentAt(clinicId, request.arrivalTime());
+        /*
+         * 슬롯이거나, 슬롯은 아니어도 그 시각에 학생이 있으면 받는다.
+         *
+         * hasSlot만으로 막으면 outOfRange 예약(선생님이 시간대를 좁혀 범위 밖으로 남은 것)을
+         * 영영 확정할 수 없다. attend_status가 null로 굳으면 findPendingUntil이 그 클리닉을
+         * 계속 미확정으로 뽑아 T-1에서 사라지지 않는다.
+         *
+         * 예약이 0명일 때 hasSlot을 요구하는 것으로 임의 시각 방어는 그대로 남는다 —
+         * 화면이 슬롯을 그려 주는 건 안내일 뿐이고 아무 값이나 올라올 수 있다.
+         */
+        if (reservations.isEmpty() && !clinic.hasSlot(request.arrivalTime())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
 
         Map<Long, AttendanceExceptionRequest> exceptions = new HashMap<>();
         for (AttendanceExceptionRequest exception : request.exceptionsOrEmpty()) {

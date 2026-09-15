@@ -49,6 +49,22 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     List<Lesson> findPendingUntil(@Param("today") LocalDate today);
 
     /**
+     * T-5 주차 조회. <b>확정된 수업도 함께</b> 내려준다 — 지난 출석을 고치려면 들어갈
+     * 입구가 있어야 한다(2026-09-01 확정).
+     *
+     * <p><b>오늘까지로 자르는 것은 findPendingUntil과 같다.</b> 이번 주를 열면 아직 오지
+     * 않은 날이 섞이는데, 실수로 미리 확정하면 학부모 캘린더가 초록색이 된다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l JOIN FETCH l.classRoom c
+        WHERE l.lessonDate BETWEEN :from AND :to AND l.lessonDate <= :today
+        ORDER BY l.lessonDate DESC, c.name ASC
+        """)
+    List<Lesson> findForAttendanceWeek(@Param("from") LocalDate from,
+                                       @Param("to") LocalDate to,
+                                       @Param("today") LocalDate today);
+
+    /**
      * T-1 대시보드의 오늘 수업. 시작 시각은 lessons에 없고 반의 요일 슬롯에 있다.
      *
      * <p>시각으로 정렬하지 않는다. 반이 주 2회면 요일마다 시각이 달라서 반 하나로 값을
@@ -97,7 +113,8 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c
         WHERE l.lessonDate < :today
-          AND (l.content IS NOT NULL OR l.videoUrl IS NOT NULL OR l.title IS NOT NULL)
+          AND (l.content IS NOT NULL OR l.title IS NOT NULL
+               OR EXISTS (SELECT 1 FROM LessonVideo v WHERE v.lesson.id = l.id))
           AND EXISTS (SELECT 1 FROM Enrollment e
                       WHERE e.classRoom.id = l.classRoom.id
                         AND e.student.id = :studentId
@@ -125,12 +142,18 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         """)
     long countUnwrittenUntil(@Param("today") LocalDate today);
 
-    /** T-4 목록. 반·기간·주차가 전부 선택이라 null이면 조건을 통과시킨다. */
+    /**
+     * T-4 목록. 반·기간·주차가 전부 선택이라 null이면 조건을 통과시킨다.
+     *
+     * <p>from·to의 {@code CAST(... AS date)}를 빼지 마라. Hibernate가 파라미터를 둘로 전개해
+     * {@code $1 is null} 쪽에 타입 단서가 없어지고, PostgreSQL이 42P18로 거부한다.
+     * <b>날짜를 실제로 고를 때만 터져서</b> 파라미터 없이 열어 보면 멀쩡해 보인다.
+     */
     @Query("""
         SELECT l FROM Lesson l JOIN FETCH l.classRoom c
         WHERE (:classRoomId IS NULL OR c.id = :classRoomId)
-          AND (:from IS NULL OR l.lessonDate >= :from)
-          AND (:to IS NULL OR l.lessonDate <= :to)
+          AND (CAST(:from AS date) IS NULL OR l.lessonDate >= :from)
+          AND (CAST(:to AS date) IS NULL OR l.lessonDate <= :to)
           AND (:year IS NULL OR l.year = :year)
           AND (:month IS NULL OR l.month = :month)
           AND (:week IS NULL OR l.week = :week)
@@ -256,4 +279,32 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
         """)
     List<LocalDate> findNextLessonDates(@Param("classRoomId") Long classRoomId,
                                         @Param("after") LocalDate after);
+
+    /**
+     * 학생이 속한 <b>반마다</b> 가장 최근 공개된 수업 한 건. 숙제 탭의
+     * 「이번 주에 낼 것」이 반별로 글을 보여주기 때문이다.
+     *
+     * <p>홈의 findLastForStudent와 다르다 — 그쪽은 반 구분 없이 통틀어 한 건이다.
+     * 하나로 합치지 마라. 여러 반에 속한 학생이 한 반 숙제만 보게 된다.
+     *
+     * <p>published_at IS NOT NULL이 빠지면 초안이 학생에게 샌다.
+     * 정렬은 반 이름 → 최신 수업일이다.
+     */
+    @Query("""
+        SELECT l FROM Lesson l
+        JOIN FETCH l.classRoom c
+        WHERE c.id IN (
+                SELECT e.classRoom.id FROM Enrollment e
+                WHERE e.student.id = :studentId AND e.leftAt IS NULL)
+          AND l.publishedAt IS NOT NULL
+          AND l.lessonDate <= :today
+          AND l.lessonDate = (
+                SELECT MAX(l2.lessonDate) FROM Lesson l2
+                WHERE l2.classRoom.id = c.id
+                  AND l2.publishedAt IS NOT NULL
+                  AND l2.lessonDate <= :today)
+        ORDER BY c.name, l.lessonDate DESC
+        """)
+    List<Lesson> findLastPublishedPerClassRoom(@Param("studentId") Long studentId,
+                                               @Param("today") LocalDate today);
 }

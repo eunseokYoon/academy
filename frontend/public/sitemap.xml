@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  색인 대상은 로그인 없이 볼 수 있는 페이지뿐이다. 네 개가 전부다.
+  학생·학부모·선생님 경로를 여기 넣지 마라 — 인증이 막아서 크롤러에는 어차피
+  로그인 화면으로 보이고, 목록에 개인정보 화면 주소를 적어 두는 셈이 된다.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://njwenglish.com/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://njwenglish.com/login</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://njwenglish.com/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://njwenglish.com/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>

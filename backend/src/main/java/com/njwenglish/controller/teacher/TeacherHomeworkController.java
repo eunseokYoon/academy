@@ -135,14 +135,15 @@ public class TeacherHomeworkController {
 
     /**
      * 재제출 열기. 🔺·❌를 받은 학생에게만 제출 경로가 열린다.
-     * dueAt을 생략하면 그 반의 다음 수업일 21:00이다.
+     *
+     * <p><b>dueAt은 필수다.</b> 기본값을 되살리지 마라 — 화면에서만 필수로 두면
+     * 이 경로를 직접 치는 쪽에 기본값이 남아 규칙이 두 곳으로 갈라진다.
      */
     @PostMapping("/homeworks/{homeworkId}/resubmit-request")
     public ApiResponse<ResubmitOpenResponse> openResubmit(
             @PathVariable Long homeworkId,
-            @RequestBody(required = false) ResubmitOpenRequest request) {
-        return ApiResponse.ok(homeworkService.openResubmit(
-            homeworkId, request == null ? null : request.dueAt()));
+            @Valid @RequestBody ResubmitOpenRequest request) {
+        return ApiResponse.ok(homeworkService.openResubmit(homeworkId, request));
     }
 
     /** 잘못 연 열을 되돌린다. 이미 낸 학생이 있으면 409다. */

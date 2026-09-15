@@ -13,7 +13,6 @@ import {
   listMyClinics,
   listMyLessonChanges,
   requestLessonChange,
-  reserveClinic,
 } from "./api";
 import { formatLessonSlot } from "../../shared/lessonchange/types";
 import type { StudentClinic } from "./api";
@@ -29,30 +28,24 @@ function addDays(date: string, days: number): string {
 }
 
 /**
- * S-9 클리닉 신청.
+ * S-9 내 클리닉.
  *
- * <p>화면에 다른 학생 이름이 없다. 서버도 인원 수만 내려준다.
- * 마감 여부(full)는 서버가 계산한 값을 그대로 쓴다 — capacity가 null일 수 있어서
- * 프론트에서 reservedCount >= capacity를 계산하면 깨진다.
+ * <p><b>학생은 신청하지 못한다</b>(2026-09-01 확정). 선생님이 배정하고 학생은 배정받은
+ * 것만 본다. 신청 목록·일괄 신청 섹션을 되살리지 마라.
  *
- * <p><b>도착 시각 목록(slots)도 서버가 준다.</b> 시작·종료로 여기서 다시 만들지 마라 —
- * "마지막 슬롯은 종료 1시간 전" 규칙이 두 곳으로 갈라지면 학생이 고른 시각을 서버가 거절한다.
+ * <p>변경은 남아 있다. 다른 클리닉으로 옮기는 것도 된다 — 그래서 이동 후보를 뽑으려고
+ * listMyClinics가 여전히 열린 클리닉을 전부 내려준다. 화면에 그리지 않을 뿐이다.
  *
- * <p>변경에 선생님 승인이 없다(2026-08-10 확정). 대신 사유가 필수고, 변경하면
- * <b>공지가 한 건 발행되어</b> 본인과 학부모의 공지 탭에 뜬다(수업일 변경과 같은 경로).
- * 이 화면에 변경 이력을 따로 그리지 마라 — 같은 내용이 두 곳에 있으면 어느 쪽이 최신인지 헷갈린다.
+ * <p>변경에 선생님 승인이 없다(2026-08-10 확정). 사유가 필수고, 변경하면 공지가 한 건
+ * 발행되어 본인과 학부모의 공지 탭에 뜬다.
  *
- * <p><b>취소 버튼을 만들지 마라</b>(2026-08-10 확정). 못 가면 다른 시각으로 옮기고,
- * 아예 빠져야 하면 선생님이 T-13에서 배정을 해제한다.
+ * <p><b>취소 버튼을 만들지 마라</b>(2026-08-10 확정).
  */
 export default function StudentClinicPage() {
   const from = todayString();
   const to = addDays(from, 20);
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
   const [changing, setChanging] = useState<StudentClinic | null>(null);
-  // 클리닉별로 고른 도착 시각. 안 고르면 첫 슬롯이다
-  const [picked, setPicked] = useState<Record<number, string>>({});
 
   const clinics = useQuery({
     queryKey: ["student", "clinics", from, to],
@@ -65,33 +58,11 @@ export default function StudentClinicPage() {
     await queryClient.invalidateQueries({ queryKey: ["notices"] });
   }
 
-  const reserve = useMutation({
-    mutationFn: (clinic: StudentClinic) =>
-      reserveClinic(clinic.clinicId, picked[clinic.clinicId] ?? clinic.slots[0]),
-    onSuccess: async () => {
-      setError(null);
-      await refresh();
-    },
-    // 정원 초과와 중복 신청은 다른 코드다. 문구를 다르게 보여준다
-    onError: (e) =>
-      setError(
-        errorCode(e) === "CLINIC_CAPACITY_EXCEEDED"
-          ? "정원이 모두 찼습니다. 다른 시간을 골라 주세요."
-          : errorCode(e) === "DUPLICATE_RESOURCE"
-            ? "이미 신청하셨거나 신청이 마감된 시간입니다."
-            : errorMessage(e, "신청하지 못했습니다."),
-      ),
-  });
-
-
-
   const mine = (clinics.data ?? []).filter((clinic) => clinic.myReservation !== null);
-  const openClinics = clinics.data ?? [];
 
   return (
     <div className="space-y-5">
       <PageTitle>스케줄 관리</PageTitle>
-      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <LessonChangeSection />
 
@@ -100,7 +71,7 @@ export default function StudentClinicPage() {
         {mine.length === 0 ? (
           <TintBlock tone="neutral">
             <p className="px-4 py-5 text-center text-sm text-slate-500">
-              신청한 클리닉이 없습니다.
+              배정된 클리닉이 없습니다.
             </p>
           </TintBlock>
         ) : (
@@ -116,7 +87,7 @@ export default function StudentClinicPage() {
                     </p>
                     <p className="text-xs text-slate-500">{formatClinicSlot(clinic)}</p>
                   </div>
-                  <Badge tone="ok">신청 완료</Badge>
+                  <Badge tone="ok">배정됨</Badge>
                 </div>
                 {/* 취소 버튼은 없다(2026-08-10 확정). 못 가면 다른 시각으로 옮긴다 —
                     학생이 스스로 명단에서 사라지면 선생님이 그날 인원을 신뢰할 수 없다 */}
@@ -131,77 +102,6 @@ export default function StudentClinicPage() {
               </li>
             ))}
           </ul>
-        )}
-      </section>
-
-      <section>
-        <SectionHead tone="neutral" title="신청 가능한 시간" />
-        {clinics.isPending ? (
-          <p className="mt-2 text-sm text-slate-400">불러오는 중…</p>
-        ) : openClinics.length === 0 ? (
-          <TintBlock tone="neutral">
-            <p className="px-4 py-5 text-center text-sm text-slate-500">
-              지금 신청할 수 있는 시간이 없습니다.
-            </p>
-          </TintBlock>
-        ) : (
-          /*
-            주차로 묶는다. 3주치가 한 줄로 늘어서면 "이번 주에 갈 수 있는 게 뭔지"를
-            날짜를 읽어 가며 세야 한다. 라벨은 서버가 준 weekLabel 그대로다 —
-            여기서 날짜로 만들면 수업·성적이 쓰는 주차 계산과 갈라진다.
-          */
-          <div className="mt-2 space-y-4">
-            {groupByWeek(openClinics).map(([weekLabel, weekClinics]) => (
-              <div key={weekLabel}>
-                <p className="eyebrow px-1">{weekLabel}</p>
-                <ul className="mt-1.5 space-y-2">
-                  {weekClinics.map((clinic) => (
-                    <li key={clinic.clinicId} className="rounded-2xl bg-white p-3 shadow-card">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium text-brand-900">
-                            {formatClinicSlot(clinic)}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {clinic.reservedCount}
-                            {clinic.capacity === null ? "" : `/${clinic.capacity}`}명
-                          </p>
-                        </div>
-                        {clinic.myReservation ? (
-                          <span className="text-xs text-slate-400">
-                            {clinic.myReservation.arrivalTime} 신청함
-                          </span>
-                        ) : clinic.full ? (
-                          <span className="text-xs text-slate-400">마감</span>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={reserve.isPending || clinic.slots.length === 0}
-                            onClick={() => reserve.mutate(clinic)}
-                            className="rounded-lg bg-brand-900 px-3 py-2 text-sm font-medium
-                                       text-white disabled:opacity-50"
-                          >
-                            신청
-                          </button>
-                        )}
-                      </div>
-
-                      {/* 몇 시에 올지 먼저 고르고 신청한다. 안 고르면 첫 슬롯이다 */}
-                      {!clinic.myReservation && !clinic.full && (
-                        <SlotPicker
-                          slots={clinic.slots}
-                          value={picked[clinic.clinicId] ?? clinic.slots[0]}
-                          onChange={(slot) =>
-                            setPicked((prev) => ({ ...prev, [clinic.clinicId]: slot }))
-                          }
-                        />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
         )}
       </section>
 
@@ -221,20 +121,6 @@ export default function StudentClinicPage() {
 
     </div>
   );
-}
-
-/**
- * 주차별 묶음. 서버가 날짜 오름차순으로 주므로 순서만 유지하면 된다 —
- * 정렬을 다시 하면 서버가 정한 순서와 어긋난다.
- */
-function groupByWeek(clinics: StudentClinic[]): [string, StudentClinic[]][] {
-  const groups = new Map<string, StudentClinic[]>();
-  for (const clinic of clinics) {
-    const bucket = groups.get(clinic.weekLabel);
-    if (bucket) bucket.push(clinic);
-    else groups.set(clinic.weekLabel, [clinic]);
-  }
-  return [...groups.entries()];
 }
 
 /** 도착 시각 고르기. 슬롯 수가 대여섯 개라 드롭다운보다 버튼이 빠르다. */

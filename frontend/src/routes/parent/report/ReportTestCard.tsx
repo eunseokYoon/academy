@@ -1,4 +1,4 @@
-import { AccuracyChart } from "../../../shared/components/AccuracyChart";
+import { CorrectCountChart } from "../../../shared/components/CorrectCountChart";
 import { ScoreResultBadge, ScoreValueText } from "../../../shared/components/ScoreValue";
 import type { StudentScoreItem, StudentScoreSection } from "../../../shared/score/types";
 
@@ -29,11 +29,11 @@ export function ReportTestCard({ tests }: { tests: WeekTest[] }) {
       </div>
 
       {/*
-        그래프는 정답률이 있는 종류만 그린다(chart 플래그). 리뷰는 P/F뿐이고
-        클리닉은 내부·외부 두 값이라 선 하나로 못 그린다 — 서버가 정한 값이다.
+        그래프 종류는 서버가 정한다(chartKind). 단어·리뷰는 NONE이다 —
+        단어는 "12/15" 텍스트, 리뷰는 통과 배지뿐이다.
       */}
       {tests
-        .filter(({ section, history }) => section.chart && history.length >= 2)
+        .filter(({ section, history }) => section.chartKind !== "NONE" && history.length >= 2)
         .map(({ section, item, history }) => (
           <section key={`chart-${section.testType}`} className="card p-4">
             <div className="flex items-baseline justify-between gap-2">
@@ -41,7 +41,11 @@ export function ReportTestCard({ tests }: { tests: WeekTest[] }) {
               <p className="text-[11px] text-slate-400">{item.weekLabel}까지</p>
             </div>
             <div className="mt-2">
-              <AccuracyChart items={history} highlight={item} />
+              <CorrectCountChart
+                items={history}
+                chartKind={section.chartKind}
+                highlight={item}
+              />
             </div>
           </section>
         ))}
@@ -59,28 +63,6 @@ function TestRow({ label, item }: { label: string; item: StudentScoreItem }) {
           <ScoreResultBadge item={item} />
         </span>
       </div>
-
-      {/*
-        정답률이 없는 종류(리뷰·클리닉)는 막대를 그리지 않는다. 0%짜리 빈 막대를
-        그리면 다 틀린 것처럼 보인다.
-      */}
-      {item.accuracy !== null && (
-        <div className="mt-2 flex items-center gap-2">
-          <div
-            className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"
-            role="img"
-            aria-label={`정답률 ${item.accuracy}%`}
-          >
-            <div
-              className="h-full rounded-full bg-brand-900"
-              style={{ width: `${item.accuracy}%` }}
-            />
-          </div>
-          <span className="tnum w-9 shrink-0 text-right text-xs font-semibold text-brand-900">
-            {item.accuracy}%
-          </span>
-        </div>
-      )}
     </div>
   );
 }

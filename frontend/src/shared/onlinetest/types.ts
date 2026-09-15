@@ -1,10 +1,12 @@
 /** NOT_STARTED는 서버에 행이 없는 상태다. */
-export type OnlineTestTakeStatus = "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED";
+export type OnlineTestTakeStatus = "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "OFFLINE";
 
 export const TAKE_STATUS_LABELS: Record<OnlineTestTakeStatus, string> = {
   NOT_STARTED: "미응시",
   IN_PROGRESS: "작성 중",
   SUBMITTED: "제출 완료",
+  /* 종이로 봤고 선생님이 성적에 적었다. 온라인 테스트는 그 대체본이다 */
+  OFFLINE: "오프라인 응시",
 };
 
 export interface QuestionResult {
@@ -19,9 +21,15 @@ export interface QuestionResult {
 export interface OnlineTestResult {
   testId: number;
   title: string;
+  /** <b>쓰지 마라</b>(2026-09-10). 환산 점수를 화면에 보이지 않기로 했다. */
   score: number;
   correctCount: number;
   questionCount: number;
+  /** 앞 N문항이 내부지문. null이면 나누지 않은 테스트다. */
+  internalQuestionCount: number | null;
+  /** internalQuestionCount가 null이면 null이다. */
+  internalCorrect: number | null;
+  externalCorrect: number | null;
   submittedAt: string;
   answerFileUrl: string | null;
   results: QuestionResult[];

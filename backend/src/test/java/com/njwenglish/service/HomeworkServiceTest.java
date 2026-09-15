@@ -16,9 +16,11 @@ import com.njwenglish.dto.homework.HomeworkCreateRequest;
 import com.njwenglish.dto.homework.HomeworkCreateResponse;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
+import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.Teacher;
+import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
@@ -44,6 +46,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.njwenglish.dto.homework.ResubmitOpenRequest;
 
 @ExtendWith(MockitoExtension.class)
 class HomeworkServiceTest {
@@ -211,5 +214,47 @@ class HomeworkServiceTest {
             null, DUE_AT);
         ReflectionTestUtils.setField(homework, "id", id);
         return homework;
+    }
+
+    /**
+     * 제목 한 줄로는 "무엇을 다시 해와야 하는지"가 안 담긴다. 상세 내용은 길이 제한이
+     * 없고(TEXT), 학생 목록에서 눌러 모달로 본다.
+     */
+    @Test
+    @DisplayName("재제출 요청이 제목과 상세 내용을 함께 저장한다")
+    void 재제출_요청이_제목과_상세를_저장한다() {
+        LocalDate lessonDate = LocalDate.of(2026, 5, 21);
+        Lesson lesson = Fixtures.lesson(1L, classRoom, lessonDate);
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "교재 1과 복습", (short) 0);
+        Submission target = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        target.grade(HomeworkResult.NOT_DONE, null);
+        given(homeworkRepository.findWithClassRoom(700L)).willReturn(Optional.of(column));
+        given(submissionRepository.findResubmitTargets(700L)).willReturn(List.of(target));
+        OffsetDateTime due = OffsetDateTime.now().plusDays(2);
+
+        homeworkService.openResubmit(700L, new ResubmitOpenRequest(
+            due, "교재 1과 다시", "p.144-152 중 1,2번 제외. 틀린 문항만 다시 풀어 오세요."));
+
+        assertThat(column.getTitle()).isEqualTo("교재 1과 다시");
+        assertThat(column.getDescription())
+            .isEqualTo("p.144-152 중 1,2번 제외. 틀린 문항만 다시 풀어 오세요.");
+        assertThat(column.getDueAt()).isEqualTo(due);
+    }
+
+    @Test
+    @DisplayName("상세 내용이 null이면 제목만 바뀐다")
+    void 상세가_null이면_제목만_바뀐다() {
+        LocalDate lessonDate = LocalDate.of(2026, 5, 21);
+        Lesson lesson = Fixtures.lesson(1L, classRoom, lessonDate);
+        Homework column = Fixtures.gridColumn(700L, classRoom, lesson, "교재 1과 복습", (short) 0);
+        Submission target = Fixtures.submission(11L, column, Fixtures.student(1L, "가나다"));
+        target.grade(HomeworkResult.NOT_DONE, null);
+        given(homeworkRepository.findWithClassRoom(700L)).willReturn(Optional.of(column));
+        given(submissionRepository.findResubmitTargets(700L)).willReturn(List.of(target));
+
+        homeworkService.openResubmit(700L, new ResubmitOpenRequest(
+            OffsetDateTime.now().plusDays(2), "교재 1과 다시", null));
+
+        assertThat(column.getDescription()).isNull();
     }
 }
