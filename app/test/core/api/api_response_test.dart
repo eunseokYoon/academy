@@ -22,6 +22,11 @@ void main() {
       // ApiResponse.ok() 가 내려오는 경로가 있다 — 로그아웃·비밀번호 변경
       final body = {'success': true, 'data': null, 'error': null};
       expect(unwrap<Null>(body, 200, (_) => null), isNull);
+
+      // Task 8의 logout·changePassword가 쓰는 형태다. Dart는 void 식을 값으로
+      // 쓰지 못하므로 위처럼 단정할 수 없고, 문장 위치에서 컴파일되는 것이
+      // 확인해야 하는 전부다. 이 줄을 지우면 T = void 경로가 검증되지 않는다.
+      unwrap<void>(body, 200, (_) {});
     });
 
     test('실패 응답은 code와 message를 담아 던진다', () {
