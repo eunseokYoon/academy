@@ -11,9 +11,7 @@ T unwrap<T>(
 ) {
   final success = body['success'];
   if (success == true) {
-    final result = parse(body['data']);
-    // Handle void return type in generic context
-    return (result as dynamic) as T;
+    return parse(body['data']);
   }
 
   final error = body['error'];
