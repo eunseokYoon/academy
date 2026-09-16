@@ -1,0 +1,12 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # 이 앱은 화면 위젯이 많아 const 누락이 성능으로 직결된다
+    prefer_const_constructors: true
+    prefer_const_literals_to_create_immutables: true
