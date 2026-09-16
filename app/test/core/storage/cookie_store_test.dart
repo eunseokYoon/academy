@@ -1,3 +1,6 @@
+// `Cookie`는 cookie_jar가 re-export한다. `import 'dart:io';`를 넣으면
+// unnecessary_import 린트로 analyze가 깨진다 — lib/core/storage/cookie_store.dart의 주석을 봐라.
+
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/storage/cookie_store.dart';

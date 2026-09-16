@@ -1,3 +1,9 @@
+// `Cookie`는 `dart:io`의 클래스지만 여기서 직접 import하지 않는다 —
+// cookie_jar가 `package:universal_io/io.dart`를 통해 re-export하고 있어서
+// `import 'dart:io';`를 넣으면 `unnecessary_import` 린트가 analyze를 깨뜨린다.
+// 되살리지 마라. cookie_jar가 re-export를 그만두면 이 파일이 컴파일에 실패하는데,
+// 그때 필요한 import가 `dart:io`다.
+
 import 'package:cookie_jar/cookie_jar.dart';
 
 import 'key_value_store.dart';
