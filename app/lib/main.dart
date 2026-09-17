@@ -45,7 +45,15 @@ void main() {
 
   // 리프레시와 재시도 전용 Dio. RefreshInterceptor가 붙지 않아야 한다 —
   // 붙으면 리프레시가 401일 때 재귀한다. 쿠키 자는 공유한다.
-  final plain = Dio(BaseOptions(baseUrl: baseUrl))
+  // 타임아웃은 DioClient.build와 반드시 같아야 한다 — RefreshInterceptor가
+  // QueuedInterceptor라 리프레시 하나가 멈추면 뒤에 줄 선 401 복구가 전부
+  // 막힌다. dio의 기본값은 타임아웃이 없다(null)라서 여기서 빠뜨리면
+  // 영원히 멈출 수 있다.
+  final plain = Dio(BaseOptions(
+    baseUrl: baseUrl,
+    connectTimeout: DioClient.connectTimeout,
+    receiveTimeout: DioClient.receiveTimeout,
+  ))
     ..interceptors.add(CookieManager(jar));
 
   // 순환을 끊는다. 클로저가 auth를 나중에 읽는다.

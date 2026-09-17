@@ -9,6 +9,12 @@ import 'auth_interceptor.dart';
 class DioClient {
   const DioClient._();
 
+  /// `main.dart`의 `plain`(리프레시 전용 Dio)도 이 값을 그대로 써야 한다.
+  /// `RefreshInterceptor`가 `QueuedInterceptor`라 리프레시 하나가 멈추면
+  /// 뒤에 줄 선 401 복구가 전부 막힌다 — 타임아웃이 없으면 영원히 막힌다.
+  static const connectTimeout = Duration(seconds: 10);
+  static const receiveTimeout = Duration(seconds: 20);
+
   static Dio build({
     required String baseUrl,
     required TokenStore tokens,
@@ -18,8 +24,8 @@ class DioClient {
     final dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 20),
+        connectTimeout: connectTimeout,
+        receiveTimeout: receiveTimeout,
         // 401·403·409를 예외가 아니라 응답으로 받아서 인터셉터가 다루게 한다면
         // 모든 화면이 상태 코드를 보게 된다. 그러지 않는다 — Dio가 던지고
         // 인터셉터가 onError에서 처리한다.
