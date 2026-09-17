@@ -12,7 +12,13 @@ import 'package:academy_app/core/storage/key_value_store.dart';
 import 'package:academy_app/core/storage/token_store.dart';
 
 class _FakeRepo implements AuthRepository {
-  _FakeRepo({this.meResult, this.loginResult, this.throwOnMe = false});
+  _FakeRepo({
+    this.meResult,
+    this.loginResult,
+    this.throwOnMe = false,
+    this.jarProbe,
+    this.probeUri,
+  });
 
   MeResponse? meResult;
   LoginResponse? loginResult;
@@ -23,9 +29,20 @@ class _FakeRepo implements AuthRepository {
   int changeCalls = 0;
   int signupCalls = 0;
 
+  /// me()가 불리는 **그 순간** jar에 refreshToken이 있었는지 기록한다.
+  /// bootstrap()이 끝난 뒤에 jar를 보면 restore가 언제 불렸는지 알 수 없어서,
+  /// 「쿠키를 먼저 심는다」는 순서를 그 방식으로는 검증할 수 없다.
+  final CookieJar? jarProbe;
+  final Uri? probeUri;
+  bool? cookiePresentAtMeCall;
+
   @override
   Future<MeResponse> me() async {
     meCalls++;
+    if (jarProbe != null && probeUri != null) {
+      final cookies = await jarProbe!.loadForRequest(probeUri!);
+      cookiePresentAtMeCall = cookies.any((c) => c.name == 'refreshToken');
+    }
     if (throwOnMe) {
       throw const ApiException(code: 'TOKEN_INVALID', message: '유효하지 않은 인증 정보입니다.');
     }
@@ -68,11 +85,12 @@ void main() {
   late CookieStore cookies;
   late KeyValueStore cookieKv;
   late CookieJar jar;
+  final authUri = Uri.parse('https://example.test/api/auth');
 
   setUp(() {
     tokens = TokenStore(InMemoryKeyValueStore());
     cookieKv = InMemoryKeyValueStore();
-    cookies = CookieStore(cookieKv, Uri.parse('https://example.test/api/auth'));
+    cookies = CookieStore(cookieKv, authUri);
     jar = CookieJar();
   });
 
@@ -123,14 +141,19 @@ void main() {
   test('부팅이 리프레시 쿠키를 jar에 먼저 심는다', () async {
     // 이 순서가 어긋나면 첫 요청의 401 리프레시가 쿠키 없이 나가서 실패하고,
     // 앱을 다시 열 때마다 재로그인을 하게 된다.
+    // **bootstrap()이 끝난 뒤에 jar를 보면 안 된다** — restore가 me() 뒤에 불려도
+    // 그때는 이미 심겨 있어서 통과한다. me()가 불리는 순간을 봐야 한다.
     await cookieKv.write('refresh_cookie', 'rt-1');
     await tokens.write('at-1');
-    final c = controllerWith(_FakeRepo(meResult: meOf(UserRole.student)));
+    final repo = _FakeRepo(
+      meResult: meOf(UserRole.student),
+      jarProbe: jar,
+      probeUri: authUri,
+    );
 
-    await c.bootstrap();
+    await controllerWith(repo).bootstrap();
 
-    final loaded = await jar.loadForRequest(Uri.parse('https://example.test/api/auth'));
-    expect(loaded.map((e) => e.name), contains('refreshToken'));
+    expect(repo.cookiePresentAtMeCall, isTrue);
   });
 
   test('me가 실패하면 보관소를 비우고 loggedOut이다', () async {
@@ -243,6 +266,22 @@ void main() {
     expect(c.snapshot.status, AuthStatus.mustChangePassword);
     // 역할은 유지된다 — 비밀번호를 바꾸면 그 역할 화면으로 돌아가야 한다
     expect(c.snapshot.role, UserRole.student);
+    expect(c.snapshot.name, '김하늘');
+  });
+
+  test('onSessionExpired가 보관소를 비우고 loggedOut으로 만든다', () async {
+    // RefreshInterceptor(Task 6)가 리프레시마저 실패했을 때 부른다.
+    await tokens.write('at-1');
+    await cookieKv.write('refresh_cookie', 'rt-1');
+    final c = controllerWith(_FakeRepo(meResult: meOf(UserRole.student)));
+    await c.bootstrap();
+    expect(c.snapshot.status, AuthStatus.ready);
+
+    await c.onSessionExpired();
+
+    expect(c.snapshot.status, AuthStatus.loggedOut);
+    expect(await tokens.read(), isNull);
+    expect(await cookieKv.read('refresh_cookie'), isNull);
   });
 
   test('가입은 저장소에 위임하고 상태를 바꾸지 않는다', () async {
