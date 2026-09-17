@@ -4,4 +4,10 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- 로컬 개발 기본 baseUrl(10.0.2.2)이 HTTP다. targetSdk 28+ 는 cleartext를
+         기본 차단하고 10.0.2.2 는 loopback 예외가 아니므로, 디버그 빌드에서만
+         평문 HTTP를 허용한다. main 매니페스트에는 절대 넣지 않는다(운영에 새면
+         안 된다). -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
