@@ -43,7 +43,10 @@ String? redirectFor(AuthSnapshot snapshot, String location) {
         UserRole.parent => AppRoutes.parent,
         UserRole.teacher => AppRoutes.teacherNotice,
       };
-      // 자기 영역 밖(인증 화면이거나 남의 역할 영역)이면 홈으로
-      return location.startsWith(home) ? null : home;
+      // 자기 영역 밖(인증 화면이거나 남의 역할 영역)이면 홈으로.
+      // **`startsWith(home)` 하나로 쓰지 마라** — `/students-archive`처럼 이름이
+      // 겹치기만 하는 라우트가 학생 영역으로 오인되어, 보내야 할 리다이렉트가
+      // 조용히 사라진다. 그 순간 학부모가 학생 화면에 앉는다.
+      return (location == home || location.startsWith('$home/')) ? null : home;
   }
 }

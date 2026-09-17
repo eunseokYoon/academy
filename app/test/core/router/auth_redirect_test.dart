@@ -75,6 +75,7 @@ void main() {
       expect(redirectFor(student, '/student'), isNull);
       expect(redirectFor(student, '/student/homeworks'), isNull);
       expect(redirectFor(parent, '/parent/scores'), isNull);
+      expect(redirectFor(parent, '/parent'), isNull);
     });
 
     test('남의 역할 영역이면 자기 홈으로 보낸다', () {
@@ -82,6 +83,12 @@ void main() {
       // 학부모가 학생 화면을 열어 빈 에러를 보지 않는다.
       expect(redirectFor(student, '/parent'), AppRoutes.student);
       expect(redirectFor(parent, '/student/homeworks'), AppRoutes.parent);
+    });
+
+    test('이름만 겹치는 라우트는 자기 영역이 아니다', () {
+      // startsWith(home) 하나로 판정하면 이것이 null이 되어 리다이렉트가 사라진다.
+      expect(redirectFor(student, '/students-archive'), AppRoutes.student);
+      expect(redirectFor(parent, '/parent-info'), AppRoutes.parent);
     });
 
     test('비밀번호를 바꾼 뒤 splash에 남아 있으면 홈으로 보낸다', () {
