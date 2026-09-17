@@ -49,12 +49,10 @@ Future<T> unwrapCall<T>(
 ) async {
   try {
     final res = await call();
-    // ignore: unawaited_return_in_try_block — unwrap은 동기 함수라서 await 불필요
-    return unwrap(res.data ?? const {}, res.statusCode, parse);
+    return await unwrap(res.data ?? const {}, res.statusCode, parse);
   } on DioException catch (e) {
     final body = e.response?.data;
     if (body is Map<String, dynamic>) {
-      // ignore: unawaited_return_in_try_block — unwrap은 동기 함수라서 await 불필요
       return unwrap(body, e.response?.statusCode, parse);
     }
     rethrow;
