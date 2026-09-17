@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/api_exception.dart';
@@ -7,7 +9,12 @@ void main() {
   late List<(String, String)> changes;
   late int logouts;
 
-  Future<void> pump(WidgetTester tester, {Object? error}) async {
+  /// `hold`가 참이면 변경이 끝나지 않는다 — 재탭 방어를 확인할 때 쓴다.
+  Future<void> pump(
+    WidgetTester tester, {
+    Object? error,
+    bool hold = false,
+  }) async {
     changes = [];
     logouts = 0;
     await tester.pumpWidget(MaterialApp(
@@ -18,6 +25,7 @@ void main() {
         }) async {
           changes.add((currentPassword, newPassword));
           if (error != null) throw error;
+          if (hold) return Completer<void>().future;
         },
         onLogout: () async => logouts++,
       ),
@@ -48,7 +56,7 @@ void main() {
     // 정책은 8자 이상뿐이다. 특수문자 강제 같은 제약을 넣지 마라 —
     // 학부모 연령대를 고려한 확정 사항이다.
     await pump(tester);
-    await fill(tester, next: 'short7');
+    await fill(tester, next: 'short77');
     await tester.tap(find.byKey(const Key('pw-submit')));
     await tester.pump();
 
@@ -100,8 +108,24 @@ void main() {
     expect(logouts, 1);
   });
 
+  testWidgets('보내는 동안 버튼을 두 번 누를 수 없다', (tester) async {
+    // 더블탭으로 변경이 두 번 나가면 서버가 리프레시 토큰을 두 번 폐기하려 든다.
+    // hold: true 로 첫 호출을 붙잡아 두고 두 번째 탭을 시도한다.
+    await pump(tester, hold: true);
+    await fill(tester);
+    await tester.tap(find.byKey(const Key('pw-submit')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('pw-submit')));
+    await tester.pump();
+
+    expect(changes.length, 1);
+  });
+
   testWidgets('360px에서 넘치지 않는다', (tester) async {
-    tester.view.physicalSize = const Size(360, 640);
+    // 높이를 420으로 잡는 이유가 있다. 640에서는 내용이 다 들어가서
+    // SingleChildScrollView를 지워도 오버플로가 나지 않아 이 테스트가 통과한다 —
+    // 즉 아무것도 지키지 못한다. 짧은 화면에서만 스크롤 여부가 드러난다.
+    tester.view.physicalSize = const Size(360, 420);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
