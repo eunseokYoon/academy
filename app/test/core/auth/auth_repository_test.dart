@@ -1,16 +1,17 @@
 import 'package:dio/dio.dart';
+import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/api_exception.dart';
+import 'package:academy_app/core/api/dio_client.dart';
 import 'package:academy_app/core/api/fake_adapter.dart';
 import 'package:academy_app/core/auth/auth_repository.dart';
 import 'package:academy_app/core/auth/models/user_role.dart';
+import 'package:academy_app/core/storage/key_value_store.dart';
+import 'package:academy_app/core/storage/token_store.dart';
 
 void main() {
   AuthRepository repoWith(FakeAdapter adapter) {
-    final dio = Dio(BaseOptions(
-      baseUrl: 'https://example.test',
-      validateStatus: (_) => true,
-    ))
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
       ..httpClientAdapter = adapter;
     return AuthRepository(dio);
   }
@@ -132,5 +133,35 @@ void main() {
     expect(adapter.received[0].path, '/api/auth/password');
     expect(adapter.received[0].method, 'PATCH');
     expect(adapter.received[1].path, '/api/auth/logout');
+  });
+
+  test('운영 조립에서도 401이 ApiException이 된다', () async {
+    // Task 6의 401 리프레시와 Task 7의 403 게이트가 DioException 자체에 기대고 있어서
+    // validateStatus를 켤 수 없다. 저장소가 DioException을 잡아 ApiException으로
+    // 바꿔줘야 화면이 ApiException 하나만 알면 된다. 이 테스트는 그 변환을 검증한다.
+    final adapter = FakeAdapter(replies: const [
+      FakeReply(statusCode: 401, body: {
+        'success': false,
+        'data': null,
+        'error': {
+          'code': 'INVALID_CREDENTIALS',
+          'message': '아이디 또는 비밀번호가 올바르지 않습니다.',
+        },
+      }),
+    ]);
+
+    final dio = DioClient.build(
+      baseUrl: 'https://example.test',
+      tokens: TokenStore(InMemoryKeyValueStore()),
+      jar: CookieJar(),
+    );
+    dio.httpClientAdapter = adapter;
+    final repo = AuthRepository(dio);
+
+    await expectLater(
+      repo.login(loginId: '01012345678', password: 'wrong'),
+      throwsA(isA<ApiException>()
+          .having((e) => e.code, 'code', 'INVALID_CREDENTIALS')),
+    );
   });
 }

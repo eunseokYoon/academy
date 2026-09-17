@@ -17,23 +17,19 @@ class AuthRepository {
   Future<LoginResponse> login({
     required String loginId,
     required String password,
-  }) async {
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/api/auth/login',
-      data: {'loginId': loginId, 'password': password},
-    );
-    return unwrap(
-      res.data ?? const {},
-      res.statusCode,
+  }) {
+    return unwrapCall(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/auth/login',
+        data: {'loginId': loginId, 'password': password},
+      ),
       (data) => LoginResponse.fromJson(data as Map<String, dynamic>),
     );
   }
 
-  Future<MeResponse> me() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/auth/me');
-    return unwrap(
-      res.data ?? const {},
-      res.statusCode,
+  Future<MeResponse> me() {
+    return unwrapCall(
+      () => _dio.get<Map<String, dynamic>>('/api/auth/me'),
       (data) => MeResponse.fromJson(data as Map<String, dynamic>),
     );
   }
@@ -46,17 +42,19 @@ class AuthRepository {
     String? name,
     required String phone,
     String? parentPhone,
-  }) async {
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/api/auth/signup',
-      data: {
-        'code': code,
-        'name': name,
-        'phone': phone,
-        'parentPhone': parentPhone,
-      },
+  }) {
+    return unwrapCall<void>(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/auth/signup',
+        data: {
+          'code': code,
+          'name': name,
+          'phone': phone,
+          'parentPhone': parentPhone,
+        },
+      ),
+      (_) {},
     );
-    unwrap<void>(res.data ?? const {}, res.statusCode, (_) {});
   }
 
   /// 성공하면 서버가 리프레시 토큰을 **전부 폐기하고** 쿠키도 만료시킨다.
@@ -64,19 +62,19 @@ class AuthRepository {
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
-  }) async {
-    final res = await _dio.patch<Map<String, dynamic>>(
-      '/api/auth/password',
-      data: {
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-      },
+  }) {
+    return unwrapCall<void>(
+      () => _dio.patch<Map<String, dynamic>>(
+        '/api/auth/password',
+        data: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+      ),
+      (_) {},
     );
-    unwrap<void>(res.data ?? const {}, res.statusCode, (_) {});
   }
 
-  Future<void> logout() async {
-    final res = await _dio.post<Map<String, dynamic>>('/api/auth/logout');
-    unwrap<void>(res.data ?? const {}, res.statusCode, (_) {});
-  }
+  Future<void> logout() =>
+      unwrapCall<void>(() => _dio.post<Map<String, dynamic>>('/api/auth/logout'), (_) {});
 }
