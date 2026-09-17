@@ -31,8 +31,13 @@ import 'features/student/student_shell.dart';
 /// 연결이 조용히 실패한다. iOS 시뮬레이터는 호스트와 같은 `localhost`다.
 String resolveBaseUrl() {
   const fromDefine = String.fromEnvironment('API_BASE_URL');
-  if (fromDefine.isNotEmpty) return fromDefine;
-  return Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+  final value = fromDefine.isNotEmpty
+      ? fromDefine
+      : (Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+  // 끝의 '/'를 남기면 Uri.parse('$baseUrl/api/auth')가 '//api/auth'가 되어
+  // 쿠키 path가 요청 path와 영영 안 맞는다 — 리프레시 쿠키가 조용히 안 실려
+  // 나가서, 액세스 토큰이 만료될 때마다 전원 재로그인하게 된다.
+  return value.replaceAll(RegExp(r'/+$'), '');
 }
 
 void main() {
