@@ -1,9 +1,3 @@
-// ignore_for_file: prefer_initializing_formals — 초기화 폼을 쓸 수 없다.
-// named 매개변수에 private 이름(`this._plain`)을 쓰는 것을 Dart가 금지하므로,
-// 필드를 private으로 두려면 이 방식뿐이다. 필드를 공개로 바꿔 린트를
-// 만족시키지 마라 — `plain`은 이 클래스가 숨기려고 존재하는, 인터셉터 없는
-// Dio다. 공개되면 인터셉터 목록을 훑어 꺼내서 인증도 401 복구도 없이
-// 요청을 보낼 수 있다.
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 
@@ -32,10 +26,21 @@ class RefreshInterceptor extends QueuedInterceptor {
     required CookieStore cookies,
     required CookieJar jar,
     required Future<void> Function() onSessionExpired,
-  })  : _plain = plain,
+  })
+      // named 매개변수에 private 이름(`this._plain`)을 쓰는 것을 Dart가 금지하므로,
+      // 필드를 private으로 두려면 이 방식뿐이다. 필드를 공개로 바꿔 린트를
+      // 만족시키지 마라 — `plain`은 이 클래스가 숨기려고 존재하는, 인터셉터 없는
+      // Dio다. 공개되면 인터셉터 목록을 훑어 꺼내서 인증도 401 복구도 없이
+      // 요청을 보낼 수 있다.
+      // ignore: prefer_initializing_formals
+      : _plain = plain,
+        // ignore: prefer_initializing_formals
         _tokens = tokens,
+        // ignore: prefer_initializing_formals
         _cookies = cookies,
+        // ignore: prefer_initializing_formals
         _jar = jar,
+        // ignore: prefer_initializing_formals
         _onSessionExpired = onSessionExpired;
 
   final Dio _plain;
@@ -67,9 +72,10 @@ class RefreshInterceptor extends QueuedInterceptor {
       return;
     }
 
+    final String token;
     try {
       final res = await _plain.post<Map<String, dynamic>>('/api/auth/refresh');
-      final token = unwrap<String>(
+      token = unwrap<String>(
         res.data ?? const {},
         res.statusCode,
         (data) => (data as Map<String, dynamic>)['accessToken'] as String,
@@ -77,13 +83,22 @@ class RefreshInterceptor extends QueuedInterceptor {
       await _tokens.write(token);
       // 리프레시가 쿠키를 회전시키면 Set-Cookie 가 온다. 새 값을 남겨야 한다.
       await _cookies.persist(_jar);
-      handler.resolve(await _retry(err.requestOptions, token));
     } catch (_) {
       // 리프레시 토큰이 죽었다. 재로그인 외에 길이 없다.
       await _tokens.clear();
       await _cookies.clear();
       await _jar.deleteAll();
       await _onSessionExpired();
+      handler.next(err);
+      return;
+    }
+
+    try {
+      handler.resolve(await _retry(err.requestOptions, token));
+    } on DioException catch (_) {
+      // **리프레시는 성공했다. 상태를 비우지 마라** — 실패한 것은 이 요청뿐이다.
+      // 비우면 비밀번호 화면에서 현재 비밀번호를 한 번 틀리는 것만으로
+      // (백엔드가 INVALID_CREDENTIALS를 401로 준다) 강제 로그아웃된다.
       handler.next(err);
     }
   }

@@ -13,8 +13,9 @@ class AuthController extends ChangeNotifier {
     required TokenStore tokens,
     required CookieStore cookies,
     required CookieJar jar,
-  })  : // this._repository로 바꾸면 매개변수명이 private(`_repository`)이 되어
-        // 외부에서 `repository:`로 못 부른다(공개 생성자 시그니처가 깨진다). 아래 세 줄도 동일.
+  })  : // named 매개변수에 private 이름(`this._repository`)을 쓰는 것을 Dart가
+        // 금지한다(컴파일 에러다, 조용히 깨지는 게 아니다). 필드를 private으로
+        // 두려면 이 방식뿐이다. 아래 세 줄도 동일.
         // ignore: prefer_initializing_formals
         _repository = repository,
         // ignore: prefer_initializing_formals
