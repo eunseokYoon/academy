@@ -1,3 +1,9 @@
+// ignore_for_file: prefer_initializing_formals — 초기화 폼을 쓸 수 없다.
+// named 매개변수에 private 이름(`this._plain`)을 쓰는 것을 Dart가 금지하므로,
+// 필드를 private으로 두려면 이 방식뿐이다. 필드를 공개로 바꿔 린트를
+// 만족시키지 마라 — `plain`은 이 클래스가 숨기려고 존재하는, 인터셉터 없는
+// Dio다. 공개되면 인터셉터 목록을 훑어 꺼내서 인증도 401 복구도 없이
+// 요청을 보낼 수 있다.
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 
@@ -20,26 +26,23 @@ import 'api_response.dart';
 /// 리프레시 호출이 401이어도 재귀하지 않고, 재시도가 정확히 한 번이다.
 /// 쿠키 자는 공유해야 한다. 리프레시 토큰이 쿠키로 실려 나가기 때문이다.
 class RefreshInterceptor extends QueuedInterceptor {
-  // 필드를 초기화 폼(`this.plain`)으로 못 받는 이유: 생성자의 공개 이름
-  // (plain·tokens·cookies·jar·onSessionExpired)은 Task 14가 그대로 부르는
-  // 계약이다. 필드를 관례대로 `_plain`처럼 private으로 두고 초기화 폼을 쓰면
-  // 매개변수 외부 이름도 `_plain`이 되어 다른 라이브러리(Task 14, 이 테스트
-  // 파일)에서 이름 있는 인자로 부를 수 없게 된다 — 직접 검증했다. 그래서
-  // 필드를 공개로 두고 초기화 폼을 쓴다. 호출자가 넘긴 바로 그 객체라
-  // 공개해도 새로 드러나는 것은 없다.
   RefreshInterceptor({
-    required this.plain,
-    required this.tokens,
-    required this.cookies,
-    required this.jar,
-    required this.onSessionExpired,
-  });
+    required Dio plain,
+    required TokenStore tokens,
+    required CookieStore cookies,
+    required CookieJar jar,
+    required Future<void> Function() onSessionExpired,
+  })  : _plain = plain,
+        _tokens = tokens,
+        _cookies = cookies,
+        _jar = jar,
+        _onSessionExpired = onSessionExpired;
 
-  final Dio plain;
-  final TokenStore tokens;
-  final CookieStore cookies;
-  final CookieJar jar;
-  final Future<void> Function() onSessionExpired;
+  final Dio _plain;
+  final TokenStore _tokens;
+  final CookieStore _cookies;
+  final CookieJar _jar;
+  final Future<void> Function() _onSessionExpired;
 
   @override
   Future<void> onError(
@@ -52,7 +55,7 @@ class RefreshInterceptor extends QueuedInterceptor {
     }
 
     final sentWith = err.requestOptions.headers['Authorization'] as String?;
-    final current = await tokens.read();
+    final current = await _tokens.read();
 
     // 앞의 누군가가 이미 갱신했다. 리프레시 없이 재시도만 한다.
     if (current != null && sentWith != 'Bearer $current') {
@@ -65,22 +68,22 @@ class RefreshInterceptor extends QueuedInterceptor {
     }
 
     try {
-      final res = await plain.post<Map<String, dynamic>>('/api/auth/refresh');
+      final res = await _plain.post<Map<String, dynamic>>('/api/auth/refresh');
       final token = unwrap<String>(
         res.data ?? const {},
         res.statusCode,
         (data) => (data as Map<String, dynamic>)['accessToken'] as String,
       );
-      await tokens.write(token);
+      await _tokens.write(token);
       // 리프레시가 쿠키를 회전시키면 Set-Cookie 가 온다. 새 값을 남겨야 한다.
-      await cookies.persist(jar);
+      await _cookies.persist(_jar);
       handler.resolve(await _retry(err.requestOptions, token));
     } catch (_) {
       // 리프레시 토큰이 죽었다. 재로그인 외에 길이 없다.
-      await tokens.clear();
-      await cookies.clear();
-      await jar.deleteAll();
-      await onSessionExpired();
+      await _tokens.clear();
+      await _cookies.clear();
+      await _jar.deleteAll();
+      await _onSessionExpired();
       handler.next(err);
     }
   }
@@ -88,6 +91,6 @@ class RefreshInterceptor extends QueuedInterceptor {
   Future<Response<dynamic>> _retry(RequestOptions options, String token) {
     // 원 요청을 그대로 다시 보낸다. plain 을 쓰므로 이 인터셉터를 다시 타지 않는다.
     options.headers['Authorization'] = 'Bearer $token';
-    return plain.fetch<dynamic>(options);
+    return _plain.fetch<dynamic>(options);
   }
 }
