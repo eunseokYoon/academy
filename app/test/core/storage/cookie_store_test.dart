@@ -26,10 +26,7 @@ void main() {
 
     final cookies = await restored.loadForRequest(authUri);
     expect(cookies.map((c) => c.name), contains('refreshToken'));
-    expect(
-      cookies.firstWhere((c) => c.name == 'refreshToken').value,
-      'rt-1',
-    );
+    expect(cookies.firstWhere((c) => c.name == 'refreshToken').value, 'rt-1');
   });
 
   test('빈 값이면 저장이 아니라 삭제다', () async {

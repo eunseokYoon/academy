@@ -7,8 +7,14 @@ enum AuthStatus { unknown, loggedOut, mustChangePassword, ready }
 class AuthSnapshot {
   const AuthSnapshot({required this.status, this.role, this.name});
 
-  const AuthSnapshot.unknown() : status = AuthStatus.unknown, role = null, name = null;
-  const AuthSnapshot.loggedOut() : status = AuthStatus.loggedOut, role = null, name = null;
+  const AuthSnapshot.unknown()
+    : status = AuthStatus.unknown,
+      role = null,
+      name = null;
+  const AuthSnapshot.loggedOut()
+    : status = AuthStatus.loggedOut,
+      role = null,
+      name = null;
 
   final AuthStatus status;
 

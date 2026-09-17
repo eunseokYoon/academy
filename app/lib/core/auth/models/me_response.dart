@@ -17,10 +17,10 @@ class MeResponse {
   final bool mustChangePassword;
 
   factory MeResponse.fromJson(Map<String, dynamic> json) => MeResponse(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        role: roleFromJson(json['role'] as String),
-        phone: json['phone'] as String,
-        mustChangePassword: json['mustChangePassword'] as bool,
-      );
+    id: json['id'] as int,
+    name: json['name'] as String,
+    role: roleFromJson(json['role'] as String),
+    phone: json['phone'] as String,
+    mustChangePassword: json['mustChangePassword'] as bool,
+  );
 }

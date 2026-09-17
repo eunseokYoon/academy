@@ -19,7 +19,8 @@ class PasswordGateInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (err.response?.statusCode == 403 && _isPasswordGate(err.response?.data)) {
+    if (err.response?.statusCode == 403 &&
+        _isPasswordGate(err.response?.data)) {
       _onRequired();
     }
     handler.next(err);

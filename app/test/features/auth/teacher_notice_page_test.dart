@@ -7,9 +7,9 @@ void main() {
     // 선생님은 앱 대상이 아니다. 로그인은 성공하므로 안내로 받아야 한다 —
     // 빈 화면을 주면 앱이 고장난 것으로 보인다.
     var logouts = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: TeacherNoticePage(onLogout: () async => logouts++),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(home: TeacherNoticePage(onLogout: () async => logouts++)),
+    );
 
     expect(find.textContaining('웹'), findsOneWidget);
 

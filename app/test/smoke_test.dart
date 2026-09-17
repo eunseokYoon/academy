@@ -30,15 +30,13 @@ class _FakeAuthRepo implements AuthRepository {
   Future<LoginResponse> login({
     required String loginId,
     required String password,
-  }) =>
-      throw UnimplementedError('스모크 테스트는 로그인을 거치지 않는다');
+  }) => throw UnimplementedError('스모크 테스트는 로그인을 거치지 않는다');
 
   @override
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
-  }) =>
-      throw UnimplementedError('스모크 테스트는 비밀번호 변경을 거치지 않는다');
+  }) => throw UnimplementedError('스모크 테스트는 비밀번호 변경을 거치지 않는다');
 
   @override
   Future<void> logout() async {}
@@ -49,8 +47,7 @@ class _FakeAuthRepo implements AuthRepository {
     String? name,
     required String phone,
     String? parentPhone,
-  }) =>
-      throw UnimplementedError('스모크 테스트는 가입을 거치지 않는다');
+  }) => throw UnimplementedError('스모크 테스트는 가입을 거치지 않는다');
 }
 
 /// 토큰을 미리 심고 `bootstrap()`으로 `me()`를 태워 해당 역할·상태의
@@ -64,13 +61,15 @@ Future<void> _pumpAtRole(
   final tokens = TokenStore(kv);
   await tokens.write('at-1');
   final auth = AuthController(
-    repository: _FakeAuthRepo(MeResponse(
-      id: 1,
-      name: '김하늘',
-      role: role,
-      phone: '01012345678',
-      mustChangePassword: mustChangePassword,
-    )),
+    repository: _FakeAuthRepo(
+      MeResponse(
+        id: 1,
+        name: '김하늘',
+        role: role,
+        phone: '01012345678',
+        mustChangePassword: mustChangePassword,
+      ),
+    ),
     tokens: tokens,
     cookies: CookieStore(kv, Uri.parse('https://example.test/api/auth')),
     jar: CookieJar(),
@@ -137,7 +136,11 @@ void main() {
     });
 
     testWidgets('mustChangePassword → PasswordChangePage', (tester) async {
-      await _pumpAtRole(tester, role: UserRole.student, mustChangePassword: true);
+      await _pumpAtRole(
+        tester,
+        role: UserRole.student,
+        mustChangePassword: true,
+      );
 
       expect(find.byType(PasswordChangePage), findsOneWidget);
       expect(find.byType(StudentShell), findsNothing);

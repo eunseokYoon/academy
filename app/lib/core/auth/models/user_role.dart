@@ -17,7 +17,7 @@ UserRole roleFromJson(String value) {
 }
 
 String roleToJson(UserRole role) => switch (role) {
-      UserRole.teacher => 'TEACHER',
-      UserRole.student => 'STUDENT',
-      UserRole.parent => 'PARENT',
-    };
+  UserRole.teacher => 'TEACHER',
+  UserRole.student => 'STUDENT',
+  UserRole.parent => 'PARENT',
+};

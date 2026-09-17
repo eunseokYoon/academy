@@ -10,9 +10,9 @@ class LoginResponse {
   final UserSummary user;
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) => LoginResponse(
-        accessToken: json['accessToken'] as String,
-        user: UserSummary.fromJson(json['user'] as Map<String, dynamic>),
-      );
+    accessToken: json['accessToken'] as String,
+    user: UserSummary.fromJson(json['user'] as Map<String, dynamic>),
+  );
 }
 
 class UserSummary {
@@ -31,9 +31,9 @@ class UserSummary {
   final bool mustChangePassword;
 
   factory UserSummary.fromJson(Map<String, dynamic> json) => UserSummary(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        role: roleFromJson(json['role'] as String),
-        mustChangePassword: json['mustChangePassword'] as bool,
-      );
+    id: json['id'] as int,
+    name: json['name'] as String,
+    role: roleFromJson(json['role'] as String),
+    mustChangePassword: json['mustChangePassword'] as bool,
+  );
 }

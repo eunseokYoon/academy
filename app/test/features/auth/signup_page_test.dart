@@ -15,33 +15,41 @@ void main() {
     bool hold = false,
   }) async {
     calls = [];
-    await tester.pumpWidget(MaterialApp(
-      home: SignupPage(
-        onSignup: ({
-          required String code,
-          required String name,
-          required String phone,
-          required String parentPhone,
-        }) async {
-          calls.add({
-            'code': code,
-            'name': name,
-            'phone': phone,
-            'parentPhone': parentPhone,
-          });
-          if (error != null) throw error;
-          if (hold) return Completer<void>().future;
-        },
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SignupPage(
+          onSignup:
+              ({
+                required String code,
+                required String name,
+                required String phone,
+                required String parentPhone,
+              }) async {
+                calls.add({
+                  'code': code,
+                  'name': name,
+                  'phone': phone,
+                  'parentPhone': parentPhone,
+                });
+                if (error != null) throw error;
+                if (hold) return Completer<void>().future;
+              },
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> fillAll(WidgetTester tester) async {
     await tester.enterText(find.byKey(const Key('signup-code')), 'ABCD12');
     await tester.enterText(find.byKey(const Key('signup-name')), '김하늘');
-    await tester.enterText(find.byKey(const Key('signup-phone')), '010-1234-5678');
     await tester.enterText(
-        find.byKey(const Key('signup-parent-phone')), '010-9876-5432');
+      find.byKey(const Key('signup-phone')),
+      '010-1234-5678',
+    );
+    await tester.enterText(
+      find.byKey(const Key('signup-parent-phone')),
+      '010-9876-5432',
+    );
   }
 
   testWidgets('네 칸을 채우면 가입을 부른다', (tester) async {
@@ -78,9 +86,14 @@ void main() {
     await pump(tester);
     await tester.enterText(find.byKey(const Key('signup-code')), 'ABCD12');
     await tester.enterText(find.byKey(const Key('signup-name')), '김하늘');
-    await tester.enterText(find.byKey(const Key('signup-phone')), '01012345678');
     await tester.enterText(
-        find.byKey(const Key('signup-parent-phone')), '01012345678');
+      find.byKey(const Key('signup-phone')),
+      '01012345678',
+    );
+    await tester.enterText(
+      find.byKey(const Key('signup-parent-phone')),
+      '01012345678',
+    );
     await tester.tap(find.byKey(const Key('signup-submit')));
     await tester.pump();
 
@@ -98,11 +111,13 @@ void main() {
   });
 
   testWidgets('코드가 틀리면 서버 문구를 보여준다', (tester) async {
-    await pump(tester,
-        error: const ApiException(
-          code: 'INVITE_CODE_INVALID',
-          message: '초대코드가 유효하지 않습니다.',
-        ));
+    await pump(
+      tester,
+      error: const ApiException(
+        code: 'INVITE_CODE_INVALID',
+        message: '초대코드가 유효하지 않습니다.',
+      ),
+    );
     await fillAll(tester);
     await tester.tap(find.byKey(const Key('signup-submit')));
     await tester.pumpAndSettle();

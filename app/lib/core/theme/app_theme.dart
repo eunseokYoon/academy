@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'app_colors.dart';
 
 /// 화면은 모바일 먼저다. 360px에서 안 깨지면 된다.
@@ -9,10 +10,7 @@ class AppTheme {
     final scheme = ColorScheme.fromSeed(
       seedColor: AppColors.brand600,
       brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.brand600,
-      surface: Colors.white,
-    );
+    ).copyWith(primary: AppColors.brand600, surface: Colors.white);
 
     return ThemeData(
       useMaterial3: true,

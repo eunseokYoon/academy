@@ -44,7 +44,10 @@ class _FakeRepo implements AuthRepository {
       cookiePresentAtMeCall = cookies.any((c) => c.name == 'refreshToken');
     }
     if (throwOnMe) {
-      throw const ApiException(code: 'TOKEN_INVALID', message: '유효하지 않은 인증 정보입니다.');
+      throw const ApiException(
+        code: 'TOKEN_INVALID',
+        message: '유효하지 않은 인증 정보입니다.',
+      );
     }
     return meResult!;
   }
@@ -53,15 +56,13 @@ class _FakeRepo implements AuthRepository {
   Future<LoginResponse> login({
     required String loginId,
     required String password,
-  }) async =>
-      loginResult!;
+  }) async => loginResult!;
 
   @override
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
-  }) async =>
-      changeCalls++;
+  }) async => changeCalls++;
 
   @override
   Future<void> logout() async => logoutCalls++;
@@ -95,19 +96,19 @@ void main() {
   });
 
   AuthController controllerWith(AuthRepository repo) => AuthController(
-        repository: repo,
-        tokens: tokens,
-        cookies: cookies,
-        jar: jar,
-      );
+    repository: repo,
+    tokens: tokens,
+    cookies: cookies,
+    jar: jar,
+  );
 
   MeResponse meOf(UserRole role, {bool mustChange = false}) => MeResponse(
-        id: 1,
-        name: '김하늘',
-        role: role,
-        phone: '01012345678',
-        mustChangePassword: mustChange,
-      );
+    id: 1,
+    name: '김하늘',
+    role: role,
+    phone: '01012345678',
+    mustChangePassword: mustChange,
+  );
 
   test('초기 상태는 unknown이다', () {
     // 부팅 중에 로그인 화면을 깜빡 보여주지 않으려면 셋째 상태가 필요하다.
@@ -170,7 +171,9 @@ void main() {
 
   test('mustChangePassword면 ready가 아니다', () async {
     await tokens.write('at-1');
-    final c = controllerWith(_FakeRepo(meResult: meOf(UserRole.student, mustChange: true)));
+    final c = controllerWith(
+      _FakeRepo(meResult: meOf(UserRole.student, mustChange: true)),
+    );
 
     await c.bootstrap();
 

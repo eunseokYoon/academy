@@ -13,17 +13,17 @@ class AuthController extends ChangeNotifier {
     required TokenStore tokens,
     required CookieStore cookies,
     required CookieJar jar,
-  })  : // named 매개변수에 private 이름(`this._repository`)을 쓰는 것을 Dart가
-        // 금지한다(컴파일 에러다, 조용히 깨지는 게 아니다). 필드를 private으로
-        // 두려면 이 방식뿐이다. 아래 세 줄도 동일.
-        // ignore: prefer_initializing_formals
-        _repository = repository,
-        // ignore: prefer_initializing_formals
-        _tokens = tokens,
-        // ignore: prefer_initializing_formals
-        _cookies = cookies,
-        // ignore: prefer_initializing_formals
-        _jar = jar;
+  }) : // named 매개변수에 private 이름(`this._repository`)을 쓰는 것을 Dart가
+       // 금지한다(컴파일 에러다, 조용히 깨지는 게 아니다). 필드를 private으로
+       // 두려면 이 방식뿐이다. 아래 세 줄도 동일.
+       // ignore: prefer_initializing_formals
+       _repository = repository,
+       // ignore: prefer_initializing_formals
+       _tokens = tokens,
+       // ignore: prefer_initializing_formals
+       _cookies = cookies,
+       // ignore: prefer_initializing_formals
+       _jar = jar;
 
   final AuthRepository _repository;
   final TokenStore _tokens;
@@ -48,13 +48,15 @@ class AuthController extends ChangeNotifier {
 
     try {
       final me = await _repository.me();
-      _set(AuthSnapshot(
-        status: me.mustChangePassword
-            ? AuthStatus.mustChangePassword
-            : AuthStatus.ready,
-        role: me.role,
-        name: me.name,
-      ));
+      _set(
+        AuthSnapshot(
+          status: me.mustChangePassword
+              ? AuthStatus.mustChangePassword
+              : AuthStatus.ready,
+          role: me.role,
+          name: me.name,
+        ),
+      );
     } catch (_) {
       // 토큰이 죽었고 리프레시도 못 살렸다. 남겨두면 매 요청이 401이다.
       await _clearLocal();
@@ -70,13 +72,15 @@ class AuthController extends ChangeNotifier {
     await _tokens.write(res.accessToken);
     // 로그인 응답의 Set-Cookie 를 남긴다. 이게 리프레시 토큰이다.
     await _cookies.persist(_jar);
-    _set(AuthSnapshot(
-      status: res.user.mustChangePassword
-          ? AuthStatus.mustChangePassword
-          : AuthStatus.ready,
-      role: res.user.role,
-      name: res.user.name,
-    ));
+    _set(
+      AuthSnapshot(
+        status: res.user.mustChangePassword
+            ? AuthStatus.mustChangePassword
+            : AuthStatus.ready,
+        role: res.user.role,
+        name: res.user.name,
+      ),
+    );
   }
 
   /// 성공하면 서버가 리프레시 토큰을 전부 폐기한다. **다시 로그인시킨다.**
@@ -108,11 +112,13 @@ class AuthController extends ChangeNotifier {
   /// 비밀번호를 바꾸면 그 역할 화면으로 돌아가야 한다.
   void markPasswordChangeRequired() {
     if (_snapshot.status == AuthStatus.mustChangePassword) return;
-    _set(AuthSnapshot(
-      status: AuthStatus.mustChangePassword,
-      role: _snapshot.role,
-      name: _snapshot.name,
-    ));
+    _set(
+      AuthSnapshot(
+        status: AuthStatus.mustChangePassword,
+        role: _snapshot.role,
+        name: _snapshot.name,
+      ),
+    );
   }
 
   /// 가입은 로그인이 아니다. 계정만 만들어지고 상태는 `loggedOut` 그대로다 —
@@ -122,13 +128,12 @@ class AuthController extends ChangeNotifier {
     required String name,
     required String phone,
     required String parentPhone,
-  }) =>
-      _repository.signup(
-        code: code,
-        name: name,
-        phone: phone,
-        parentPhone: parentPhone,
-      );
+  }) => _repository.signup(
+    code: code,
+    name: name,
+    phone: phone,
+    parentPhone: parentPhone,
+  );
 
   /// `RefreshInterceptor`가 부른다(Task 6). 리프레시가 죽었을 때다.
   Future<void> onSessionExpired() async {

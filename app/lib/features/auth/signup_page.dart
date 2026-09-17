@@ -20,7 +20,8 @@ class SignupPage extends StatefulWidget {
     required String name,
     required String phone,
     required String parentPhone,
-  }) onSignup;
+  })
+  onSignup;
 
   @override
   State<SignupPage> createState() => _SignupPageState();
@@ -44,7 +45,8 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  static String _digits(String value) => value.replaceAll(RegExp(r'[^0-9]'), '');
+  static String _digits(String value) =>
+      value.replaceAll(RegExp(r'[^0-9]'), '');
 
   Future<void> _submit() async {
     if (_busy) return;

@@ -15,15 +15,17 @@ void main() {
     bool hold = false,
   }) async {
     logins = [];
-    await tester.pumpWidget(MaterialApp(
-      home: LoginPage(
-        onLogin: ({required String loginId, required String password}) async {
-          logins.add((loginId, password));
-          if (error != null) throw error;
-          if (hold) return Completer<void>().future;
-        },
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(
+          onLogin: ({required String loginId, required String password}) async {
+            logins.add((loginId, password));
+            if (error != null) throw error;
+            if (hold) return Completer<void>().future;
+          },
+        ),
       ),
-    ));
+    );
   }
 
   testWidgets('전화번호와 비밀번호로 로그인을 부른다', (tester) async {
@@ -52,11 +54,13 @@ void main() {
   testWidgets('서버 문구를 그대로 보여준다', (tester) async {
     // 백엔드 ErrorCode 의 message 가 이미 한국어 사용자 문구다.
     // 앱에서 문구를 다시 만들면 같은 실패가 화면마다 다르게 보인다.
-    await pump(tester,
-        error: const ApiException(
-          code: 'INVALID_CREDENTIALS',
-          message: '아이디 또는 비밀번호가 올바르지 않습니다.',
-        ));
+    await pump(
+      tester,
+      error: const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+      ),
+    );
 
     await tester.enterText(find.byKey(const Key('login-id')), '01012345678');
     await tester.enterText(find.byKey(const Key('login-password')), 'wrong');

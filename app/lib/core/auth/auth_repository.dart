@@ -66,15 +66,14 @@ class AuthRepository {
     return unwrapCall<void>(
       () => _dio.patch<Map<String, dynamic>>(
         '/api/auth/password',
-        data: {
-          'currentPassword': currentPassword,
-          'newPassword': newPassword,
-        },
+        data: {'currentPassword': currentPassword, 'newPassword': newPassword},
       ),
       (_) {},
     );
   }
 
-  Future<void> logout() =>
-      unwrapCall<void>(() => _dio.post<Map<String, dynamic>>('/api/auth/logout'), (_) {});
+  Future<void> logout() => unwrapCall<void>(
+    () => _dio.post<Map<String, dynamic>>('/api/auth/logout'),
+    (_) {},
+  );
 }

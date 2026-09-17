@@ -21,9 +21,8 @@ GoRouter buildRouter({
     routes: [
       GoRoute(
         path: AppRoutes.splash,
-        builder: (_, _) => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
+        builder: (_, _) =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
       ...routes,
     ],

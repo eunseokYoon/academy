@@ -36,7 +36,10 @@ void main() {
       final body = {
         'success': false,
         'data': null,
-        'error': {'code': 'INVALID_CREDENTIALS', 'message': '아이디 또는 비밀번호가 올바르지 않습니다.'},
+        'error': {
+          'code': 'INVALID_CREDENTIALS',
+          'message': '아이디 또는 비밀번호가 올바르지 않습니다.',
+        },
       };
       expect(
         () => unwrap<String>(body, 401, (data) => data as String),
@@ -56,14 +59,17 @@ void main() {
       final body = {'success': false, 'data': null, 'error': null};
       expect(
         () => unwrap<String>(body, 500, (data) => data as String),
-        throwsA(isA<ApiException>().having((e) => e.code, 'code', 'INTERNAL_ERROR')),
+        throwsA(
+          isA<ApiException>().having((e) => e.code, 'code', 'INTERNAL_ERROR'),
+        ),
       );
     });
 
     test('엔벌로프가 아닌 본문도 던진다', () {
       // nginx가 502를 HTML로 돌려주는 경우다
       expect(
-        () => unwrap<String>(<String, dynamic>{}, 502, (data) => data as String),
+        () =>
+            unwrap<String>(<String, dynamic>{}, 502, (data) => data as String),
         throwsA(isA<ApiException>()),
       );
     });

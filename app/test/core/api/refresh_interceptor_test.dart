@@ -16,10 +16,10 @@ void main() {
     'error': {'code': 'TOKEN_EXPIRED', 'message': '인증이 만료되었습니다. 다시 로그인해 주세요.'},
   };
   Map<String, dynamic> refreshed(String token) => {
-        'success': true,
-        'data': {'accessToken': token},
-        'error': null,
-      };
+    'success': true,
+    'data': {'accessToken': token},
+    'error': null,
+  };
 
   late TokenStore tokens;
   late CookieStore cookies;
@@ -50,13 +50,15 @@ void main() {
     final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
       ..httpClientAdapter = mainAdapter
       ..interceptors.add(AuthInterceptor(tokens))
-      ..interceptors.add(RefreshInterceptor(
-        plain: plainDio,
-        tokens: tokens,
-        cookies: cookies,
-        jar: jar,
-        onSessionExpired: () async => expiredCalls++,
-      ));
+      ..interceptors.add(
+        RefreshInterceptor(
+          plain: plainDio,
+          tokens: tokens,
+          cookies: cookies,
+          jar: jar,
+          onSessionExpired: () async => expiredCalls++,
+        ),
+      );
 
     return (dio, mainAdapter, plainAdapter);
   }
@@ -89,19 +91,27 @@ void main() {
     // 이게 없으면 리프레시가 5번 나가고 그중 4개가 이미 회전된 토큰으로 실패한다.
     await tokens.write('old');
     final (dio, _, plainAdapter) = build(
-      main: List.generate(5, (_) => const FakeReply(statusCode: 401, body: unauthorized)),
+      main: List.generate(
+        5,
+        (_) => const FakeReply(statusCode: 401, body: unauthorized),
+      ),
       plain: [
         FakeReply(statusCode: 200, body: refreshed('new')),
-        ...List.generate(5, (_) => const FakeReply(statusCode: 200, body: okBody)),
+        ...List.generate(
+          5,
+          (_) => const FakeReply(statusCode: 200, body: okBody),
+        ),
       ],
     );
 
     await Future.wait([
-      for (var i = 0; i < 5; i++) dio.get<Map<String, dynamic>>('/api/student/p$i'),
+      for (var i = 0; i < 5; i++)
+        dio.get<Map<String, dynamic>>('/api/student/p$i'),
     ]);
 
-    final refreshCalls =
-        plainAdapter.received.where((r) => r.path == '/api/auth/refresh').length;
+    final refreshCalls = plainAdapter.received
+        .where((r) => r.path == '/api/auth/refresh')
+        .length;
     expect(refreshCalls, 1);
     expect(await tokens.read(), 'new');
   });
@@ -133,11 +143,17 @@ void main() {
       main: [const FakeReply(statusCode: 401, body: unauthorized)],
       plain: [
         FakeReply(statusCode: 200, body: refreshed('new')),
-        const FakeReply(statusCode: 401, body: {
-          'success': false,
-          'data': null,
-          'error': {'code': 'INVALID_CREDENTIALS', 'message': '아이디 또는 비밀번호가 올바르지 않습니다.'},
-        }),
+        const FakeReply(
+          statusCode: 401,
+          body: {
+            'success': false,
+            'data': null,
+            'error': {
+              'code': 'INVALID_CREDENTIALS',
+              'message': '아이디 또는 비밀번호가 올바르지 않습니다.',
+            },
+          },
+        ),
       ],
     );
 
@@ -157,11 +173,14 @@ void main() {
     await tokens.write('old');
     final (dio, _, plainAdapter) = build(
       main: [
-        const FakeReply(statusCode: 409, body: {
-          'success': false,
-          'data': null,
-          'error': {'code': 'DUE_DATE_PASSED', 'message': '마감 시간이 지났습니다.'},
-        }),
+        const FakeReply(
+          statusCode: 409,
+          body: {
+            'success': false,
+            'data': null,
+            'error': {'code': 'DUE_DATE_PASSED', 'message': '마감 시간이 지났습니다.'},
+          },
+        ),
       ],
       plain: [],
     );

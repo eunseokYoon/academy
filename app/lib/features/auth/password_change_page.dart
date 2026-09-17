@@ -18,7 +18,8 @@ class PasswordChangePage extends StatefulWidget {
   final Future<void> Function({
     required String currentPassword,
     required String newPassword,
-  }) onChange;
+  })
+  onChange;
 
   /// 이 화면이 막다른 길이 되지 않게 한다.
   final Future<void> Function() onLogout;
@@ -100,7 +101,10 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
                 _field('pw-confirm', _confirm, '새 비밀번호 확인'),
                 if (_error != null) ...[
                   const SizedBox(height: 4),
-                  Text(_error!, style: const TextStyle(color: Color(0xFFB91C1C))),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: Color(0xFFB91C1C)),
+                  ),
                 ],
                 const SizedBox(height: 20),
                 FilledButton(

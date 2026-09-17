@@ -22,7 +22,10 @@ void main() {
       replies: const [FakeReply(statusCode: 200, body: okBody)],
     );
 
-    await dioWith(tokens, adapter).get<Map<String, dynamic>>('/api/student/home');
+    await dioWith(
+      tokens,
+      adapter,
+    ).get<Map<String, dynamic>>('/api/student/home');
 
     expect(adapter.received.single.headers['Authorization'], 'Bearer abc');
   });
@@ -33,9 +36,14 @@ void main() {
       replies: const [FakeReply(statusCode: 200, body: okBody)],
     );
 
-    await dioWith(TokenStore(InMemoryKeyValueStore()), adapter)
-        .post<Map<String, dynamic>>('/api/auth/login');
+    await dioWith(
+      TokenStore(InMemoryKeyValueStore()),
+      adapter,
+    ).post<Map<String, dynamic>>('/api/auth/login');
 
-    expect(adapter.received.single.headers.containsKey('Authorization'), isFalse);
+    expect(
+      adapter.received.single.headers.containsKey('Authorization'),
+      isFalse,
+    );
   });
 }

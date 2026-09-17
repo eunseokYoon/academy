@@ -11,16 +11,17 @@ abstract class KeyValueStore {
 /// iOS Keychain · Android Keystore. 리프레시 쿠키와 액세스 토큰이 여기 들어간다.
 class SecureKeyValueStore implements KeyValueStore {
   SecureKeyValueStore([FlutterSecureStorage? storage])
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              // aOptions를 넘기지 않는다. 11.x의 기본값이 이미 AES-GCM +
-              // RSA OAEP 키 래핑이라 암호화가 옵션이 아니라 기본이다 —
-              // 옛 `encryptedSharedPreferences: true` 플래그는 API에서 사라졌다.
-              // 되살리려 하지 마라. 컴파일되지 않는다.
-              iOptions: IOSOptions(
-                accessibility: KeychainAccessibility.first_unlock,
-              ),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            // aOptions를 넘기지 않는다. 11.x의 기본값이 이미 AES-GCM +
+            // RSA OAEP 키 래핑이라 암호화가 옵션이 아니라 기본이다 —
+            // 옛 `encryptedSharedPreferences: true` 플래그는 API에서 사라졌다.
+            // 되살리려 하지 마라. 컴파일되지 않는다.
+            iOptions: IOSOptions(
+              accessibility: KeychainAccessibility.first_unlock,
+            ),
+          );
 
   final FlutterSecureStorage _storage;
 

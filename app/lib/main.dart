@@ -54,12 +54,13 @@ void main() {
   // QueuedInterceptor라 리프레시 하나가 멈추면 뒤에 줄 선 401 복구가 전부
   // 막힌다. dio의 기본값은 타임아웃이 없다(null)라서 여기서 빠뜨리면
   // 영원히 멈출 수 있다.
-  final plain = Dio(BaseOptions(
-    baseUrl: baseUrl,
-    connectTimeout: DioClient.connectTimeout,
-    receiveTimeout: DioClient.receiveTimeout,
-  ))
-    ..interceptors.add(CookieManager(jar));
+  final plain = Dio(
+    BaseOptions(
+      baseUrl: baseUrl,
+      connectTimeout: DioClient.connectTimeout,
+      receiveTimeout: DioClient.receiveTimeout,
+    ),
+  )..interceptors.add(CookieManager(jar));
 
   // 순환을 끊는다. 클로저가 auth를 나중에 읽는다.
   late final AuthController auth;

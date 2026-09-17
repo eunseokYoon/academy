@@ -14,7 +14,8 @@ class LoginPage extends StatefulWidget {
   final Future<void> Function({
     required String loginId,
     required String password,
-  }) onLogin;
+  })
+  onLogin;
 
   @override
   State<LoginPage> createState() => _LoginPageState();

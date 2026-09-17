@@ -8,11 +8,7 @@ import 'package:dio/dio.dart';
 ///
 /// **lib/ 안에 두는 것은 의도적이다.** Task 6·7·8의 테스트가 전부 이것을 쓴다.
 class FakeReply {
-  const FakeReply({
-    required this.statusCode,
-    required this.body,
-    this.headers,
-  });
+  const FakeReply({required this.statusCode, required this.body, this.headers});
 
   final int statusCode;
   final Map<String, dynamic> body;

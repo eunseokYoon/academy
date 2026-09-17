@@ -17,19 +17,22 @@ void main() {
   }) async {
     changes = [];
     logouts = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: PasswordChangePage(
-        onChange: ({
-          required String currentPassword,
-          required String newPassword,
-        }) async {
-          changes.add((currentPassword, newPassword));
-          if (error != null) throw error;
-          if (hold) return Completer<void>().future;
-        },
-        onLogout: () async => logouts++,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PasswordChangePage(
+          onChange:
+              ({
+                required String currentPassword,
+                required String newPassword,
+              }) async {
+                changes.add((currentPassword, newPassword));
+                if (error != null) throw error;
+                if (hold) return Completer<void>().future;
+              },
+          onLogout: () async => logouts++,
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> fill(
@@ -40,7 +43,10 @@ void main() {
   }) async {
     await tester.enterText(find.byKey(const Key('pw-current')), current);
     await tester.enterText(find.byKey(const Key('pw-new')), next);
-    await tester.enterText(find.byKey(const Key('pw-confirm')), confirm ?? next);
+    await tester.enterText(
+      find.byKey(const Key('pw-confirm')),
+      confirm ?? next,
+    );
   }
 
   testWidgets('현재·새 비밀번호로 변경을 부른다', (tester) async {
@@ -86,11 +92,13 @@ void main() {
   });
 
   testWidgets('서버 문구를 그대로 보여준다', (tester) async {
-    await pump(tester,
-        error: const ApiException(
-          code: 'INVALID_CREDENTIALS',
-          message: '아이디 또는 비밀번호가 올바르지 않습니다.',
-        ));
+    await pump(
+      tester,
+      error: const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+      ),
+    );
     await fill(tester);
     await tester.tap(find.byKey(const Key('pw-submit')));
     await tester.pumpAndSettle();
