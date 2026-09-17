@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/api_exception.dart';
 import 'package:academy_app/core/api/api_response.dart';
@@ -65,4 +68,47 @@ void main() {
       );
     });
   });
+
+  group('unwrapCall', () {
+    // 서버가 준 문구가 없을 때 앱이 문구를 만들지 않는다는 것이 R11의 핵심이고,
+    // 이 테스트가 없으면 rethrow를 없애도 아무것도 실패하지 않는다.
+
+    test('연결 실패(response == null)는 DioException을 그대로 던진다', () async {
+      // 서버 응답이 없다 (연결 불가, 타임아웃 등)
+      final adapter = _ConnectionErrorAdapter();
+      final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
+        ..httpClientAdapter = adapter;
+
+      try {
+        await unwrapCall<String>(
+          () => dio.get<Map<String, dynamic>>('/api/test'),
+          (data) => 'result',
+        );
+        fail('예외를 던져야 한다');
+      } catch (e) {
+        // DioException이어야 한다
+        expect(e, isA<DioException>());
+        // ApiException이 아니어야 한다 — 앱이 문구를 만들지 않았다는 뜻
+        expect(e, isNot(isA<ApiException>()));
+      }
+    });
+  });
+}
+
+/// 연결 수준의 DioException을 던지는 테스트용 어댑터
+class _ConnectionErrorAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    throw DioException.connectionError(
+      requestOptions: options,
+      reason: 'No internet',
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
