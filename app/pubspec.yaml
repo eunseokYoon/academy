@@ -62,6 +62,16 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # 웹과 글자 모양을 맞춘다. frontend/index.html 이 jsDelivr 에서
+  # Pretendard Variable v1.3.9 을 받는데, Flutter 는 woff2 를 못 읽고
+  # dynamic-subset 도 안 되므로 같은 태그의 Variable TTF 를 번들한다.
+  # Variable 한 파일이 static 5개(400·500·600·700·800)보다 작다.
+  # 라이선스는 SIL OFL — assets/fonts/OFL.txt 를 같이 배포해야 한다.
+  fonts:
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/PretendardVariable.ttf
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
