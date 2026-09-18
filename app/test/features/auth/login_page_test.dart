@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:academy_app/core/api/api_exception.dart';
 import 'package:academy_app/core/router/app_router.dart';
 import 'package:academy_app/features/auth/login_page.dart';
@@ -96,94 +97,91 @@ void main() {
     expect(logins.length, 1);
   });
 
-  testWidgets('_busy 가드가 in-flight 요청을 막는다', (tester) async {
-    // onSubmitted 경로(키보드 엔터)는 버튼을 거치지 않아 SubmitButton의 pending 가드를 피한다.
-    // 따라서 _submit() 메서드의 if (_busy) return; 가드만이 double-submit을 막는다.
-    // 이 테스트는 _busy 플래그가 제 역할을 하는지 확인한다.
-    var submitCallCount = 0;
+  testWidgets('키보드 완료 키로 두 번 보내도 요청은 한 번만 나간다', (tester) async {
+    // 버튼 경로는 SubmitButton의 pending 가드(onPressed: pending ? null :
+    // onPressed)가 이미 이중 제출을 막아서 위 테스트는 _busy 가드 없이도
+    // 통과한다. 비밀번호 필드의 onSubmitted(키보드 「완료」 키)는 버튼을
+    // 거치지 않아 그 가드를 피해 간다 — 이 경로를 막는 건 _submit() 맨 앞의
+    // if (_busy) return; 뿐이다.
+    //
+    // tester.testTextInput.receiveAction(TextInputAction.done) 은 done
+    // 액션의 기본 동작(포커스 해제 → 연결 재시작)까지 함께 트리거해서 두
+    // 번째 호출이 같은 입력 클라이언트에 닿지 않았다 — 첫 호출만으로도
+    // _busy 유무와 상관없이 늘 호출 1회로 끝나 가드를 판별하지 못했다.
+    // 그래서 내부 TextField 의 onSubmitted 콜백을 직접 두 번 호출해
+    // 프레임워크의 포커스 해제 부작용 없이 _submit() 재진입만을 본다.
+    await pump(tester, hold: true);
+    await tester.enterText(find.byKey(const Key('login-id')), '01012345678');
+    await tester.enterText(find.byKey(const Key('login-password')), '0000');
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: _TestSubmitGuard(
-            onSubmit: () {
-              submitCallCount++;
-              return Completer<void>().future;
-            },
-          ),
-        ),
+    final passwordField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('login-password')),
+        matching: find.byType(TextField),
       ),
     );
 
-    // 첫 번째 제출
-    await tester.tap(find.byKey(const Key('test-submit')));
+    passwordField.onSubmitted!('0000');
     await tester.pump();
-    expect(submitCallCount, 1);
+    passwordField.onSubmitted!('0000');
+    await tester.pump();
 
-    // 두 번째 제출을 바로 한다 (첫 번째가 여전히 in-flight)
-    // _busy 가드가 있다면 submitCallCount는 그대로 1이어야 한다
-    await tester.tap(find.byKey(const Key('test-submit')));
-    await tester.pump();
-    expect(submitCallCount, 1);
+    expect(logins.length, 1);
   });
 
-  testWidgets('약관·처리방침 링크 목적지가 올바르다', (tester) async {
-    // 웹은 카드 밖 남색 위에 둔다. 법정 고지다.
-    // 링크 레이블뿐만 아니라 목적지를 검증한다 — 라벨과 URL이 교차되면 안 된다.
-    tester.view.physicalSize = const Size(800, 1600);
-    addTearDown(tester.view.resetPhysicalSize);
-
-    var termsRoute = '';
-    var privacyRoute = '';
-
-    // _LegalLink 을 직접 테스트해서 올바른 라우트를 검증한다
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: () => termsRoute = AppRoutes.terms,
-                child: const Text('이용약관'),
-              ),
-              GestureDetector(
-                onTap: () => privacyRoute = AppRoutes.privacy,
-                child: const Text('개인정보처리방침'),
-              ),
-            ],
+  testWidgets('약관·처리방침 링크가 각자 올바른 경로로 이동한다', (tester) async {
+    // 실제 GoRouter 로 탭해서 도착한 경로를 확인한다. 라벨 존재만 보면
+    // context.go(AppRoutes.terms) 와 context.go(AppRoutes.privacy) 가
+    // 서로 바뀌어도 잡지 못한다. 목적지 화면은 라우팅만 확인하면 되므로
+    // 실제 약관·처리방침 화면 대신 식별 가능한 자리표시 텍스트를 쓴다.
+    final router = GoRouter(
+      initialLocation: AppRoutes.login,
+      routes: [
+        GoRoute(
+          path: AppRoutes.login,
+          builder: (context, state) => LoginPage(
+            onLogin: ({
+              required String loginId,
+              required String password,
+            }) async {},
           ),
         ),
-      ),
+        GoRoute(
+          path: AppRoutes.terms,
+          builder: (context, state) => const Scaffold(body: Text('약관 화면 도착')),
+        ),
+        GoRoute(
+          path: AppRoutes.privacy,
+          builder: (context, state) => const Scaffold(body: Text('처리방침 화면 도착')),
+        ),
+      ],
     );
+    addTearDown(router.dispose);
 
-    // 이용약관 목표 검증
-    termsRoute = '';
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+
+    // 기본 테스트 뷰포트(800x600)에는 카드 아래 링크 줄이 다 안 들어와서
+    // SingleChildScrollView 안으로 스크롤해야 링크가 hit-test 된다.
+    await tester.ensureVisible(find.text('이용약관'));
     await tester.tap(find.text('이용약관'));
     await tester.pumpAndSettle();
-    expect(termsRoute, AppRoutes.terms);
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.terms,
+    );
+    expect(find.text('약관 화면 도착'), findsOneWidget);
 
-    // 개인정보처리방침 목표 검증
-    privacyRoute = '';
+    router.go(AppRoutes.login);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('개인정보처리방침'));
     await tester.tap(find.text('개인정보처리방침'));
     await tester.pumpAndSettle();
-    expect(privacyRoute, AppRoutes.privacy);
-
-    // 실제 LoginPage의 링크도 있는지 확인
-    await tester.pumpWidget(
-      MaterialApp(
-        home: LoginPage(
-          onLogin: ({
-            required String loginId,
-            required String password,
-          }) async {},
-        ),
-      ),
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.privacy,
     );
-
-    // 링크가 실제로 존재하는지 확인
-    expect(find.text('이용약관'), findsWidgets);
-    expect(find.text('개인정보처리방침'), findsWidgets);
+    expect(find.text('처리방침 화면 도착'), findsOneWidget);
   });
 
   testWidgets('약관·처리방침 링크가 있다', (tester) async {
@@ -195,9 +193,9 @@ void main() {
 
   testWidgets('360px 넓이에서 가로로 넘치지 않는다', (tester) async {
     // 페이지가 SingleChildScrollView 에 싸여 있어서 세로 넘침은 테스트할 수 없다.
-    // 높이 350은 테스트 실행 중 일정한 상태를 유지하기 위한 값이다.
-    // 이 테스트는 가로 넘침을 잡는다: Row나 unbreakable Text 같은 고정폭 위젯이
-    // 있으면 360px에서 RenderFlex 오류가 난다.
+    // 높이 350은 테스트 실행 중 일정한 상태를 유지하기 위한 값이고 실측한
+    // 값은 아니다 — 이 테스트가 잡는 건 가로 넘침이다: Row나 unbreakable
+    // Text 같은 고정폭 위젯이 있으면 360px 너비에서 RenderFlex 오류가 난다.
     tester.view.physicalSize = const Size(360, 350);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -206,38 +204,4 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
-}
-
-class _TestSubmitGuard extends StatefulWidget {
-  const _TestSubmitGuard({required this.onSubmit});
-
-  final Future<void> Function() onSubmit;
-
-  @override
-  State<_TestSubmitGuard> createState() => _TestSubmitGuardState();
-}
-
-class _TestSubmitGuardState extends State<_TestSubmitGuard> {
-  bool _busy = false;
-
-  Future<void> _submit() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      await widget.onSubmit();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ElevatedButton(
-        key: const Key('test-submit'),
-        onPressed: _submit,
-        child: const Text('Submit'),
-      ),
-    );
-  }
 }
