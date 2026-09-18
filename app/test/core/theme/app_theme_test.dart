@@ -23,6 +23,10 @@ void main() {
     for (final s in AppShadows.card) {
       expect(s.color.r, lessThan(s.color.b), reason: '남색이어야 한다');
     }
+    // 정확한 ARGB 값을 검증한다 — 웹 tailwind.config.js 가 정본이다.
+    // 0x0D14294D = rgba(20,41,77,0.05), 0x1A14294D = rgba(20,41,77,0.10)
+    expect(AppShadows.card[0].color.toARGB32(), 0x0D14294D);
+    expect(AppShadows.card[1].color.toARGB32(), 0x1A14294D);
   });
 
   test('테마가 Pretendard 와 paper 배경을 유지한다', () {

@@ -25,12 +25,12 @@ class AppShadows {
   /// `0 1px 2px rgba(20,41,77,0.05)` + `0 6px 16px -6px rgba(20,41,77,0.10)`
   static const List<BoxShadow> card = [
     BoxShadow(
-      color: Color(0x0D142949),
+      color: Color(0x0D14294D),
       offset: Offset(0, 1),
       blurRadius: 2,
     ),
     BoxShadow(
-      color: Color(0x1A142949),
+      color: Color(0x1A14294D),
       offset: Offset(0, 6),
       blurRadius: 16,
       spreadRadius: -6,
