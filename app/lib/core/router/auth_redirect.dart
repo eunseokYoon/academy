@@ -52,6 +52,10 @@ String? redirectFor(AuthSnapshot snapshot, String location) {
         UserRole.parent => AppRoutes.parent,
         UserRole.teacher => AppRoutes.teacherNotice,
       };
+      // 법정 고지는 로그인 상태에서도 읽을 수 있다.
+      if (location == AppRoutes.terms || location == AppRoutes.privacy) {
+        return null;
+      }
       // 자기 영역 밖(인증 화면이거나 남의 역할 영역)이면 홈으로.
       // **`startsWith(home)` 하나로 쓰지 마라** — `/students-archive`처럼 이름이
       // 겹치기만 하는 라우트가 학생 영역으로 오인되어, 보내야 할 리다이렉트가

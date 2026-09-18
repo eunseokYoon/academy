@@ -16,10 +16,31 @@ void main() {
     expect(find.byType(LegalDraftNotice), findsOneWidget);
   });
 
-  testWidgets('확정 안 된 값은 Pending 으로 남긴다', (tester) async {
-    // 상호·연락처·보관 기간을 그럴듯하게 채우면 그것이 그대로 고지가 된다.
+  testWidgets('보관 기간 값을 Pending 으로 남긴다', (tester) async {
+    // 퇴원 후 보관 기간을 그럴듯하게 채우면 그것이 그대로 고지가 된다.
+    // 섹션 3에 있는 Pending을 구체적으로 확인한다.
     await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    final section3 = find.text('3. 보관 기간');
+    expect(section3, findsOneWidget);
+    // 섹션 3 내 Pending이 있는지 확인
     expect(find.byType(Pending), findsWidgets);
+    expect(find.text('[확정 예정]'), findsNWidgets(2)); // 섹션 3, 4에 각각 하나씩
+  });
+
+  testWidgets('클라우드 사업자 값을 Pending 으로 남긴다', (tester) async {
+    // 제3자 제공 섹션의 클라우드 사업자를 그럴듯하게 채우면 그것이 그대로 고지가 된다.
+    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    final section4 = find.text('4. 제3자 제공과 처리 위탁');
+    expect(section4, findsOneWidget);
+    expect(find.text('[확정 예정]'), findsNWidgets(2)); // 섹션 3, 4에 각각 하나씩
+  });
+
+  testWidgets('연락처를 Pending 으로 남긴다', (tester) async {
+    // 문의처의 담당자·연락처를 그럴듯하게 채우면 그것이 그대로 고지가 된다.
+    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    final section7 = find.text('7. 문의처');
+    expect(section7, findsOneWidget);
+    expect(find.text('[담당자·연락처 확정 예정]'), findsOneWidget);
   });
 
   testWidgets('두 화면 모두 절이 하나 이상 있다', (tester) async {
@@ -51,26 +72,36 @@ void main() {
     expect(find.text('7. 문의처'), findsOneWidget);
   });
 
-  testWidgets('Pending 마크가 눈에 띈다', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    final pending = find.byType(Pending);
-    expect(pending, findsWidgets);
-    // 각 Pending은 [label] 형태로 화면에 표시된다
-    expect(find.text('[확정 예정]'), findsWidgets);
-    expect(find.text('[담당자·연락처 확정 예정]'), findsOneWidget);
+  testWidgets('로그인으로 돌아가기 링크가 있다', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: const TermsPage(),
+      routes: {'/login': (_) => const Scaffold()},
+    ));
+    expect(find.text('로그인으로 돌아가기'), findsOneWidget);
+
+    await tester.pumpWidget(MaterialApp(
+      home: const PrivacyPage(),
+      routes: {'/login': (_) => const Scaffold()},
+    ));
+    expect(find.text('로그인으로 돌아가기'), findsOneWidget);
   });
 
-  testWidgets('360px 짧은 화면에서 넘치지 않는다', (tester) async {
-    tester.view.physicalSize = const Size(360, 850);
+  testWidgets('360px 폭에서 콘텐츠가 넘치지 않는다', (tester) async {
+    tester.view.physicalSize = const Size(360, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
+    // TermsPage 테스트
     await tester.pumpWidget(const MaterialApp(home: TermsPage()));
-    await tester.pumpAndSettle();
+    // 콘텐츠의 최대 너비는 384px로 제한되어 360px 폭에 맞아야 한다
+    final termsContent = find.byType(ConstrainedBox);
+    expect(termsContent, findsWidgets);
     expect(tester.takeException(), isNull);
 
+    // PrivacyPage 테스트
     await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    await tester.pumpAndSettle();
+    final privacyContent = find.byType(ConstrainedBox);
+    expect(privacyContent, findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

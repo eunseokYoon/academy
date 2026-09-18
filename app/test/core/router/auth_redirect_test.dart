@@ -115,10 +115,14 @@ void main() {
       expect(redirectFor(loggedOut, AppRoutes.privacy), isNull);
     });
 
-    test('로그인한 뒤에는 자기 홈으로 돌려보낸다', () {
-      // 읽기는 로그인 전 경로다. 로그인 상태에서 머무를 화면이 아니다.
-      expect(redirectFor(student, AppRoutes.terms), AppRoutes.student);
-      expect(redirectFor(parent, AppRoutes.privacy), AppRoutes.parent);
+    test('로그인했을 때도 읽을 수 있다', () {
+      // 법정 고지는 언제나 읽을 수 있어야 한다.
+      expect(redirectFor(student, AppRoutes.terms), isNull);
+      expect(redirectFor(student, AppRoutes.privacy), isNull);
+      expect(redirectFor(parent, AppRoutes.terms), isNull);
+      expect(redirectFor(parent, AppRoutes.privacy), isNull);
+      expect(redirectFor(teacher, AppRoutes.terms), isNull);
+      expect(redirectFor(teacher, AppRoutes.privacy), isNull);
     });
   });
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/legal.dart';
 
@@ -21,11 +23,11 @@ class PrivacyPage extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 384),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  LegalDraftNotice(),
-                  LegalSection(
+                  const LegalDraftNotice(),
+                  const LegalSection(
                     title: '1. 수집하는 항목',
                     body: Text.rich(
                       TextSpan(
@@ -39,19 +41,19 @@ class PrivacyPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  LegalSection(
+                  const LegalSection(
                     title: '2. 수집·이용 목적',
                     body: Text(
                       '수업 운영과 출결 관리, 숙제 확인과 피드백 제공, 성적 안내, 보호자 안내에만 사용합니다. 광고나 마케팅 목적으로 이용하지 않습니다.',
                     ),
                   ),
-                  LegalSection(
+                  const LegalSection(
                     title: '3. 보관 기간',
                     body: Text.rich(
                       TextSpan(
                         children: [
                           TextSpan(text: '재원 기간 동안 보관합니다. 퇴원 이후의 보관 기간은 '),
-                          WidgetSpan(
+WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
                             child: Pending(label: '확정 예정'),
                           ),
@@ -60,7 +62,7 @@ class PrivacyPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  LegalSection(
+                  const LegalSection(
                     title: '4. 제3자 제공과 처리 위탁',
                     body: Text.rich(
                       TextSpan(
@@ -78,19 +80,19 @@ class PrivacyPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  LegalSection(
+                  const LegalSection(
                     title: '5. 이용자의 권리',
                     body: Text(
                       '본인 또는 보호자는 언제든지 자신과 자녀의 정보 열람·정정·삭제를 요청할 수 있습니다. 요청은 담당 강사에게 연락해 주시면 처리합니다.',
                     ),
                   ),
-                  LegalSection(
+                  const LegalSection(
                     title: '6. 안전성 확보 조치',
                     body: Text(
                       '비밀번호는 복호화할 수 없는 형태로 저장하며, 학생·보호자·강사의 권한에 따라 열람 범위를 분리합니다. 보호자는 본인에게 연결된 자녀의 정보만 열람할 수 있습니다.',
                     ),
                   ),
-                  LegalSection(
+                  const LegalSection(
                     title: '7. 문의처',
                     body: Text.rich(
                       TextSpan(
@@ -104,10 +106,35 @@ class PrivacyPage extends StatelessWidget {
                       ),
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 32),
+                    child: _BackLink(onTap: () => context.go(AppRoutes.login)),
+                  ),
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BackLink extends StatelessWidget {
+  const _BackLink({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: const Text(
+        '로그인으로 돌아가기',
+        style: TextStyle(
+          fontSize: 14,
+          color: AppColors.slate500,
+          decoration: TextDecoration.underline,
         ),
       ),
     );
