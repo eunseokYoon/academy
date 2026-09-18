@@ -13,6 +13,11 @@ class AppRoutes {
 
   /// 선생님은 앱 대상이 아니다. 로그인은 성공하므로 안내 화면으로 받는다.
   static const teacherNotice = '/teacher-notice';
+
+  /// 법정 고지. **로그인 전에도 읽을 수 있어야 한다** —
+  /// 로그인해야 읽히면 고지가 아니다.
+  static const terms = '/terms';
+  static const privacy = '/privacy';
 }
 
 /// 인증 상태와 지금 위치로 갈 곳을 정한다. `null`이면 그대로 둔다.
@@ -28,8 +33,12 @@ String? redirectFor(AuthSnapshot snapshot, String location) {
       return location == AppRoutes.splash ? null : AppRoutes.splash;
 
     case AuthStatus.loggedOut:
-      // 가입은 비로그인 상태에서 들어가는 화면이다
-      if (location == AppRoutes.login || location == AppRoutes.signup) {
+      // 가입은 비로그인 상태에서 들어가는 화면이고,
+      // 약관·처리방침은 법정 고지라 로그인 전에도 읽을 수 있어야 한다.
+      if (location == AppRoutes.login ||
+          location == AppRoutes.signup ||
+          location == AppRoutes.terms ||
+          location == AppRoutes.privacy) {
         return null;
       }
       return AppRoutes.login;

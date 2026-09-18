@@ -19,8 +19,10 @@ import 'core/storage/token_store.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/password_change_page.dart';
+import 'features/auth/privacy_page.dart';
 import 'features/auth/signup_page.dart';
 import 'features/auth/teacher_notice_page.dart';
+import 'features/auth/terms_page.dart';
 import 'features/parent/parent_shell.dart';
 import 'features/student/student_shell.dart';
 
@@ -120,6 +122,14 @@ class _AcademyAppState extends State<AcademyApp> {
           onChange: widget.auth.changePassword,
           onLogout: widget.auth.logout,
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.terms,
+        builder: (_, _) => const TermsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.privacy,
+        builder: (_, _) => const PrivacyPage(),
       ),
       GoRoute(
         path: AppRoutes.student,

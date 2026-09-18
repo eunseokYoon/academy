@@ -102,4 +102,23 @@ void main() {
       expect(redirectFor(teacher, '/student'), AppRoutes.teacherNotice);
     });
   });
+
+  group('약관·처리방침', () {
+    test('라우트 상수가 웹 경로와 같다', () {
+      expect(AppRoutes.terms, '/terms');
+      expect(AppRoutes.privacy, '/privacy');
+    });
+
+    test('로그인 전에도 들어갈 수 있다', () {
+      // 법정 고지다. 로그인해야 읽을 수 있으면 고지가 아니다.
+      expect(redirectFor(loggedOut, AppRoutes.terms), isNull);
+      expect(redirectFor(loggedOut, AppRoutes.privacy), isNull);
+    });
+
+    test('로그인한 뒤에는 자기 홈으로 돌려보낸다', () {
+      // 읽기는 로그인 전 경로다. 로그인 상태에서 머무를 화면이 아니다.
+      expect(redirectFor(student, AppRoutes.terms), AppRoutes.student);
+      expect(redirectFor(parent, AppRoutes.privacy), AppRoutes.parent);
+    });
+  });
 }
