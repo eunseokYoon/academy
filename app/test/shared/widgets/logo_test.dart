@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:academy_app/core/theme/app_colors.dart';
 import 'package:academy_app/shared/branding.dart';
 import 'package:academy_app/shared/widgets/logo.dart';
 
@@ -23,7 +24,14 @@ void main() {
     final spans = (text.textSpan! as TextSpan).children!;
     expect((spans[0] as TextSpan).text, academyNameHead);
     expect((spans[1] as TextSpan).text, academyNameTail);
-    expect((spans[1] as TextSpan).style?.color, isNotNull);
+
+    // LAB 만 주황이다 — 한글은 외부 흰색을 상속한다.
+    expect((spans[0] as TextSpan).style?.color, isNull);
+    expect(text.style!.color!.toARGB32(), Colors.white.toARGB32());
+    expect(
+      (spans[1] as TextSpan).style!.color!.toARGB32(),
+      AppColors.accent500.toARGB32(),
+    );
   });
 
   testWidgets('로고 마크가 그려진다', (tester) async {
