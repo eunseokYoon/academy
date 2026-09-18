@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:academy_app/core/theme/app_colors.dart';
 import 'package:academy_app/shared/widgets/app_text_field.dart';
 
 void main() {
@@ -158,5 +159,99 @@ void main() {
     final shadow = shadows!.first;
     // brand600 = 0xFF1E5AA8, with 15% alpha ≈ 0x261E5AA8
     expect(shadow.color.toARGB32(), 0x261E5AA8);
+  });
+
+  testWidgets('라벨의 스타일이 맞다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '전화번호',
+            controller: TextEditingController(),
+          ),
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('전화번호'));
+    expect(label.style?.fontSize, 14);
+    expect(label.style?.fontWeight, FontWeight.w500);
+    expect(label.style?.color?.toARGB32(), AppColors.slate700.toARGB32());
+  });
+
+  testWidgets('힌트의 스타일이 맞다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '전화번호',
+            controller: TextEditingController(),
+            hint: '설명 텍스트',
+          ),
+        ),
+      ),
+    );
+
+    final hint = tester.widget<Text>(find.text('설명 텍스트'));
+    expect(hint.style?.fontSize, 12);
+    expect(hint.style?.color?.toARGB32(), AppColors.slate500.toARGB32());
+  });
+
+  testWidgets('placeholder 색이 slate400이다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '전화번호',
+            controller: TextEditingController(),
+            placeholder: '010-1234-5678',
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final hintStyle = field.decoration!.hintStyle as TextStyle;
+    expect(hintStyle.color?.toARGB32(), AppColors.slate400.toARGB32());
+  });
+
+  testWidgets('입력칸의 배경이 white이다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '전화번호',
+            controller: TextEditingController(),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final fillColor = field.decoration!.fillColor;
+    expect(fillColor?.toARGB32(), Colors.white.toARGB32());
+  });
+
+  testWidgets('포커스된 테두리의 색이 brand600이다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '전화번호',
+            controller: TextEditingController(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final focusedBorder = field.decoration!.focusedBorder as OutlineInputBorder;
+    expect(
+      focusedBorder.borderSide.color.toARGB32(),
+      AppColors.brand600.toARGB32(),
+    );
   });
 }

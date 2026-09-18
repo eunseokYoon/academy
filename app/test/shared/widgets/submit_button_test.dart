@@ -109,4 +109,17 @@ void main() {
     final shape = style.shape!.resolve({}) as RoundedRectangleBorder;
     expect(shape.borderRadius, BorderRadius.circular(12));
   });
+
+  testWidgets('버튼 라벨의 fontWeight가 w600이다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SubmitButton(label: '로그인', onPressed: () {}),
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('로그인'));
+    expect(label.style?.fontWeight, FontWeight.w600);
+  });
 }
