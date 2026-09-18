@@ -16,6 +16,19 @@ void main() {
     // Material elevation 이 아니라 테마의 두 겹 그림자를 그대로 쓴다.
     expect(d.boxShadow, AppShadows.card);
     expect(d.borderRadius, BorderRadius.circular(AppRadii.xxl));
+    expect(d.color?.toARGB32(), Colors.white.toARGB32());
     expect(find.text('내용'), findsOneWidget);
+  });
+
+  testWidgets('카드의 기본 패딩이 20px 전방향이다', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppCard(child: Text('내용'))),
+      ),
+    );
+
+    final box = tester.widget<Container>(find.byType(Container));
+    // 기본값 EdgeInsets.all(20)을 확인한다.
+    expect(box.padding, const EdgeInsets.all(20));
   });
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:academy_app/core/theme/app_colors.dart';
+import 'package:academy_app/core/theme/app_theme.dart';
 import 'package:academy_app/shared/widgets/form_error.dart';
 
 void main() {
@@ -21,5 +23,24 @@ void main() {
       ),
     );
     expect(find.text(message), findsOneWidget);
+
+    // 스타일을 확인한다 — 서버 메시지가 신뢰할 수 있으려면 매번 같아야 한다.
+    final textWidget = tester.widget<Text>(find.byType(Text));
+    expect(textWidget.style?.fontSize, 14);
+    expect(textWidget.style?.color?.toARGB32(), AppColors.red700.toARGB32());
+
+    // 배경과 테두리를 확인한다.
+    final containerWidget = tester.widget<Container>(find.byType(Container));
+    final decoration = containerWidget.decoration! as BoxDecoration;
+    expect(decoration.color?.toARGB32(), AppColors.red50.toARGB32());
+    expect(decoration.borderRadius, BorderRadius.circular(AppRadii.xl));
+    expect(
+      decoration.border?.top.color.toARGB32(),
+      AppColors.red200.toARGB32(),
+    );
+    expect(
+      containerWidget.padding,
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
   });
 }
