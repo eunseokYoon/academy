@@ -81,4 +81,26 @@ void main() {
     await tester.pumpWidget(host());
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('백드롭 블러가 있다', (tester) async {
+    await tester.pumpWidget(host());
+    expect(find.byType(BackdropFilter), findsOneWidget);
+  });
+
+  testWidgets('탭 행의 최대 폭이 384 이다', (tester) async {
+    await tester.pumpWidget(host());
+    final constrainedBox = tester.widget<ConstrainedBox>(
+      find.descendant(
+        of: find.byType(Center),
+        matching: find.byType(ConstrainedBox),
+      ),
+    );
+    expect(constrainedBox.constraints.maxWidth, 384);
+  });
+
+  testWidgets('SafeArea 의 top 은 false 다', (tester) async {
+    await tester.pumpWidget(host());
+    final safeArea = tester.widget<SafeArea>(find.byType(SafeArea));
+    expect(safeArea.top, false);
+  });
 }

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../../core/router/routes.dart';
@@ -37,23 +39,32 @@ class BottomTabBar extends StatelessWidget {
           top: BorderSide(color: AppColors.slate200.withValues(alpha: 0.8)),
         ),
       ),
-      // 아이폰 홈 인디케이터를 피한다.
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 56,
-          child: Row(
-            children: [
-              for (var i = 0; i < tabs.length; i++)
-                Expanded(
-                  child: _Tab(
-                    key: ValueKey('tab-${tabs[i].route}'),
-                    tab: tabs[i],
-                    active: i == currentIndex,
-                    onTap: () => onTap(i),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 56,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 384),
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < tabs.length; i++)
+                        Expanded(
+                          child: _Tab(
+                            key: ValueKey('tab-${tabs[i].route}'),
+                            tab: tabs[i],
+                            active: i == currentIndex,
+                            onTap: () => onTap(i),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
         ),
       ),
