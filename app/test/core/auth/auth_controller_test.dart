@@ -6,6 +6,7 @@ import 'package:academy_app/core/auth/auth_repository.dart';
 import 'package:academy_app/core/auth/auth_status.dart';
 import 'package:academy_app/core/auth/models/login_response.dart';
 import 'package:academy_app/core/auth/models/me_response.dart';
+import 'package:academy_app/core/auth/models/signup_response.dart';
 import 'package:academy_app/core/auth/models/user_role.dart';
 import 'package:academy_app/core/storage/cookie_store.dart';
 import 'package:academy_app/core/storage/key_value_store.dart';
@@ -68,13 +69,20 @@ class _FakeRepo implements AuthRepository {
   Future<void> logout() async => logoutCalls++;
 
   @override
-  Future<void> signup({
+  Future<SignupResponse> signup({
     required String code,
     String? name,
     required String phone,
     String? parentPhone,
   }) async {
     signupCalls++;
+    return const SignupResponse(
+      role: UserRole.student,
+      loginId: '01012345678',
+      studentName: '김하늘',
+      classRoomName: null,
+      initialPassword: '0000',
+    );
   }
 }
 
@@ -295,13 +303,15 @@ void main() {
     await c.bootstrap();
     expect(c.snapshot.status, AuthStatus.loggedOut);
 
-    await c.signup(
+    final res = await c.signup(
       code: 'ABCD12',
       name: '김하늘',
       phone: '01012345678',
       parentPhone: '01098765432',
     );
 
+    // 결과를 그대로 돌려줘야 한다 — 화면이 반 이름으로 오가입을 알아차린다.
+    expect(res.studentName, '김하늘');
     expect(c.snapshot.status, AuthStatus.loggedOut);
     expect(repo.signupCalls, 1);
   });

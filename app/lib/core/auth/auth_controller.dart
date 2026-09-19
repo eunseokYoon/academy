@@ -5,6 +5,7 @@ import '../storage/cookie_store.dart';
 import '../storage/token_store.dart';
 import 'auth_repository.dart';
 import 'auth_status.dart';
+import 'models/signup_response.dart';
 
 /// 로그인 상태의 정본. 라우터가 이것을 듣고 화면을 고른다(Task 10).
 class AuthController extends ChangeNotifier {
@@ -123,11 +124,13 @@ class AuthController extends ChangeNotifier {
 
   /// 가입은 로그인이 아니다. 계정만 만들어지고 상태는 `loggedOut` 그대로다 —
   /// 초기 비밀번호 `0000`으로 로그인해야 한다. 그래서 `_set`을 부르지 않는다.
-  Future<void> signup({
+  ///
+  /// 결과를 그대로 돌려준다. 화면이 반 이름을 보여줘야 한다.
+  Future<SignupResponse> signup({
     required String code,
-    required String name,
+    String? name,
     required String phone,
-    required String parentPhone,
+    String? parentPhone,
   }) => _repository.signup(
     code: code,
     name: name,

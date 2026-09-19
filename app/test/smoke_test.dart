@@ -6,6 +6,7 @@ import 'package:academy_app/core/auth/auth_controller.dart';
 import 'package:academy_app/core/auth/auth_repository.dart';
 import 'package:academy_app/core/auth/models/login_response.dart';
 import 'package:academy_app/core/auth/models/me_response.dart';
+import 'package:academy_app/core/auth/models/signup_response.dart';
 import 'package:academy_app/core/auth/models/user_role.dart';
 import 'package:academy_app/core/storage/cookie_store.dart';
 import 'package:academy_app/core/storage/key_value_store.dart';
@@ -42,7 +43,7 @@ class _FakeAuthRepo implements AuthRepository {
   Future<void> logout() async {}
 
   @override
-  Future<void> signup({
+  Future<SignupResponse> signup({
     required String code,
     String? name,
     required String phone,

@@ -5,6 +5,7 @@ import 'package:academy_app/core/api/api_exception.dart';
 import 'package:academy_app/core/api/dio_client.dart';
 import 'package:academy_app/core/api/fake_adapter.dart';
 import 'package:academy_app/core/auth/auth_repository.dart';
+import 'package:academy_app/core/auth/models/signup_response.dart';
 import 'package:academy_app/core/auth/models/user_role.dart';
 import 'package:academy_app/core/storage/key_value_store.dart';
 import 'package:academy_app/core/storage/token_store.dart';
@@ -111,28 +112,44 @@ void main() {
     expect(adapter.received.single.path, '/api/auth/me');
   });
 
-  test('가입은 비밀번호를 보내지 않는다', () async {
-    // 서버가 code 를 보고 학생·학부모를 판별한다. 사용자는 역할을 고르지 않고,
-    // phone 이 로그인 아이디가 되며 초기 비밀번호는 0000 이다.
+  test('가입이 결과를 돌려준다', () async {
+    // 웹은 이 값으로 성공 화면에 이름·반·아이디를 보여준다.
+    // 반 코드에는 번호 대조가 없어서 엉뚱한 반에 가입해도 조용히 넘어가는데,
+    // 반 이름을 보여주면 그 자리에서 알아차린다.
+    //
+    // 필드는 백엔드 SignupResponse.java(record)를 따른다 — studentId는 없고
+    // role·initialPassword가 있다. (자세한 내용은 보고서 Step 1 참고.)
     final adapter = FakeAdapter(
       replies: const [
         FakeReply(
           statusCode: 200,
           body: {
             'success': true,
-            'data': {'studentId': 7},
+            'data': {
+              'role': 'STUDENT',
+              'loginId': '01012345678',
+              'studentName': '김하늘',
+              'classRoomName': 'A고 2학년 목요일반',
+              'initialPassword': '0000',
+            },
             'error': null,
           },
         ),
       ],
     );
 
-    await repoWith(adapter).signup(
+    final res = await repoWith(adapter).signup(
       code: 'ABCD12',
       name: '김하늘',
       phone: '01012345678',
       parentPhone: '01098765432',
     );
+
+    expect(res.role, UserRole.student);
+    expect(res.studentName, '김하늘');
+    expect(res.classRoomName, 'A고 2학년 목요일반');
+    expect(res.loginId, '01012345678');
+    expect(res.initialPassword, '0000');
 
     final sent = adapter.received.single;
     expect(sent.path, '/api/auth/signup');
@@ -143,6 +160,66 @@ void main() {
       'parentPhone': '01098765432',
     });
     expect((sent.data as Map).containsKey('password'), isFalse);
+  });
+
+  test('개인 코드 가입은 이름과 보호자 번호를 보내지 않는다', () async {
+    // 선생님이 직접 등록한 학생이다 — 이름은 이미 서버에 있다.
+    // classRoomName은 백엔드가 @JsonInclude(NON_NULL)이라 null이면 키 자체가
+    // 빠진다 — 여기서도 그 모양 그대로 준다.
+    final adapter = FakeAdapter(
+      replies: const [
+        FakeReply(
+          statusCode: 200,
+          body: {
+            'success': true,
+            'data': {
+              'role': 'STUDENT',
+              'loginId': '01055556666',
+              'studentName': '박서준',
+              'initialPassword': '0000',
+            },
+            'error': null,
+          },
+        ),
+      ],
+    );
+
+    final res = await repoWith(adapter).signup(
+      code: 'K7F2QX',
+      phone: '01055556666',
+    );
+
+    expect(res.classRoomName, isNull);
+    final sent = adapter.received.single.data as Map;
+    expect(sent['name'], isNull);
+    expect(sent['parentPhone'], isNull);
+  });
+
+  test('SignupResponse.fromJson이 classRoomName 부재를 null로 받는다', () {
+    // 백엔드가 @JsonInclude(NON_NULL)이라 null일 때는 명시적 null이 아니라
+    // 키 자체가 응답에서 빠진다. fromJson이 그 경우도 null로 받아야 한다.
+    final res = SignupResponse.fromJson(const {
+      'role': 'STUDENT',
+      'loginId': '01055556666',
+      'studentName': '박서준',
+      'initialPassword': '0000',
+    });
+
+    expect(res.classRoomName, isNull);
+    expect(res.studentName, '박서준');
+    expect(res.role, UserRole.student);
+  });
+
+  test('SignupResponse.fromJson이 명시적 null도 받는다', () {
+    final res = SignupResponse.fromJson(const {
+      'role': 'STUDENT',
+      'loginId': '01055556666',
+      'studentName': '박서준',
+      'classRoomName': null,
+      'initialPassword': '0000',
+    });
+
+    expect(res.classRoomName, isNull);
   });
 
   test('비밀번호 변경과 로그아웃은 data가 null인 성공을 받는다', () async {

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../api/api_response.dart';
 import 'models/login_response.dart';
 import 'models/me_response.dart';
+import 'models/signup_response.dart';
 
 /// `/api/auth` 다섯 개를 감싼다. **상태를 갖지 않는다** — 토큰 보관과 로그인
 /// 상태는 `AuthController`가 맡는다(Task 9).
@@ -37,13 +38,16 @@ class AuthRepository {
   /// 세 가지 가입이 이 엔드포인트 하나를 쓴다. 서버가 `code`를 보고 종류를
   /// 판별하므로 **사용자는 학생·학부모를 고르지 않는다.**
   /// 비밀번호를 보내지 않는다 — `phone`이 로그인 아이디가 되고 초기값은 `0000`이다.
-  Future<void> signup({
+  ///
+  /// 결과를 **버리지 마라** — 화면이 반 이름을 보여줘야 엉뚱한 반 코드로
+  /// 가입한 것을 학생이 알아차린다.
+  Future<SignupResponse> signup({
     required String code,
     String? name,
     required String phone,
     String? parentPhone,
   }) {
-    return unwrapCall<void>(
+    return unwrapCall(
       () => _dio.post<Map<String, dynamic>>(
         '/api/auth/signup',
         data: {
@@ -53,7 +57,7 @@ class AuthRepository {
           'parentPhone': parentPhone,
         },
       ),
-      (_) {},
+      (data) => SignupResponse.fromJson(data as Map<String, dynamic>),
     );
   }
 
