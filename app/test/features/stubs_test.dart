@@ -61,10 +61,12 @@ void main() {
     final cases = <Widget, String>{
       const StudentHomeworksStub(): '숙제',
       const StudentLessonsStub(): '수업',
+      StudentScoresStub(onLogout: () async {}): '내 정보 · 성적',
       const StudentQnaStub(): '질문',
       const ParentScheduleStub(): '일정',
       const ParentLessonsStub(): '주간 레포트',
       const ParentScoresStub(): '성적',
+      ParentMeStub(onLogout: () async {}): '내 정보',
     };
     for (final e in cases.entries) {
       await tester.pumpWidget(MaterialApp(home: e.key));
