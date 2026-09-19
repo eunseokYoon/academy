@@ -39,7 +39,7 @@ class TeacherNoticePage extends StatelessWidget {
                   '성적·숙제 그리드는 넓은 화면에서 훨씬 빠릅니다.\n'
                   '이 앱은 학생과 학부모용입니다.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(height: 1.5, color: Color(0xFF475569)),
+                  style: TextStyle(height: 1.5, color: AppColors.slate600),
                 ),
                 const SizedBox(height: 28),
                 TextButton(

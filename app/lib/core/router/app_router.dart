@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../shared/widgets/full_screen_loader.dart';
 import '../auth/auth_controller.dart';
 import 'auth_redirect.dart';
 
@@ -21,8 +22,7 @@ GoRouter buildRouter({
     routes: [
       GoRoute(
         path: AppRoutes.splash,
-        builder: (_, _) =>
-            const Scaffold(body: Center(child: CircularProgressIndicator())),
+        builder: (_, _) => const Scaffold(body: FullScreenLoader()),
       ),
       ...routes,
     ],

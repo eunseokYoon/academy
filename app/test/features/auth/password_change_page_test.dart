@@ -141,6 +141,35 @@ void main() {
     expect(changes.length, 1);
   });
 
+  testWidgets('키보드 완료 키로 두 번 보내도 요청은 한 번만 나간다', (tester) async {
+    // login_page_test.dart 의 같은 이름 테스트와 같은 이유다 — 버튼 경로는
+    // SubmitButton 의 pending 가드가 이미 이중 제출을 막지만, pw-confirm
+    // 필드의 onSubmitted(키보드 「완료」 키)는 버튼을 거치지 않아 그 가드를
+    // 피해 간다. 이 경로를 막는 건 _submit() 맨 앞의 if (_busy) return; 뿐이다.
+    //
+    // tester.testTextInput.receiveAction(TextInputAction.done) 은 done
+    // 액션의 기본 동작(포커스 해제 → 연결 재시작)까지 함께 트리거해서 두
+    // 번째 호출이 같은 입력 클라이언트에 닿지 않는다 — 그래서 내부
+    // TextField 의 onSubmitted 콜백을 직접 두 번 호출해 프레임워크의
+    // 포커스 해제 부작용 없이 _submit() 재진입만을 본다.
+    await pump(tester, hold: true);
+    await fill(tester);
+
+    final confirmField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('pw-confirm')),
+        matching: find.byType(TextField),
+      ),
+    );
+
+    confirmField.onSubmitted!('newpass1');
+    await tester.pump();
+    confirmField.onSubmitted!('newpass1');
+    await tester.pump();
+
+    expect(changes.length, 1);
+  });
+
   testWidgets('변경 후 재로그인 안내가 있다', (tester) async {
     await pump(tester);
     expect(
@@ -194,6 +223,10 @@ void main() {
   });
 
   testWidgets('360px 짧은 화면에서 넘치지 않는다', (tester) async {
+    // 페이지가 SingleChildScrollView 에 싸여 있어서 세로 넘침은 테스트할 수 없다.
+    // 높이 420은 테스트 실행 중 일정한 상태를 유지하기 위한 값이고 실측한
+    // 값은 아니다 — 이 테스트가 잡는 건 가로 넘침이다: Row나 unbreakable
+    // Text 같은 고정폭 위젯이 있으면 360px 너비에서 RenderFlex 오류가 난다.
     tester.view.physicalSize = const Size(360, 420);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);

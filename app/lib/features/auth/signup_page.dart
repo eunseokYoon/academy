@@ -142,7 +142,7 @@ class _SwitchLine extends StatelessWidget {
                 action,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                   color: AppColors.slate900,
                   decoration: TextDecoration.underline,
                 ),
@@ -282,6 +282,7 @@ class _ClassCodeFormState extends State<_ClassCodeForm> {
           pending: _busy,
           onPressed: _submit,
         ),
+        const SizedBox(height: 24),
         _SwitchLine(
           prompt: '선생님께 개인 코드를 받으셨나요? ',
           action: '개인 코드로 가입',
@@ -471,7 +472,7 @@ class _SignupDone extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppRadii.xl),
-            boxShadow: AppShadows.card,
+            boxShadow: AppShadows.sm,
           ),
           child: Column(
             children: [
@@ -516,25 +517,20 @@ class _SignupDone extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadii.lg),
+        FilledButton(
+          key: const Key('signup-done-login'),
+          onPressed: () => context.go(AppRoutes.login),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.slate900,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+            ),
           ),
-          child: FilledButton(
-            key: const Key('signup-done-login'),
-            onPressed: () => context.go(AppRoutes.login),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.slate900,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadii.lg),
-              ),
-            ),
-            child: const Text(
-              '로그인하러 가기',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+          child: const Text(
+            '로그인하러 가기',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -562,7 +558,7 @@ class _LoginLine extends StatelessWidget {
             '로그인',
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: AppColors.slate900,
               decoration: TextDecoration.underline,
             ),

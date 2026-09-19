@@ -15,8 +15,12 @@ void main() {
     final dir = Directory('lib/shared/widgets');
     expect(dir.existsSync(), isTrue, reason: '위젯 디렉터리가 있어야 한다');
 
-    // Color(0x…) 과 #RRGGBB 둘 다 잡는다.
-    final pattern = RegExp(r'Color\(0x|#[0-9a-fA-F]{6}\b');
+    // Color(0x…), Color.fromARGB(…), 맨 16진수 0xAARRGGBB, #RRGGBB 를 잡는다.
+    // 맨 16진수 대안이 있는 이유 — `Color(` 가 줄바꿈으로 쪼개져도
+    // 포맷팅과 상관없이 잡힌다.
+    final pattern = RegExp(
+      r'Color\(0x|Color\.fromARGB|\b0x[0-9a-fA-F]{8}\b|#[0-9a-fA-F]{6}\b',
+    );
     final offenders = <String>[];
 
     for (final f in dir.listSync(recursive: true).whereType<File>()) {
@@ -36,7 +40,8 @@ void main() {
     expect(
       offenders,
       isEmpty,
-      reason: '색은 AppColors 에서 읽어라. 위젯 안에 값을 두지 마라:\n'
+      reason:
+          '색은 AppColors 에서 읽어라. 위젯 안에 값을 두지 마라:\n'
           '${offenders.join('\n')}',
     );
   });

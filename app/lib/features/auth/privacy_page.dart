@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/branding.dart';
 import '../../shared/widgets/legal.dart';
 
 /// C-3. 법정 고지라 로그인 전에도 읽을 수 있다.
@@ -33,10 +34,11 @@ class PrivacyPage extends StatelessWidget {
                       TextSpan(
                         children: [
                           TextSpan(
-                            text:
-                                '학생: 이름, 전화번호, 소속 반. 보호자: 이름, 전화번호, 자녀 관계. 서비스 이용 과정에서 출석, 숙제 제출물(사진), 시험 결과, 학습 자료 열람 기록이 생성됩니다.',
+                            text: '학생: 이름, 전화번호, 소속 반. 보호자: 이름, 전화번호, 자녀 관계. 서비스 이용 과정에서 출석, 숙제 제출물(사진), 시험 결과, 학습 자료 열람 기록이 생성됩니다.',
                           ),
-                          TextSpan(text: '\n주민등록번호, 주소, 이메일, 결제 정보는 수집하지 않습니다.'),
+                          TextSpan(
+                            text: '\n주민등록번호, 주소, 이메일, 결제 정보는 수집하지 않습니다.',
+                          ),
                         ],
                       ),
                     ),
@@ -53,7 +55,7 @@ class PrivacyPage extends StatelessWidget {
                       TextSpan(
                         children: [
                           TextSpan(text: '재원 기간 동안 보관합니다. 퇴원 이후의 보관 기간은 '),
-WidgetSpan(
+                          WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
                             child: Pending(label: '확정 예정'),
                           ),
@@ -68,8 +70,7 @@ WidgetSpan(
                       TextSpan(
                         children: [
                           TextSpan(
-                            text:
-                                '수집한 정보를 제3자에게 제공하지 않습니다. 다만 서비스 운영을 위해 클라우드 인프라 (서버·파일 보관)를 이용하며, 해당 사업자는 ',
+                            text: '수집한 정보를 제3자에게 제공하지 않습니다. 다만 서비스 운영을 위해 클라우드 인프라 (서버·파일 보관)를 이용하며, 해당 사업자는 ',
                           ),
                           WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
@@ -97,7 +98,7 @@ WidgetSpan(
                     body: Text.rich(
                       TextSpan(
                         children: [
-                          TextSpan(text: '남지원영어LAB · '),
+                          TextSpan(text: '$academyName · '),
                           WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
                             child: Pending(label: '담당자·연락처 확정 예정'),
@@ -108,33 +109,12 @@ WidgetSpan(
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 32),
-                    child: _BackLink(onTap: () => context.go(AppRoutes.login)),
+                    child: BackLink(onTap: () => context.go(AppRoutes.login)),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackLink extends StatelessWidget {
-  const _BackLink({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: const Text(
-        '로그인으로 돌아가기',
-        style: TextStyle(
-          fontSize: 14,
-          color: AppColors.slate500,
-          decoration: TextDecoration.underline,
         ),
       ),
     );

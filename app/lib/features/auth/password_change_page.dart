@@ -129,6 +129,7 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
                     label: '새 비밀번호',
                     controller: _next,
                     obscureText: true,
+                    hint: '8자 이상',
                   ),
                   const SizedBox(height: 16),
                   AppTextField(
@@ -136,6 +137,7 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
                     label: '새 비밀번호 확인',
                     controller: _confirm,
                     obscureText: true,
+                    onSubmitted: (_) => _submit(),
                   ),
                   const SizedBox(height: 16),
                   FormError(message: _error),

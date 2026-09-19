@@ -71,33 +71,12 @@ class TermsPage extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 32),
-                    child: _BackLink(onTap: () => context.go(AppRoutes.login)),
+                    child: BackLink(onTap: () => context.go(AppRoutes.login)),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackLink extends StatelessWidget {
-  const _BackLink({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: const Text(
-        '로그인으로 돌아가기',
-        style: TextStyle(
-          fontSize: 14,
-          color: AppColors.slate500,
-          decoration: TextDecoration.underline,
         ),
       ),
     );

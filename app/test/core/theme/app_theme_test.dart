@@ -29,6 +29,21 @@ void main() {
     expect(AppShadows.card[1].color.toARGB32(), 0x1A14294D);
   });
 
+  test('shadow-sm 은 두 겹이고 card 와 다른 수치다', () {
+    // 웹 tailwind.config.js 가 tailwind 기본 shadow-sm 을 덮어쓴 값이다.
+    // card 와 같은 남색(rgba(20,41,77,…))이지만 레이어 수치가 다르다.
+    expect(AppShadows.sm.length, 2);
+    expect(AppShadows.sm[0].offset, const Offset(0, 1));
+    expect(AppShadows.sm[0].blurRadius, 2);
+    expect(AppShadows.sm[1].offset, const Offset(0, 4));
+    expect(AppShadows.sm[1].blurRadius, 10);
+    expect(AppShadows.sm[1].spreadRadius, -6);
+    // 정확한 ARGB 값을 검증한다 — 웹 tailwind.config.js 가 정본이다.
+    // 0x0F14294D = rgba(20,41,77,0.06), 0x1A14294D = rgba(20,41,77,0.10)
+    expect(AppShadows.sm[0].color.toARGB32(), 0x0F14294D);
+    expect(AppShadows.sm[1].color.toARGB32(), 0x1A14294D);
+  });
+
   test('테마가 Pretendard 와 paper 배경을 유지한다', () {
     final t = AppTheme.light();
     expect(t.textTheme.bodyMedium?.fontFamily, 'Pretendard');

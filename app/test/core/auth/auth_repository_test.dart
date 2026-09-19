@@ -184,10 +184,8 @@ void main() {
       ],
     );
 
-    final res = await repoWith(adapter).signup(
-      code: 'K7F2QX',
-      phone: '01055556666',
-    );
+    final res = await repoWith(adapter)
+        .signup(code: 'K7F2QX', phone: '01055556666');
 
     expect(res.classRoomName, isNull);
     final sent = adapter.received.single.data as Map;

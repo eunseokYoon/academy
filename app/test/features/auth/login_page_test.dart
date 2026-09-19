@@ -205,6 +205,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('360px 넓이, 글자 배율 2.0x 에서도 가로로 넘치지 않는다', (tester) async {
+    // 위 테스트는 기본 글자 배율만 본다. iOS 접근성 최대 배율은 ~3.1x,
+    // Android 는 2x 까지 간다 — _SignupLine 처럼 문구 + 링크를 한 줄에
+    // 욱여넣은 Row 는 너비가 아니라 글자 배율이 커질 때 넘친다.
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    logins = [];
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: MaterialApp(
+          home: LoginPage(
+            onLogin:
+                ({required String loginId, required String password}) async {
+                  logins.add((loginId, password));
+                },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('비밀번호 필드는 글자를 가리고 전화번호 필드는 가리지 않는다', (tester) async {
     await pump(tester);
 

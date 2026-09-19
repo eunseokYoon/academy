@@ -24,15 +24,24 @@ class AppShadows {
 
   /// `0 1px 2px rgba(20,41,77,0.05)` + `0 6px 16px -6px rgba(20,41,77,0.10)`
   static const List<BoxShadow> card = [
-    BoxShadow(
-      color: Color(0x0D14294D),
-      offset: Offset(0, 1),
-      blurRadius: 2,
-    ),
+    BoxShadow(color: Color(0x0D14294D), offset: Offset(0, 1), blurRadius: 2),
     BoxShadow(
       color: Color(0x1A14294D),
       offset: Offset(0, 6),
       blurRadius: 16,
+      spreadRadius: -6,
+    ),
+  ];
+
+  /// 웹 `boxShadow.sm` 을 그대로 옮긴 것 — tailwind 기본 `shadow-sm` 을
+  /// 덮어쓴 값이라 `card` 와 레이어 수치가 다르다.
+  /// `0 1px 2px rgba(20,41,77,0.06)` + `0 4px 10px -6px rgba(20,41,77,0.10)`
+  static const List<BoxShadow> sm = [
+    BoxShadow(color: Color(0x0F14294D), offset: Offset(0, 1), blurRadius: 2),
+    BoxShadow(
+      color: Color(0x1A14294D),
+      offset: Offset(0, 4),
+      blurRadius: 10,
       spreadRadius: -6,
     ),
   ];

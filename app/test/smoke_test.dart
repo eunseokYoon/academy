@@ -1,7 +1,7 @@
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:academy_app/core/auth/auth_controller.dart';
 import 'package:academy_app/core/auth/auth_repository.dart';
 import 'package:academy_app/core/auth/models/login_response.dart';
@@ -11,11 +11,15 @@ import 'package:academy_app/core/auth/models/user_role.dart';
 import 'package:academy_app/core/storage/cookie_store.dart';
 import 'package:academy_app/core/storage/key_value_store.dart';
 import 'package:academy_app/core/storage/token_store.dart';
+import 'package:academy_app/core/router/app_router.dart';
 import 'package:academy_app/features/auth/password_change_page.dart';
+import 'package:academy_app/features/auth/privacy_page.dart';
 import 'package:academy_app/features/auth/teacher_notice_page.dart';
+import 'package:academy_app/features/auth/terms_page.dart';
 import 'package:academy_app/features/parent/parent_shell.dart';
 import 'package:academy_app/features/student/student_shell.dart';
 import 'package:academy_app/main.dart';
+import 'package:academy_app/shared/widgets/full_screen_loader.dart';
 
 /// 역할 → 화면 배선만 확인하면 되므로 `me()`만 채운다.
 /// `auth_controller_test.dart`의 `_FakeRepo` 패턴을 그대로 따른다.
@@ -96,7 +100,7 @@ void main() {
     await tester.pumpWidget(AcademyApp(auth: auth));
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(FullScreenLoader), findsOneWidget);
   });
 
   test('Android 에뮬레이터 기본 baseUrl은 10.0.2.2다', () {
@@ -146,5 +150,23 @@ void main() {
       expect(find.byType(PasswordChangePage), findsOneWidget);
       expect(find.byType(StudentShell), findsNothing);
     });
+  });
+
+  testWidgets('약관·처리방침 라우트가 실제 화면을 그린다', (tester) async {
+    // main.dart 의 실제 라우트 테이블을 쓰는 파일은 이 스모크 테스트뿐이다.
+    // /terms·/privacy 를 방문하지 않으면 라우트가 지워져도 여기서는 안 보인다.
+    await _pumpAtRole(tester, role: UserRole.student);
+
+    // GoRouter 자체(엘리먼트가 아니라 라우터 객체)를 한 번만 얻어 재사용한다
+    // — StudentShell 은 첫 이동에서 트리를 떠나 그 컨텍스트가 비활성화된다.
+    final router = GoRouter.of(tester.element(find.byType(StudentShell)));
+
+    router.go(AppRoutes.terms);
+    await tester.pumpAndSettle();
+    expect(find.byType(TermsPage), findsOneWidget);
+
+    router.go(AppRoutes.privacy);
+    await tester.pumpAndSettle();
+    expect(find.byType(PrivacyPage), findsOneWidget);
   });
 }

@@ -17,7 +17,8 @@ class LoginPage extends StatefulWidget {
   final Future<void> Function({
     required String loginId,
     required String password,
-  }) onLogin;
+  })
+  onLogin;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -138,7 +139,11 @@ class _LoginPageState extends State<LoginPage> {
                           onPressed: _submit,
                         ),
                         const SizedBox(height: 20),
-                        const Divider(height: 1, color: AppColors.slate100),
+                        const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: AppColors.slate100,
+                        ),
                         const SizedBox(height: 16),
                         const _SignupLine(),
                         const SizedBox(height: 6),
@@ -153,14 +158,14 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
                     children: [
                       _LegalLink(
                         label: '이용약관',
                         onTap: () => context.go(AppRoutes.terms),
                       ),
-                      const SizedBox(width: 12),
                       _LegalLink(
                         label: '개인정보처리방침',
                         onTap: () => context.go(AppRoutes.privacy),
@@ -182,7 +187,8 @@ class _SignupLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         const Text(
           '처음이신가요? ',

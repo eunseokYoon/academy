@@ -62,6 +62,13 @@ void main() {
     test('이미 비밀번호 화면이면 그대로 둔다', () {
       expect(redirectFor(mustChange, AppRoutes.password), isNull);
     });
+
+    test('약관·처리방침도 예외 없이 비밀번호 화면으로 보낸다', () {
+      // 법정 고지라도 강제 게이트는 좁게 유지한다 — 초기 비밀번호 0000 을
+      // 바꾸기 전까지 허용 경로는 셋(비밀번호 변경·내 정보·로그아웃)뿐이다.
+      expect(redirectFor(mustChange, AppRoutes.terms), AppRoutes.password);
+      expect(redirectFor(mustChange, AppRoutes.privacy), AppRoutes.password);
+    });
   });
 
   group('ready', () {

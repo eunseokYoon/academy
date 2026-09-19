@@ -344,7 +344,7 @@ A단계의 세 화면이 `#b91c1c` 를 각자 하드코딩했고, 그래서 「�
 
 **13-4. 입력 필드 글꼴 크기는 16 이상이어야 한다.** iOS는 16 미만이면 포커스 시 뷰포트를 확대한다.
 
-**13-5. `qlmanage -t` 는 SVG 투명도를 불투명한 흰색으로 평탄화한다.** 이 기계에 알파 보존 래스터라이저가 없으므로, `flutter_launcher_icons` 에 먹일 아이콘 원본은 풀-블리드여야 한다. 그래서 `icon-foreground.svg` 는 자기 해군색 판을 가진다.
+**13-5. `qlmanage -t` 는 SVG 투명도를 불투명한 흰색으로 평탄화한다.** 이 기계에 알파 보존 래스터라이저가 없으므로, `flutter_launcher_icons` 에 먹일 아이콘 원본은 풀-블리드여야 한다. 그래서 `icon-foreground.svg` 는 자기 남색 판을 가진다.
 
 **13-6. `tester.testTextInput.receiveAction(TextInputAction.done)` 은 두 번째 키보드 제출을 테스트할 수 없다.** `done` 은 포커스를 풀고 입력 연결을 재시작해서 두 번째 호출이 도착하지 않는다. 내부 `TextField` 의 `onSubmitted` 를 직접 호출하라; `login_page_test.dart` 에 패턴이 있다.
 

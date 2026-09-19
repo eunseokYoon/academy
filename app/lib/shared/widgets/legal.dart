@@ -40,6 +40,29 @@ class LegalSection extends StatelessWidget {
   }
 }
 
+/// 약관·처리방침 하단, 로그인으로 돌아가는 링크. `TermsPage`·`PrivacyPage`
+/// 둘이 그대로 썼었다 — 여기 하나로 합친다.
+class BackLink extends StatelessWidget {
+  const BackLink({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: const Text(
+        '로그인으로 돌아가기',
+        style: TextStyle(
+          fontSize: 14,
+          color: AppColors.slate500,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    );
+  }
+}
+
 /// 상호·연락처·보관 기간 등 학원이 확정해야 하는 값이 남아 있다는 표시.
 ///
 /// **그럴듯하게 채우지 마라.** 채우면 그것이 그대로 고지가 된다.
@@ -75,6 +98,8 @@ class Pending extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: AppColors.slate100,
+        // 8/12/16 축척과 안 맞아 보이지만 의도적이다 — 웹의 `Pending` 이 쓰는
+        // tailwind `rounded`(4px) 그대로다. 8로 "고치지" 마라.
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
