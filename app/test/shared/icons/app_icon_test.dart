@@ -16,10 +16,10 @@ void main() {
       final path = parseSvgPathData(d!);
       final b = path.getBounds();
       // 웹 viewBox 가 0 0 24 24 다. 벗어나면 옮겨 적다 틀린 것이다.
-      expect(b.left, greaterThanOrEqualTo(-1));
-      expect(b.top, greaterThanOrEqualTo(-1));
-      expect(b.right, lessThanOrEqualTo(25));
-      expect(b.bottom, lessThanOrEqualTo(25));
+      expect(b.left, greaterThanOrEqualTo(0));
+      expect(b.top, greaterThanOrEqualTo(0));
+      expect(b.right, lessThanOrEqualTo(24));
+      expect(b.bottom, lessThanOrEqualTo(24));
     }
   });
 

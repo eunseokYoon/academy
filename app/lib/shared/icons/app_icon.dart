@@ -55,7 +55,8 @@ class IconPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..color = color
-        // 확대 전에 그리므로 굵기도 되돌려 놔야 화면에서 1.7 이 된다
+        // 패스는 웹의 24단위 좌표계로 그려진다. canvas.scale() 이 패스와 함께 굵기도 확대하므로
+        // strokeWidth 는 viewBox 단위 그대로이고 크기를 바꿔도 웹과 같은 상대 굵기를 유지한다
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
