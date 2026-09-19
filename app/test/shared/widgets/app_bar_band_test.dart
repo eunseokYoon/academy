@@ -48,10 +48,35 @@ void main() {
     expect((pad.padding as EdgeInsets).bottom, 12 + 32);
   });
 
-  testWidgets('역할 칩 색이 brand300 이다', (tester) async {
+  testWidgets('역할 칩 색이 brand300 이고 무게가 w500 이다', (tester) async {
     await tester.pumpWidget(host('학생'));
     final t = tester.widget<Text>(find.text('학생'));
     expect(t.style!.color!.toARGB32(), AppColors.brand300.toARGB32());
     expect(t.style!.fontSize, 12);
+    expect(t.style!.fontWeight, FontWeight.w500);
+  });
+
+  testWidgets('360px 너비에서도 깨지지 않는다', (tester) async {
+    // 학부모 역할 문자가 가장 길다.
+    // ignore: deprecated_member_use
+    tester.binding.window.physicalSizeTestValue = const Size(360 * 3, 800 * 3);
+    // ignore: deprecated_member_use
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+
+    await tester.pumpWidget(host('학부모'));
+    expect(find.byType(AppBarBand), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('SafeArea의 bottom이 false 이다', (tester) async {
+    // 제스처 네비게이션 폰의 34px 하단 inset이 로고 줄 아래로 흘러내리면 안 된다.
+    await tester.pumpWidget(host('학생'));
+    final safeArea = tester.widget<SafeArea>(
+      find.descendant(
+        of: find.byType(AppBarBand),
+        matching: find.byType(SafeArea),
+      ),
+    );
+    expect(safeArea.bottom, false);
   });
 }
