@@ -13,6 +13,9 @@ class AppColors {
   const AppColors._();
 
   static const brand50 = Color(0xFFEFF4FC);
+
+  /// 남색 띠 위의 보조 글자(역할 칩·지면의 라벨). 흰색이면 본문과 같은 무게가 된다.
+  static const brand300 = Color(0xFF8AAFE2);
   static const brand600 = Color(0xFF1E5AA8);
   static const brand900 = Color(0xFF1B2A44);
   static const accent500 = Color(0xFFD9542B);
