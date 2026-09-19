@@ -149,6 +149,50 @@ void main() {
     );
   });
 
+  testWidgets('현재 비밀번호가 비면 현재 문제를 먼저 지적한다', (tester) async {
+    // 현재 빈칸과 새 비밀번호 3자 모두 틀렸을 때
+    // 길이 지적이 아니라 현재 비밀번호 지적이 나야 한다.
+    await pump(tester);
+    await fill(tester, current: '', next: 'abc');
+    await tester.tap(find.byKey(const Key('pw-submit')));
+    await tester.pump();
+
+    expect(changes, isEmpty);
+    expect(find.text('지금 비밀번호를 입력해 주세요.'), findsOneWidget);
+    expect(find.text('새 비밀번호는 8자 이상이어야 합니다.'), findsNothing);
+  });
+
+  testWidgets('새 비밀번호가 짧으면 길이를 먼저 지적한다', (tester) async {
+    // 새 비밀번호 3자와 확인 불일치 모두 있을 때
+    // 불일치 지적이 아니라 길이 지적이 나야 한다.
+    await pump(tester);
+    await fill(tester, next: 'abc', confirm: 'xyz');
+    await tester.tap(find.byKey(const Key('pw-submit')));
+    await tester.pump();
+
+    expect(changes, isEmpty);
+    expect(find.text('새 비밀번호는 8자 이상이어야 합니다.'), findsOneWidget);
+    expect(find.text('새 비밀번호가 서로 다릅니다.'), findsNothing);
+  });
+
+  testWidgets('새 비밀번호 확인이 다르면 불일치를 먼저 지적한다', (tester) async {
+    // 확인 불일치와 현재와 동일 모두 있을 때
+    // 현재와 동일 지적이 아니라 불일치 지적이 나야 한다.
+    await pump(tester);
+    await fill(
+      tester,
+      current: 'samepass1',
+      next: 'samepass1',
+      confirm: 'other1234',
+    );
+    await tester.tap(find.byKey(const Key('pw-submit')));
+    await tester.pump();
+
+    expect(changes, isEmpty);
+    expect(find.text('새 비밀번호가 서로 다릅니다.'), findsOneWidget);
+    expect(find.text('지금 비밀번호와 다른 값을 넣어 주세요.'), findsNothing);
+  });
+
   testWidgets('360px 짧은 화면에서 넘치지 않는다', (tester) async {
     tester.view.physicalSize = const Size(360, 420);
     tester.view.devicePixelRatio = 1.0;
