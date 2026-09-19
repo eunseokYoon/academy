@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_theme.dart';
+import '../../shared/widgets/app_text_field.dart';
+import '../../shared/widgets/form_error.dart';
+import '../../shared/widgets/submit_button.dart';
 
 /// 초기 비밀번호가 전원 `0000`이라, 바꾸기 전에는 세 경로 외 전부 403이다.
 /// 그래서 라우터가 `mustChangePassword`에서 이 화면만 허용한다.
@@ -82,67 +86,83 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('비밀번호 변경')),
+      backgroundColor: AppColors.slate50,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  '처음 비밀번호는 모두 0000 입니다.\n내 정보를 보려면 먼저 바꿔 주세요.',
-                  style: TextStyle(height: 1.5, color: AppColors.brand900),
-                ),
-                const SizedBox(height: 20),
-                _field('pw-current', _current, '지금 비밀번호'),
-                _field('pw-new', _next, '새 비밀번호 (8자 이상)'),
-                _field('pw-confirm', _confirm, '새 비밀번호 확인'),
-                if (_error != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Color(0xFFB91C1C)),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 384),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    '비밀번호 변경',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.slate900,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.amber50,
+                      borderRadius: BorderRadius.circular(AppRadii.lg),
+                    ),
+                    child: const Text(
+                      '처음 비밀번호는 모두 0000 입니다. 내 정보를 보려면 먼저 바꿔 주세요.',
+                      style: TextStyle(fontSize: 14, color: AppColors.amber900),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  AppTextField(
+                    key: const Key('pw-current'),
+                    label: '현재 비밀번호',
+                    controller: _current,
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    key: const Key('pw-new'),
+                    label: '새 비밀번호',
+                    controller: _next,
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    key: const Key('pw-confirm'),
+                    label: '새 비밀번호 확인',
+                    controller: _confirm,
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 16),
+                  FormError(message: _error),
+                  if (_error != null) const SizedBox(height: 16),
+                  SubmitButton(
+                    key: const Key('pw-submit'),
+                    label: '변경하기',
+                    pending: _busy,
+                    onPressed: _submit,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '변경하면 다른 기기의 로그인이 모두 해제됩니다. 새 비밀번호로 다시 로그인해 주세요.',
+                    style: TextStyle(fontSize: 12, color: AppColors.slate500),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    key: const Key('pw-logout'),
+                    onPressed: widget.onLogout,
+                    child: const Text('로그아웃'),
                   ),
                 ],
-                const SizedBox(height: 20),
-                FilledButton(
-                  key: const Key('pw-submit'),
-                  onPressed: _submit,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('바꾸기'),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  key: const Key('pw-logout'),
-                  onPressed: widget.onLogout,
-                  child: const Text('로그아웃'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _field(String key, TextEditingController controller, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
-        key: Key(key),
-        controller: controller,
-        obscureText: true,
-        decoration: InputDecoration(labelText: label),
       ),
     );
   }

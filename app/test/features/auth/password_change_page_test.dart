@@ -9,7 +9,6 @@ void main() {
   late List<(String, String)> changes;
   late int logouts;
 
-  /// `hold`가 참이면 변경이 끝나지 않는다 — 재탭 방어를 확인할 때 쓴다.
   Future<void> pump(
     WidgetTester tester, {
     Object? error,
@@ -48,6 +47,19 @@ void main() {
       confirm ?? next,
     );
   }
+
+  testWidgets('제목과 초기 비밀번호 안내가 있다', (tester) async {
+    await pump(tester);
+    expect(find.text('비밀번호 변경'), findsWidgets);
+    expect(find.textContaining('0000'), findsOneWidget);
+  });
+
+  testWidgets('세 칸에 라벨이 있다', (tester) async {
+    await pump(tester);
+    expect(find.text('현재 비밀번호'), findsOneWidget);
+    expect(find.text('새 비밀번호'), findsOneWidget);
+    expect(find.text('새 비밀번호 확인'), findsOneWidget);
+  });
 
   testWidgets('현재·새 비밀번호로 변경을 부른다', (tester) async {
     await pump(tester);
@@ -129,17 +141,21 @@ void main() {
     expect(changes.length, 1);
   });
 
-  testWidgets('360px에서 넘치지 않는다', (tester) async {
-    // 높이를 420으로 잡는 이유가 있다. 640에서는 내용이 다 들어가서
-    // SingleChildScrollView를 지워도 오버플로가 나지 않아 이 테스트가 통과한다 —
-    // 즉 아무것도 지키지 못한다. 짧은 화면에서만 스크롤 여부가 드러난다.
+  testWidgets('변경 후 재로그인 안내가 있다', (tester) async {
+    await pump(tester);
+    expect(
+      find.text('변경하면 다른 기기의 로그인이 모두 해제됩니다. 새 비밀번호로 다시 로그인해 주세요.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('360px 짧은 화면에서 넘치지 않는다', (tester) async {
     tester.view.physicalSize = const Size(360, 420);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     await pump(tester);
     await tester.pumpAndSettle();
-
     expect(tester.takeException(), isNull);
   });
 }
