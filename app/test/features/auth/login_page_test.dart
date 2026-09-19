@@ -204,4 +204,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('비밀번호 필드는 글자를 가리고 전화번호 필드는 가리지 않는다', (tester) async {
+    await pump(tester);
+
+    // 전화번호 필드 확인 (가려지면 안 됨)
+    final phoneField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('login-id')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(phoneField.obscureText, isFalse);
+
+    // 비밀번호 필드 확인 (가려져야 함)
+    final passwordField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('login-password')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(passwordField.obscureText, isTrue);
+  });
 }

@@ -254,4 +254,37 @@ void main() {
       AppColors.brand600.toARGB32(),
     );
   });
+
+  testWidgets('obscureText:true를 inner TextField로 전달한다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '비밀번호',
+            controller: TextEditingController(),
+            obscureText: true,
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.obscureText, isTrue);
+  });
+
+  testWidgets('obscureText를 지정하지 않으면 inner TextField는 false다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppTextField(
+            label: '전화번호',
+            controller: TextEditingController(),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.obscureText, isFalse);
+  });
 }

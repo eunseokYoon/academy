@@ -202,4 +202,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('세 비밀번호 칸이 모두 글자를 가린다', (tester) async {
+    await pump(tester);
+
+    // 현재 비밀번호 필드 확인
+    final currentField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('pw-current')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(currentField.obscureText, isTrue);
+
+    // 새 비밀번호 필드 확인
+    final newField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('pw-new')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(newField.obscureText, isTrue);
+
+    // 새 비밀번호 확인 필드 확인
+    final confirmField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('pw-confirm')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(confirmField.obscureText, isTrue);
+  });
 }
