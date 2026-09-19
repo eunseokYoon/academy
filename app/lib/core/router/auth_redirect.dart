@@ -18,6 +18,24 @@ class AppRoutes {
   /// 로그인해야 읽히면 고지가 아니다.
   static const terms = '/terms';
   static const privacy = '/privacy';
+
+  // 학생 탭·레일. 웹 StudentLayout.tsx · StudentHomePage.tsx 의 QUICK_ITEMS 와 같다.
+  static const studentHomeworks = '/student/homeworks';
+  static const studentLessons = '/student/lessons';
+  static const studentScores = '/student/scores';
+  static const studentQna = '/student/qna';
+  static const studentClinics = '/student/clinics';
+  static const studentOnlineTests = '/student/online-tests';
+  static const studentAttendances = '/student/attendances';
+  static const studentNotices = '/student/notices';
+
+  // 학부모 탭·레일. 웹 ParentLayout.tsx 와 같다.
+  static const parentSchedule = '/parent/schedule';
+  static const parentLessons = '/parent/lessons';
+  static const parentScores = '/parent/scores';
+  static const parentMe = '/parent/me';
+  static const parentHomeworks = '/parent/homeworks';
+  static const parentNotices = '/parent/notices';
 }
 
 /// 인증 상태와 지금 위치로 갈 곳을 정한다. `null`이면 그대로 둔다.
