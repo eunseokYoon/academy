@@ -50,6 +50,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -102,3 +103,16 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# 정본은 assets/icon/icon.svg 다(사용자 제공).
+# iOS 에 둥근 마스터를 주지 마라 — iOS 가 자기 마스크를 씌우고 알파를
+# 금지해서, 투명 모서리가 검게 합성돼 마스크 안에 어두운 각이 생긴다.
+# remove_alpha_ios 는 알파를 흰색으로 채워 이 경우 더 나쁘다.
+flutter_launcher_icons:
+  android: true
+  image_path_android: "assets/icon/icon.png"
+  adaptive_icon_background: "#17233B"
+  adaptive_icon_foreground: "assets/icon/icon-foreground.png"
+  ios: true
+  image_path_ios: "assets/icon/icon-square.png"
+  remove_alpha_ios: true

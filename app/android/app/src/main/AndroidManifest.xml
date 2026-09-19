@@ -3,7 +3,7 @@
          네트워크가 통째로 막히고, 디버그 빌드는 멀쩡해서 늦게 발견된다. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="academy_app"
+        android:label="남지원영어LAB"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
