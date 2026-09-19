@@ -266,4 +266,15 @@ void main() {
     );
     expect(confirmField.obscureText, isTrue);
   });
+
+  testWidgets('새 비밀번호 칸에 8자 이상 힌트가 있다', (tester) async {
+    await pump(tester);
+
+    // 새 비밀번호 필드 아래 8자 이상 힌트 확인
+    final hintText = find.descendant(
+      of: find.byKey(const Key('pw-new')),
+      matching: find.text('8자 이상'),
+    );
+    expect(hintText, findsOneWidget);
+  });
 }

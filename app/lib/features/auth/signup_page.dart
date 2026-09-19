@@ -393,6 +393,7 @@ class _PersonalCodeFormState extends State<_PersonalCodeForm> {
           pending: _busy,
           onPressed: _submit,
         ),
+        const SizedBox(height: 24),
         _SwitchLine(
           prompt: '반 코드를 받으셨나요? ',
           action: '반 코드로 가입',
