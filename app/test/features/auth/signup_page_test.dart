@@ -300,7 +300,10 @@ void main() {
   });
 
   testWidgets('360px 짧은 화면에서 넘치지 않는다', (tester) async {
-    // 네 칸이라 로그인보다 길다. 높이는 Step 10 에서 실측해 정해라.
+    // 페이지가 SingleChildScrollView 에 싸여 있어서 세로 넘침은 테스트할 수 없다.
+    // 높이 420은 테스트 실행 중 일정한 상태를 유지하기 위한 값이고 실측한
+    // 값은 아니다 — 이 테스트가 잡는 건 가로 넘침이다: Row나 unbreakable Text 같은
+    // 고정폭 위젯이 있으면 360px 너비에서 RenderFlex 오류가 난다.
     tester.view.physicalSize = const Size(360, 420);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
