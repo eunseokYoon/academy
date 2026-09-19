@@ -110,7 +110,7 @@ flutter:
 # remove_alpha_ios 는 알파를 흰색으로 채워 이 경우 더 나쁘다.
 flutter_launcher_icons:
   android: true
-  image_path_android: "assets/icon/icon.png"
+  image_path_android: "assets/icon/icon-square.png"
   adaptive_icon_background: "#17233B"
   adaptive_icon_foreground: "assets/icon/icon-foreground.png"
   ios: true
