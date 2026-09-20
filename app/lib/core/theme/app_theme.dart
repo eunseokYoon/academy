@@ -92,3 +92,19 @@ class AppTheme {
     );
   }
 }
+
+/// 홈 지면(`.field`)의 남색. 웹 `index.css` 의
+/// `linear-gradient(172deg, #1b2a44 0%, #1d2e4b 42%, #16233a 100%)` 이다.
+///
+/// **맨 위는 반드시 brand900(#1B2A44) 이다.** 앱바가 그 단색이라 다른 값으로
+/// 시작하면 지면이 앱바를 파고든 자리에 가로줄이 그어진다 — 두 남색이 한
+/// 덩어리로 읽혀야 하는데 상자 두 개로 보인다.
+/// **아래로만 어두워진다.** 밝히는 방향으로 뒤집지 마라.
+///
+/// 172deg 를 Alignment 로 옮긴 값이다(에뮬레이터에서 렌더 확인).
+const LinearGradient fieldGradient = LinearGradient(
+  begin: Alignment(-0.139, -0.990),
+  end: Alignment(0.139, 0.990),
+  colors: [Color(0xFF1B2A44), Color(0xFF1D2E4B), Color(0xFF16233A)],
+  stops: [0.0, 0.42, 1.0],
+);
