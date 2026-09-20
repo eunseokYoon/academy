@@ -116,6 +116,7 @@ class _Tile extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               item.label,
+              textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

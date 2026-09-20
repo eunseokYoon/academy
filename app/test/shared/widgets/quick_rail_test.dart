@@ -30,18 +30,28 @@ void main() {
     }
   });
 
+  testWidgets('라벨은 가운데 정렬된다', (tester) async {
+    await tester.pumpWidget(host());
+    final label = tester.widget<Text>(find.text('숙제'));
+    expect(label.textAlign, TextAlign.center);
+  });
+
   testWidgets('primary 칸만 남색으로 채운다', (tester) async {
     await tester.pumpWidget(host());
     final first = tester.widget<Container>(find.byKey(const Key('rail-/a')));
     final second = tester.widget<Container>(find.byKey(const Key('rail-/b')));
-    expect(
-      (first.decoration! as BoxDecoration).color!.toARGB32(),
-      AppColors.brand900.toARGB32(),
-    );
-    expect(
-      (second.decoration! as BoxDecoration).color!.toARGB32(),
-      AppColors.brand50.toARGB32(),
-    );
+    final firstDeco = first.decoration! as BoxDecoration;
+    final secondDeco = second.decoration! as BoxDecoration;
+
+    // Primary: brand900 background with no border
+    expect(firstDeco.color!.toARGB32(), AppColors.brand900.toARGB32());
+    expect(firstDeco.border, isNull);
+
+    // Non-primary: brand50 background with brand100 border
+    expect(secondDeco.color!.toARGB32(), AppColors.brand50.toARGB32());
+    final border = secondDeco.border! as Border;
+    expect(border.left.width, 1);
+    expect(border.left.color.toARGB32(), AppColors.brand100.toARGB32());
   });
 
   testWidgets('count 가 0보다 크면 점이 붙고 숫자는 안 쓴다', (tester) async {
