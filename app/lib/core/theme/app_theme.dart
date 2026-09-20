@@ -47,6 +47,10 @@ class AppShadows {
   ];
 }
 
+/// 숫자 폭 고정(웹의 `.tnum`). D-day·점수·개수가 갱신될 때 옆 글자가 밀리지 않는다.
+/// 한 곳에 둔다 — 위젯마다 따로 적으면 어느 숫자는 밀리고 어느 숫자는 안 밀린다.
+const List<FontFeature> kTabularFigures = [FontFeature.tabularFigures()];
+
 /// 화면은 모바일 먼저다. 360px에서 안 깨지면 된다.
 class AppTheme {
   const AppTheme._();

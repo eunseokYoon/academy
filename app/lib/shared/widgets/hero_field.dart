@@ -218,6 +218,7 @@ class _Line extends StatelessWidget {
             fontSize: 21,
             fontWeight: FontWeight.w800,
             color: hot ? AppColors.accent100 : Colors.white,
+            fontFeatures: kTabularFigures,
           ),
         ),
         if (sub != null)
@@ -226,6 +227,7 @@ class _Line extends StatelessWidget {
             style: TextStyle(
               fontSize: 10.5,
               color: AppColors.brand200.withValues(alpha: 0.55),
+              fontFeatures: kTabularFigures,
             ),
           ),
       ],

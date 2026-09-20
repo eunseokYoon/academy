@@ -270,4 +270,19 @@ void main() {
     final divider = tester.widget<Divider>(dividers);
     expect(divider.color, AppColors.brand200.withValues(alpha: 0.25));
   });
+
+  testWidgets('stat 값의 숫자 폭이 고정된다', (tester) async {
+    // 웹의 tnum — D-day·점수·개수가 갱신될 때 옆 글자가 밀리지 않는다.
+    await tester.pumpWidget(
+      host(
+        stats: const [HeroStat(label: '다음 수업', value: 'D-2')],
+      ),
+    );
+    final stat0Texts = find.descendant(
+      of: find.byKey(const Key('stat-0')),
+      matching: find.byType(Text),
+    );
+    final valueText = tester.widget<Text>(stat0Texts.at(1));
+    expect(valueText.style!.fontFeatures, isNotEmpty);
+  });
 }

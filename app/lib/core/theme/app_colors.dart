@@ -28,6 +28,9 @@ class AppColors {
   static const accent400 = Color(0xFFE36F49);
   static const accent500 = Color(0xFFD9542B);
 
+  /// 「안 낸 숙제」 구획의 틴트 배경. tailwind accent.50.
+  static const accent50 = Color(0xFFFDF2ED);
+
   /// 페이지 배경. 흰 카드가 떠 보이려면 배경이 흰색이 아니어야 한다.
   static const paper = Color(0xFFEDF1F7);
 
