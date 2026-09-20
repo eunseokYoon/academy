@@ -79,9 +79,18 @@ void main() {
     expect(home.nextLesson!.dDay, 2);
     expect(home.nextLesson!.classRoomName, 'A고 2학년 목요일반');
     expect(home.nextExam!.dDay, 12);
+    expect(home.nextExam!.scopeNote, '3과~5과');
     expect(home.nextClinic!.arrivalTime, '17:00');
+    expect(home.nextClinic!.clinicId, 7);
+    expect(home.nextClinic!.clinicDate, '2026-09-20');
+    expect(home.nextClinic!.dDay, 1);
     expect(home.currentHomeworks.single.title, '단어 3과');
+    expect(home.currentHomeworks.single.dueAt, '2026-09-21T21:00:00+09:00');
+    expect(home.currentHomeworks.single.status, 'NOT_SUBMITTED');
+    expect(home.currentHomeworks.single.remainingMinutes, 1500);
     expect(home.lastLesson!.videoCount, 2);
+    expect(home.lastLesson!.videoId, 'abc123');
+    expect(home.lastLesson!.embedUrl, 'https://www.youtube.com/embed/abc123');
     expect(home.notices.totalCount, 7);
     expect(home.notices.recent.single.title, '추석 휴원 안내');
     // pinned는 NoticeCard(Task 10)의 고정 배지가 그대로 쓰는 값이다 — 파싱을
@@ -115,6 +124,38 @@ void main() {
     expect(home.notices.totalCount, 7);
   });
 
+  test('lastLesson 이 있는데 videoId 와 embedUrl 이 null 이면 그대로 둔다', () async {
+    // 수업 영상이 등록되지 않은 경우. 화면이 비디오 블록을 전혀 그리지 않아야 한다.
+    final noVideo = Map<String, dynamic>.from(_full);
+    final data = Map<String, dynamic>.from(
+      _full['data'] as Map<String, dynamic>,
+    );
+    data['lastLesson'] = {
+      'lessonId': 5,
+      'lessonDate': '2026-09-14',
+      'title': '5과 정리',
+      'videoId': null,
+      'embedUrl': null,
+      'videoCount': 0,
+      'content': '본문 해석',
+      'homeworkNote': '단어 3과 외워오기',
+    };
+    noVideo['data'] = data;
+    final adapter = FakeAdapter(
+      replies: [FakeReply(statusCode: 200, body: noVideo)],
+    );
+    final home = await repoWith(adapter).fetch();
+
+    expect(home.lastLesson, isNotNull);
+    expect(home.lastLesson!.lessonId, 5);
+    expect(home.lastLesson!.title, '5과 정리');
+    expect(home.lastLesson!.content, '본문 해석');
+    expect(home.lastLesson!.homeworkNote, '단어 3과 외워오기');
+    // 비디오 필드는 null 로 남는다.
+    expect(home.lastLesson!.videoId, isNull);
+    expect(home.lastLesson!.embedUrl, isNull);
+  });
+
   test('startTime 이 없으면 null 이다 — 시각을 지어내지 않는다', () async {
     final noTime = Map<String, dynamic>.from(_full);
     final data = Map<String, dynamic>.from(
@@ -134,6 +175,27 @@ void main() {
 
     expect(home.nextLesson!.startTime, isNull);
     expect(home.nextLesson!.lessonDate, '2026-09-21');
+  });
+
+  test('scopeNote 이 없으면 null 이다 — 시험 범위를 지어내지 않는다', () async {
+    final noScope = Map<String, dynamic>.from(_full);
+    final data = Map<String, dynamic>.from(
+      _full['data'] as Map<String, dynamic>,
+    );
+    data['nextExam'] = {
+      'examType': 'MIDTERM',
+      'startDate': '2026-10-01',
+      'dDay': 12,
+      // scopeNote 는 생략
+    };
+    noScope['data'] = data;
+    final adapter = FakeAdapter(
+      replies: [FakeReply(statusCode: 200, body: noScope)],
+    );
+    final home = await repoWith(adapter).fetch();
+
+    expect(home.nextExam!.scopeNote, isNull);
+    expect(home.nextExam!.examType, 'MIDTERM');
   });
 
   test('날짜는 서버 문자열 그대로다 — 파싱해서 다시 만들지 않는다', () async {
