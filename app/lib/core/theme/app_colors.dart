@@ -19,7 +19,12 @@ class AppColors {
   static const brand200 = Color(0xFFB8CEEF);
   static const brand300 = Color(0xFF8AAFE2);
   static const brand600 = Color(0xFF1E5AA8);
+  static const brand700 = Color(0xFF1A4A8A);
   static const brand900 = Color(0xFF1B2A44);
+
+  /// 틴트 면 위의 본문 잉크. brand900 보다 한 단계 어두워서, 옅은 남색 면
+  /// 위에 얹었을 때 제목이 배경과 붙지 않는다.
+  static const brand950 = Color(0xFF111B2C);
 
   /// 지면의 hot 칸 배경과 텍스트. accent500 을 그대로 쓰면 남색 위에서 너무 튄다.
   static const accent100 = Color(0xFFFADFD3);
