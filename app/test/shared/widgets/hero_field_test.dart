@@ -133,4 +133,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('stat 칸은 내용 높이가 다르면 stretch 로 같게 맞춘다', (tester) async {
+    // IntrinsicHeight + stretch 로 해야 다른 높이의 칸들이 같아진다.
+    // 한 칸에는 sub 가 있고 다른 칸에는 없으면, stretch 없이는 높이가 다르다.
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-2', sub: '09/21 19:00'),
+          HeroStat(label: '안 낸 숙제', value: '3'),
+        ],
+      ),
+    );
+    final stat0 = tester.getRect(find.byKey(const Key('stat-0')));
+    final stat1 = tester.getRect(find.byKey(const Key('stat-1')));
+    // 두 칸의 높이가 같아야 한다 (IntrinsicHeight + stretch).
+    expect(stat0.height, stat1.height);
+  });
 }

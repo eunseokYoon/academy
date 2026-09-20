@@ -104,17 +104,19 @@ class HeroField extends StatelessWidget {
                 ),
                 if (stats.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Row(
-                    key: const Key('hero-stats'),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (var i = 0; i < stats.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 8),
-                        Expanded(
-                          child: _Stat(index: i, stat: stats[i]),
-                        ),
+                  IntrinsicHeight(
+                    child: Row(
+                      key: const Key('hero-stats'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < stats.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          Expanded(
+                            child: _Stat(index: i, stat: stats[i]),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ],
                 if (child != null) ...[const SizedBox(height: 12), child],
