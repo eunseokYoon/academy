@@ -50,20 +50,23 @@ void main() {
   testWidgets('embedUrl 이 있으면 썸네일과 재생 버튼이 있다 (videoId 없어도 남는다)', (
     tester,
   ) async {
+    // videoId 가 null 인 재생목록 케이스 — 이미지는 못 그리지만 남색
+    // 블록과 재생 버튼은 그대로 남아야 한다.
     await tester.pumpWidget(host(_lesson(videoId: null)));
     expect(find.byKey(const Key('lesson-thumb')), findsOneWidget);
-    // Image.network 는 flutter_test 에서 항상 실패하므로 errorBuilder 가
-    // 돈다 — 예외가 새지 않아야 한다. videoId 가 null 이면 애초에
-    // Image 위젯 자체가 없다.
+    expect(find.byKey(const Key('lesson-play-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('embedUrl + videoId 가 있으면 이미지 로드 실패해도 예외가 새지 않는다', (
+  testWidgets('embedUrl + videoId 가 있으면 이미지 로드 실패해도 재생 버튼이 남고 예외가 새지 않는다', (
     tester,
   ) async {
     await tester.pumpWidget(host(_lesson()));
     await tester.pump();
     expect(find.byKey(const Key('lesson-thumb')), findsOneWidget);
+    // Image.network 는 flutter_test 에서 항상 실패하므로 errorBuilder 가
+    // 돈다 — 그래도 재생 버튼은 이미지와 별개로 그려져 있어야 한다.
+    expect(find.byKey(const Key('lesson-play-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -81,6 +84,26 @@ void main() {
     await tester.tap(find.byKey(const Key('lesson-thumb')));
     await tester.pump();
     expect(taps, 1);
+  });
+
+  testWidgets('썸네일에 스크린리더용 라벨이 있다', (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(host(_lesson()));
+    // 개수 배지("영상 N개")의 글자도 같은 탭 영역 안에 있어서 노드가
+    // 합쳐진다 — 그래서 정확히 일치가 아니라 포함 여부로 잡는다.
+    expect(find.bySemanticsLabel(RegExp('수업영상 보기')), findsOneWidget);
+    handle.dispose();
+  });
+
+  // 카드 전체가 아니라 썸네일·링크 두 곳만 눌려야 한다(§2). eyebrow·제목은
+  // 죽은 구역이다 — 카드 전체를 InkWell 로 감싸는 실수(브리프의 폐기된
+  // Step 3 이 그랬다)를 이 테스트가 잡는다.
+  testWidgets('제목(죽은 구역)을 눌러도 onTap 이 불리지 않는다', (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(host(_lesson(), onTap: () => taps++));
+    await tester.tap(find.text('5과 정리'));
+    await tester.pump();
+    expect(taps, 0);
   });
 
   testWidgets('content 가 null 이면 수업 내용 라벨이 없다', (tester) async {
