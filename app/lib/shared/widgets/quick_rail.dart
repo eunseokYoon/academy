@@ -51,7 +51,7 @@ class QuickRail extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        separatorBuilder: (_, _) => const SizedBox(width: 4),
         itemBuilder: (_, i) => _Tile(item: items[i], onTap: onTap),
       ),
     );
@@ -68,7 +68,7 @@ class _Tile extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = item.primary;
     return SizedBox(
-      width: 52,
+      width: 68,
       child: InkWell(
         onTap: () => onTap(item.route),
         child: Column(
