@@ -13,6 +13,7 @@ class AppColors {
   const AppColors._();
 
   static const brand50 = Color(0xFFEFF4FC);
+  static const brand100 = Color(0xFFDAE6F7);
 
   /// 남색 띠 위의 보조 글자(역할 칩·지면의 라벨). 흰색이면 본문과 같은 무게가 된다.
   static const brand200 = Color(0xFFB8CEEF);
