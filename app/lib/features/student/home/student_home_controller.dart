@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_exception.dart';
@@ -26,7 +28,19 @@ enum HomeStatus { idle, loading, ready, error }
 /// 옮겼다 돌아오는 경우, 느린 망에서 첫 로딩 중에 당겨서 새로고침하는
 /// 경우. 두 응답이 경쟁하면 나중에 도착한 쪽이 이기는데 그게 더 오래된
 /// 요청일 수 있다 — 그래서 이미 나간 요청이 있으면 새로 부르지 않고
-/// 그 요청을 그대로 기다린다.
+/// 그 요청을 그대로 기다린다. 이 가드는 요청을 실제로 내보내는 [_run] 을
+/// 부르기 **전에** 무장한다 — [_run] 은 `async` 라 호출 시점에 첫
+/// `await` 까지(여기선 첫 [notifyListeners] 호출까지) 동기로 실행되므로,
+/// 그 동기 구간에서 리스너가 [load]/[refresh] 를 다시 부르면 가드가 아직
+/// 없는 채로 재진입해 요청이 두 번 나갈 수 있다.
+///
+/// **dispose 이후에는 아무것도 쓰지 않는다.** 화면이 응답을 기다리는 중에
+/// 닫히면(느린 망에서 뒤로 가기) 응답은 dispose 뒤에 도착한다. 그 시점에
+/// [notifyListeners] 를 부르면 Flutter 가 "used after being disposed"로
+/// 던지고(디버그·위젯 테스트에서만 — `assert` 안에 있어 release 에서는
+/// 안 던진다. 그래도 개발 중·13개 화면의 테스트에서 매번 터지는 건 나쁘고,
+/// 죽은 컨트롤러에 상태를 쓰는 것 자체가 의미가 없다), 어느 쪽이든 이
+/// 컨트롤러는 [dispose] 이후로는 상태를 쓰지도 알리지도 않는다.
 class StudentHomeController extends ChangeNotifier {
   StudentHomeController({
     required StudentHomeRepository repository,
@@ -50,6 +64,7 @@ class StudentHomeController extends ChangeNotifier {
   String? _error;
   DateTime? _loadedAt;
   Future<void>? _inFlight;
+  bool _disposed = false;
 
   HomeStatus get status => _status;
   StudentHome? get data => _data;
@@ -73,11 +88,20 @@ class StudentHomeController extends ChangeNotifier {
   Future<void> _fetch() {
     final existing = _inFlight;
     if (existing != null) return existing;
-    final future = _run();
-    _inFlight = future;
-    // 성공이든 실패든 반드시 비운다 — 안 비우면 다음 호출이 영원히 이
-    // future 를 기다리게 되어 화면이 옛 데이터·옛 오류에 묶인다.
-    return future.whenComplete(() => _inFlight = null);
+    final completer = Completer<void>();
+    // 가드를 [_run] 을 부르기 **전에** 무장한다. [_run] 은 async 라 호출한
+    // 순간 첫 await(첫 notifyListeners 호출)까지 동기로 실행된다 — 그
+    // 대입을 `_run()` 호출 뒤로 미루면, 그 동기 구간에서 리스너가
+    // load()/refresh() 를 다시 불렀을 때 _inFlight 가 아직 null이라
+    // 가드를 그냥 통과해 요청이 두 번 나간다.
+    _inFlight = completer.future;
+    _run().whenComplete(() {
+      // 성공이든 실패든 반드시 비운다 — 안 비우면 다음 호출이 영원히 이
+      // future 를 기다리게 되어 화면이 옛 데이터·옛 오류에 묶인다.
+      _inFlight = null;
+      completer.complete();
+    });
+    return completer.future;
   }
 
   Future<void> _run() async {
@@ -87,21 +111,42 @@ class StudentHomeController extends ChangeNotifier {
     final keepDataOnError = _data != null;
     if (_data == null) _status = HomeStatus.loading;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       final home = await _repository.fetch();
+      // 요청이 나가 있는 동안 화면이 dispose 됐으면(느린 망에서 뒤로
+      // 가기) 여기서 멈춘다 — 아무도 듣고 있지 않은 컨트롤러에 상태를
+      // 쓰는 건 의미가 없고, 아래 _notify() 가 알리려 해도 dispose 뒤의
+      // notifyListeners 호출은 Flutter 가 막는다.
+      if (_disposed) return;
       _data = home;
       _loadedAt = _now();
       _error = null;
       _status = HomeStatus.ready;
     } on ApiException catch (e) {
+      if (_disposed) return;
       // 서버 문구를 그대로 쓴다 — 앱에서 감싸거나 접두어를 붙이지 마라.
       _error = e.message;
       if (!keepDataOnError) _status = HomeStatus.error;
     } catch (_) {
+      if (_disposed) return;
       _error = '연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
       if (!keepDataOnError) _status = HomeStatus.error;
     }
+    _notify();
+  }
+
+  /// dispose 뒤에는 [notifyListeners] 를 부르지 않는다 — Flutter 가
+  /// "used after being disposed"로 던지는 걸(디버그·위젯 테스트에서만이라도)
+  /// 막는다.
+  void _notify() {
+    if (_disposed) return;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

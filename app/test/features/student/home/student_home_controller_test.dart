@@ -168,4 +168,49 @@ void main() {
     expect(repo.calls, 2);
     expect(c.status, HomeStatus.ready);
   });
+
+  test('dispose 된 뒤 응답이 와도 예외를 던지지 않고 상태를 쓰지 않는다', () async {
+    // 화면이 응답을 기다리는 중에 닫히면(느린 망에서 뒤로 가기) 응답은
+    // dispose 뒤에 도착한다. notifyListeners 를 그대로 부르면 Flutter 가
+    // "used after being disposed"로 던진다 — 아무도 안 듣는 컨트롤러에
+    // 상태를 쓰는 것도 의미가 없다.
+    final completer = Completer<StudentHome>();
+    final repo = _FakeRepo(() => completer.future);
+    final c = build(repo);
+    final future = c.load(); // 응답 전
+    c.dispose();
+    completer.complete(_home('김하늘'));
+    await expectLater(future, completes); // 예외를 던지지 않는다
+    expect(c.data, isNull); // 상태를 쓰지 않았다
+    expect(c.status, HomeStatus.loading); // ready 로 전이하지 않았다
+  });
+
+  test('리스너가 동기적으로 load 를 다시 불러도 요청은 한 번만 나간다', () async {
+    // _run() 은 async 라 호출 시점에 첫 notifyListeners 까지 동기로
+    // 실행된다. 그 동기 구간에서 리스너가 곧바로 load() 를 다시 부르는
+    // 경우 — _inFlight 가 이미 무장돼 있어야 재진입이 가드를 통과하지
+    // 않는다.
+    //
+    // 재진입은 한 번만 한다(`reentered` 플래그). 가드가 없는 버그
+    // 상태에서는 _inFlight 가 무장되는 시점이 늦어, 재진입한 load() 의
+    // _run() 이 자신의 notifyListeners 를 또 부르고 리스너가 다시
+    // load() 를 부른다 — 조건에 제한이 없으면 매 단계가 여전히
+    // status == loading 이라 재귀가 끝없이 깊어진다. 한 번만 재진입해도
+    // 가드가 없으면 이미 요청이 두 번 나가는 것으로 충분히 드러난다.
+    final completer = Completer<StudentHome>();
+    final repo = _FakeRepo(() => completer.future);
+    final c = build(repo);
+    var reentered = false;
+    c.addListener(() {
+      if (!reentered && c.status == HomeStatus.loading) {
+        reentered = true;
+        c.load(); // 재진입
+      }
+    });
+    final first = c.load();
+    expect(repo.calls, 1);
+    completer.complete(_home('김하늘'));
+    await first;
+    expect(repo.calls, 1);
+  });
 }
