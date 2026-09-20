@@ -13,6 +13,7 @@ import 'core/api/refresh_interceptor.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_repository.dart';
 import 'core/router/app_router.dart';
+import 'core/router/routes.dart';
 import 'core/storage/cookie_store.dart';
 import 'core/storage/key_value_store.dart';
 import 'core/storage/token_store.dart';
@@ -23,9 +24,10 @@ import 'features/auth/privacy_page.dart';
 import 'features/auth/signup_page.dart';
 import 'features/auth/teacher_notice_page.dart';
 import 'features/auth/terms_page.dart';
-import 'features/parent/parent_shell.dart';
-import 'features/student/student_shell.dart';
+import 'features/parent/stubs/parent_stubs.dart';
+import 'features/student/stubs/student_stubs.dart';
 import 'shared/branding.dart';
+import 'shared/widgets/role_shell.dart';
 
 /// 운영은 `--dart-define=API_BASE_URL=https://...`로 넣는다.
 ///
@@ -126,19 +128,98 @@ class _AcademyAppState extends State<AcademyApp> {
       ),
       GoRoute(path: AppRoutes.terms, builder: (_, _) => const TermsPage()),
       GoRoute(path: AppRoutes.privacy, builder: (_, _) => const PrivacyPage()),
-      GoRoute(
-        path: AppRoutes.student,
-        builder: (_, _) => StudentShell(
-          name: widget.auth.snapshot.name ?? '',
-          onLogout: widget.auth.logout,
-        ),
+      StatefulShellRoute.indexedStack(
+        builder: (_, _, shell) =>
+            RoleShell(role: '학생', tabs: kStudentTabs, navigationShell: shell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.student,
+                builder: (_, _) => const StudentHomePlaceholder(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.studentHomeworks,
+                builder: (_, _) => const StudentHomeworksStub(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.studentLessons,
+                builder: (_, _) => const StudentLessonsStub(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.studentScores,
+                builder: (_, _) =>
+                    StudentScoresStub(onLogout: widget.auth.logout),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.studentQna,
+                builder: (_, _) => const StudentQnaStub(),
+              ),
+            ],
+          ),
+        ],
       ),
-      GoRoute(
-        path: AppRoutes.parent,
-        builder: (_, _) => ParentShell(
-          name: widget.auth.snapshot.name ?? '',
-          onLogout: widget.auth.logout,
-        ),
+      StatefulShellRoute.indexedStack(
+        builder: (_, _, shell) =>
+            RoleShell(role: '학부모', tabs: kParentTabs, navigationShell: shell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.parent,
+                builder: (_, _) => const ParentHomePlaceholder(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.parentSchedule,
+                builder: (_, _) => const ParentScheduleStub(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.parentLessons,
+                builder: (_, _) => const ParentLessonsStub(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.parentScores,
+                builder: (_, _) => const ParentScoresStub(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.parentMe,
+                builder: (_, _) => ParentMeStub(onLogout: widget.auth.logout),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.teacherNotice,
@@ -155,4 +236,22 @@ class _AcademyAppState extends State<AcademyApp> {
       routerConfig: _router,
     );
   }
+}
+
+/// Task 15 가 StudentHomePage 로 바꾼다.
+class StudentHomePlaceholder extends StatelessWidget {
+  const StudentHomePlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      const Center(child: Text('학생 홈은 다음 태스크에서 만듭니다.'));
+}
+
+/// Task 19 가 ParentHomePage 로 바꾼다.
+class ParentHomePlaceholder extends StatelessWidget {
+  const ParentHomePlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      const Center(child: Text('학부모 홈은 다음 태스크에서 만듭니다.'));
 }

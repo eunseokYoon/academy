@@ -1,5 +1,6 @@
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:academy_app/core/auth/auth_controller.dart';
@@ -16,10 +17,9 @@ import 'package:academy_app/features/auth/password_change_page.dart';
 import 'package:academy_app/features/auth/privacy_page.dart';
 import 'package:academy_app/features/auth/teacher_notice_page.dart';
 import 'package:academy_app/features/auth/terms_page.dart';
-import 'package:academy_app/features/parent/parent_shell.dart';
-import 'package:academy_app/features/student/student_shell.dart';
 import 'package:academy_app/main.dart';
 import 'package:academy_app/shared/widgets/full_screen_loader.dart';
+import 'package:academy_app/shared/widgets/role_shell.dart';
 
 /// 역할 → 화면 배선만 확인하면 되므로 `me()`만 채운다.
 /// `auth_controller_test.dart`의 `_FakeRepo` 패턴을 그대로 따른다.
@@ -111,33 +111,61 @@ void main() {
     expect(resolveBaseUrl(), startsWith('http'));
   });
 
-  // 역할 → 화면 배선. StudentShell·ParentShell 은 이 파일 전까지 테스트가
-  // 하나도 건드리지 않았다 — 라우트 테이블이 main.dart 안에 있어서
-  // redirectFor(순수 함수)만으로는 이 배선을 검증할 수 없었다. 학생·학부모
-  // 빌더를 바꿔치기해도 78개 테스트가 전부 그린이었던 이유다. 학부모가
-  // 학생 화면에 앉는 사고가 여기 걸린다.
+  // 역할 → 화면 배선. RoleShell 은 학생·학부모가 공유하므로 타입만으로는
+  // 구분할 수 없다 — 역할 칩 글자(AppBarBand 가 그린다)로 구분한다.
+  // 라우트 테이블이 main.dart 안에 있어서 redirectFor(순수 함수)만으로는
+  // 이 배선을 검증할 수 없었다. 학생·학부모 빌더를 바꿔치기해도 나머지
+  // 테스트가 전부 그린이었던 이유다. 학부모가 학생 화면에 앉는 사고가 여기 걸린다.
   group('역할이 맞는 화면으로 연결된다', () {
-    testWidgets('ready + student → StudentShell', (tester) async {
+    testWidgets('ready + student → RoleShell(학생), /student 에 앉는다', (
+      tester,
+    ) async {
       await _pumpAtRole(tester, role: UserRole.student);
 
-      expect(find.byType(StudentShell), findsOneWidget);
-      expect(find.byType(ParentShell), findsNothing);
+      expect(find.byType(RoleShell), findsOneWidget);
+      expect(find.text('학생'), findsOneWidget);
+      expect(find.text('학부모'), findsNothing);
       expect(find.byType(TeacherNoticePage), findsNothing);
+
+      final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/student');
     });
 
-    testWidgets('ready + parent → ParentShell', (tester) async {
+    testWidgets('하단 탭 바의 다섯 라벨이 보인다', (tester) async {
+      await _pumpAtRole(tester, role: UserRole.student);
+
+      for (final label in ['홈', '숙제', '수업', '성적', '질문']) {
+        expect(find.text(label), findsOneWidget);
+      }
+    });
+
+    testWidgets('학생 셸의 성적 탭에 로그아웃이 있다', (tester) async {
+      // 로그아웃 경로가 끊기지 않았는지 지키는 테스트다. 자리표시자 셸이
+      // 들고 있던 것을 스텁으로 옮겼으므로 여기서 확인한다.
+      await _pumpAtRole(tester, role: UserRole.student);
+      await tester.tap(find.text('성적'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('student-logout')), findsOneWidget);
+    });
+
+    testWidgets('ready + parent → RoleShell(학부모), /parent 에 앉는다', (
+      tester,
+    ) async {
       await _pumpAtRole(tester, role: UserRole.parent);
 
-      expect(find.byType(ParentShell), findsOneWidget);
-      expect(find.byType(StudentShell), findsNothing);
+      expect(find.byType(RoleShell), findsOneWidget);
+      expect(find.text('학부모'), findsOneWidget);
+      expect(find.text('학생'), findsNothing);
+
+      final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/parent');
     });
 
     testWidgets('ready + teacher → TeacherNoticePage', (tester) async {
       await _pumpAtRole(tester, role: UserRole.teacher);
 
       expect(find.byType(TeacherNoticePage), findsOneWidget);
-      expect(find.byType(StudentShell), findsNothing);
-      expect(find.byType(ParentShell), findsNothing);
+      expect(find.byType(RoleShell), findsNothing);
     });
 
     testWidgets('mustChangePassword → PasswordChangePage', (tester) async {
@@ -148,7 +176,7 @@ void main() {
       );
 
       expect(find.byType(PasswordChangePage), findsOneWidget);
-      expect(find.byType(StudentShell), findsNothing);
+      expect(find.byType(RoleShell), findsNothing);
     });
   });
 
@@ -158,8 +186,8 @@ void main() {
     await _pumpAtRole(tester, role: UserRole.student);
 
     // GoRouter 자체(엘리먼트가 아니라 라우터 객체)를 한 번만 얻어 재사용한다
-    // — StudentShell 은 첫 이동에서 트리를 떠나 그 컨텍스트가 비활성화된다.
-    final router = GoRouter.of(tester.element(find.byType(StudentShell)));
+    // — RoleShell 은 이동에서 트리를 떠나 그 컨텍스트가 비활성화된다.
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
 
     router.go(AppRoutes.terms);
     await tester.pumpAndSettle();
