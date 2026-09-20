@@ -15,11 +15,14 @@ class AppColors {
   static const brand50 = Color(0xFFEFF4FC);
 
   /// 남색 띠 위의 보조 글자(역할 칩·지면의 라벨). 흰색이면 본문과 같은 무게가 된다.
+  static const brand200 = Color(0xFFB8CEEF);
   static const brand300 = Color(0xFF8AAFE2);
   static const brand600 = Color(0xFF1E5AA8);
   static const brand900 = Color(0xFF1B2A44);
 
-  /// 지면의 hot 칸 테두리. accent500 을 그대로 쓰면 남색 위에서 너무 튄다.
+  /// 지면의 hot 칸 배경과 텍스트. accent500 을 그대로 쓰면 남색 위에서 너무 튄다.
+  static const accent100 = Color(0xFFFADFD3);
+  static const accent200 = Color(0xFFF4BCA6);
   static const accent300 = Color(0xFFEC9271);
   static const accent400 = Color(0xFFE36F49);
   static const accent500 = Color(0xFFD9542B);

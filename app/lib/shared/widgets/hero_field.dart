@@ -88,29 +88,30 @@ class HeroField extends StatelessWidget {
                 if (eyebrow != null)
                   Text(
                     eyebrow,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.brand300,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.brand200.withValues(alpha: 0.8),
                     ),
                   ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
                     color: Colors.white,
                   ),
                 ),
                 if (stats.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   IntrinsicHeight(
                     child: Row(
                       key: const Key('hero-stats'),
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         for (var i = 0; i < stats.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
+                          if (i > 0) const SizedBox(width: 10),
                           Expanded(
                             child: _Stat(index: i, stat: stats[i]),
                           ),
@@ -158,10 +159,22 @@ class _Stat extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Line(label: stat.label, value: stat.value, sub: sub),
+          _Line(label: stat.label, value: stat.value, sub: sub, hot: stat.hot),
           if (extra != null) ...[
-            const SizedBox(height: 8),
-            _Line(label: extra.label, value: extra.value, sub: extra.sub),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Divider(
+                color: AppColors.brand200.withValues(alpha: 0.25),
+                height: 2,
+              ),
+            ),
+            const SizedBox(height: 2),
+            _Line(
+              label: extra.label,
+              value: extra.value,
+              sub: extra.sub,
+              hot: false,
+            ),
           ],
         ],
       ),
@@ -170,11 +183,17 @@ class _Stat extends StatelessWidget {
 }
 
 class _Line extends StatelessWidget {
-  const _Line({required this.label, required this.value, this.sub});
+  const _Line({
+    required this.label,
+    required this.value,
+    this.sub,
+    this.hot = false,
+  });
 
   final String label;
   final String value;
   final String? sub;
+  final bool hot;
 
   @override
   Widget build(BuildContext context) {
@@ -185,22 +204,28 @@ class _Line extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.brand300),
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: hot
+                ? AppColors.accent200
+                : AppColors.brand200.withValues(alpha: 0.75),
+          ),
         ),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
+          style: TextStyle(
+            fontSize: 21,
+            fontWeight: FontWeight.w800,
+            color: hot ? AppColors.accent100 : Colors.white,
           ),
         ),
         if (sub != null)
           Text(
             sub,
             style: TextStyle(
-              fontSize: 11,
-              color: Colors.white.withValues(alpha: 0.65),
+              fontSize: 10.5,
+              color: AppColors.brand200.withValues(alpha: 0.55),
             ),
           ),
       ],

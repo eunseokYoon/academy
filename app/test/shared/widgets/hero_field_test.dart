@@ -150,4 +150,124 @@ void main() {
     // 두 칸의 높이가 같아야 한다 (IntrinsicHeight + stretch).
     expect(stat0.height, stat1.height);
   });
+
+  testWidgets('hot 칸의 라벨은 accent200 이다', (tester) async {
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-2'),
+          HeroStat(label: '안 낸 숙제', value: '3', hot: true),
+        ],
+      ),
+    );
+    // "안 낸 숙제" 라벨을 찾기 위해 hot 칸의 text widget들을 검색
+    final hotLabelText = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byKey(const Key('stat-1')),
+            matching: find.byType(Text),
+          )
+          .first,
+    );
+    final style = hotLabelText.style!;
+    expect(style.color, AppColors.accent200);
+  });
+
+  testWidgets('hot 칸의 값은 accent100 이다', (tester) async {
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-2'),
+          HeroStat(label: '안 낸 숙제', value: '3', hot: true),
+        ],
+      ),
+    );
+    // hot 칸의 두 번째 Text widget (값)을 찾기
+    final stat1Texts = find.descendant(
+      of: find.byKey(const Key('stat-1')),
+      matching: find.byType(Text),
+    );
+    final valueText = tester.widget<Text>(stat1Texts.at(1));
+    final style = valueText.style!;
+    expect(style.color, AppColors.accent100);
+  });
+
+  testWidgets('일반 칸의 라벨은 brand200 75% 이다', (tester) async {
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-2'),
+          HeroStat(label: '안 낸 숙제', value: '3', hot: true),
+        ],
+      ),
+    );
+    // 일반 칸(stat-0)의 첫 번째 Text widget (라벨)
+    final stat0Texts = find.descendant(
+      of: find.byKey(const Key('stat-0')),
+      matching: find.byType(Text),
+    );
+    final labelText = tester.widget<Text>(stat0Texts.first);
+    final style = labelText.style!;
+    expect(style.color, AppColors.brand200.withValues(alpha: 0.75));
+  });
+
+  testWidgets('일반 칸의 값은 흰색이다', (tester) async {
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-2'),
+          HeroStat(label: '안 낸 숙제', value: '3', hot: true),
+        ],
+      ),
+    );
+    // 일반 칸(stat-0)의 두 번째 Text widget (값)
+    final stat0Texts = find.descendant(
+      of: find.byKey(const Key('stat-0')),
+      matching: find.byType(Text),
+    );
+    final valueText = tester.widget<Text>(stat0Texts.at(1));
+    final style = valueText.style!;
+    expect(style.color, Colors.white);
+  });
+
+  testWidgets('sub 텍스트는 brand200 55% 이다', (tester) async {
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-2', sub: '09/21 19:00'),
+        ],
+      ),
+    );
+    // sub 텍스트를 찾기 (세 번째 Text widget)
+    final stat0Texts = find.descendant(
+      of: find.byKey(const Key('stat-0')),
+      matching: find.byType(Text),
+    );
+    final subText = tester.widget<Text>(stat0Texts.at(2));
+    final style = subText.style!;
+    expect(style.color, AppColors.brand200.withValues(alpha: 0.55));
+  });
+
+  testWidgets('extra 블록 위에 divider 가 있다', (tester) async {
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(
+            label: '다음 수업',
+            value: 'D-2',
+            extra: HeroStatExtra(label: '다음 클리닉', value: 'D-1'),
+          ),
+        ],
+      ),
+    );
+    // stat-0 안의 Divider를 찾기
+    final dividers = find.descendant(
+      of: find.byKey(const Key('stat-0')),
+      matching: find.byType(Divider),
+    );
+    expect(dividers, findsOneWidget);
+    // divider 색 확인
+    final divider = tester.widget<Divider>(dividers);
+    expect(divider.color, AppColors.brand200.withValues(alpha: 0.25));
+  });
 }
