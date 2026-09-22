@@ -25,6 +25,9 @@ import 'features/auth/signup_page.dart';
 import 'features/auth/teacher_notice_page.dart';
 import 'features/auth/terms_page.dart';
 import 'features/parent/stubs/parent_stubs.dart';
+import 'features/student/home/student_home_controller.dart';
+import 'features/student/home/student_home_page.dart';
+import 'features/student/home/student_home_repository.dart';
 import 'features/student/stubs/student_stubs.dart';
 import 'shared/branding.dart';
 import 'shared/widgets/role_shell.dart';
@@ -93,21 +96,31 @@ void main() {
     jar: jar,
   );
 
-  runApp(AcademyApp(auth: auth));
+  runApp(AcademyApp(auth: auth, dio: dio));
   // 첫 프레임을 막지 않는다. splash가 떠 있는 동안 복원한다.
   unawaited(auth.bootstrap());
 }
 
 class AcademyApp extends StatefulWidget {
-  const AcademyApp({super.key, required this.auth});
+  const AcademyApp({super.key, required this.auth, required this.dio});
 
   final AuthController auth;
+
+  /// 화면들의 저장소가 쓰는 Dio. 인터셉터가 붙은 것 하나뿐이다 —
+  /// 화면에서 새로 만들지 마라.
+  final Dio dio;
 
   @override
   State<AcademyApp> createState() => _AcademyAppState();
 }
 
 class _AcademyAppState extends State<AcademyApp> {
+  /// **앱이 하나만 들고 있는다.** 탭을 옮겨도 살아 있어야 컨트롤러의 60초
+  /// 규칙이 뜻을 갖는다 — 화면이 만들면 홈에 돌아올 때마다 새로 부른다.
+  late final StudentHomeController _studentHome = StudentHomeController(
+    repository: StudentHomeRepository(widget.dio),
+  );
+
   late final GoRouter _router = buildRouter(
     auth: widget.auth,
     routes: [
@@ -136,7 +149,28 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.student,
-                builder: (_, _) => const StudentHomePlaceholder(),
+                builder: (_, _) => StudentHomePage(controller: _studentHome),
+                // 홈 퀵 레일이 가는 넷. **셸 안의 자식 라우트다** — 하단 탭
+                // 바가 그대로 있어야 한다. 경로에 앞 `/` 를 붙이지 마라,
+                // go_router 가 부모와 안 맞물린다.
+                routes: [
+                  GoRoute(
+                    path: 'clinics',
+                    builder: (_, _) => const StudentClinicsStub(),
+                  ),
+                  GoRoute(
+                    path: 'online-tests',
+                    builder: (_, _) => const StudentOnlineTestsStub(),
+                  ),
+                  GoRoute(
+                    path: 'attendances',
+                    builder: (_, _) => const StudentAttendancesStub(),
+                  ),
+                  GoRoute(
+                    path: 'notices',
+                    builder: (_, _) => const StudentNoticesStub(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -236,15 +270,6 @@ class _AcademyAppState extends State<AcademyApp> {
       routerConfig: _router,
     );
   }
-}
-
-/// Task 15 가 StudentHomePage 로 바꾼다.
-class StudentHomePlaceholder extends StatelessWidget {
-  const StudentHomePlaceholder({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const Center(child: Text('학생 홈은 다음 태스크에서 만듭니다.'));
 }
 
 /// Task 19 가 ParentHomePage 로 바꾼다.

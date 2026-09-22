@@ -33,6 +33,13 @@ class AppColors {
   static const accent400 = Color(0xFFE36F49);
   static const accent500 = Color(0xFFD9542B);
 
+  /// 미완료 숙제 줄의 배지 글자. **주황 면 위의 배지는 뒤집는다** — 흰 바탕에
+  /// 이 색 글씨다. 옅은 배지는 accent50 블록에 묻힌다.
+  static const accent600 = Color(0xFFBF4522);
+
+  /// 같은 줄의 마감 시각. 제목(brand900)보다 약하고 배지보다 어둡다.
+  static const accent700 = Color(0xFF98371C);
+
   /// 「안 낸 숙제」 구획의 틴트 배경. tailwind accent.50.
   static const accent50 = Color(0xFFFDF2ED);
 

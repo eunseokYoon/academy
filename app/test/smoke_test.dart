@@ -17,7 +17,9 @@ import 'package:academy_app/features/auth/password_change_page.dart';
 import 'package:academy_app/features/auth/privacy_page.dart';
 import 'package:academy_app/features/auth/teacher_notice_page.dart';
 import 'package:academy_app/features/auth/terms_page.dart';
+import 'package:academy_app/core/api/fake_adapter.dart';
 import 'package:academy_app/main.dart';
+import 'package:academy_app/shared/widgets/bottom_tab_bar.dart';
 import 'package:academy_app/shared/widgets/full_screen_loader.dart';
 import 'package:academy_app/shared/widgets/role_shell.dart';
 
@@ -55,6 +57,27 @@ class _FakeAuthRepo implements AuthRepository {
   }) => throw UnimplementedError('스모크 테스트는 가입을 거치지 않는다');
 }
 
+/// 학생 홈(S-1)이 부르는 유일한 API. 라우팅만 보는 테스트라 값은 비운다 —
+/// 대본이 떨어지면 FakeAdapter가 던지므로 넉넉히 깐다.
+Dio _fakeDio() {
+  const home = {
+    'success': true,
+    'data': {
+      'student': {'name': '김하늘'},
+      'nextLesson': null,
+      'nextExam': null,
+      'nextClinic': null,
+      'currentHomeworks': <Object?>[],
+      'lastLesson': null,
+      'notices': {'totalCount': 0, 'recent': <Object?>[]},
+    },
+  };
+  return Dio(BaseOptions(baseUrl: 'https://example.test'))
+    ..httpClientAdapter = FakeAdapter(
+      replies: List.filled(10, const FakeReply(statusCode: 200, body: home)),
+    );
+}
+
 /// 토큰을 미리 심고 `bootstrap()`으로 `me()`를 태워 해당 역할·상태의
 /// `AuthSnapshot`을 만든 뒤 `AcademyApp`을 그 상태로 띄운다.
 Future<void> _pumpAtRole(
@@ -81,7 +104,7 @@ Future<void> _pumpAtRole(
   );
 
   await auth.bootstrap();
-  await tester.pumpWidget(AcademyApp(auth: auth));
+  await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio()));
   await tester.pumpAndSettle();
 }
 
@@ -97,7 +120,7 @@ void main() {
       jar: CookieJar(),
     );
 
-    await tester.pumpWidget(AcademyApp(auth: auth));
+    await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio()));
     await tester.pump();
 
     expect(find.byType(FullScreenLoader), findsOneWidget);
@@ -134,8 +157,17 @@ void main() {
     testWidgets('하단 탭 바의 다섯 라벨이 보인다', (tester) async {
       await _pumpAtRole(tester, role: UserRole.student);
 
+      // **탭 바 안에서 센다.** 홈의 퀵 레일에 같은 라벨이 넷 더 있다
+      // (숙제·수업·성적·질문) — 겹치는 것은 의도다. 그냥 find.text 로
+      // 세면 이 테스트가 레일 때문에 깨진다.
       for (final label in ['홈', '숙제', '수업', '성적', '질문']) {
-        expect(find.text(label), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(BottomTabBar),
+            matching: find.text(label),
+          ),
+          findsOneWidget,
+        );
       }
     });
 
@@ -143,7 +175,8 @@ void main() {
       // 로그아웃 경로가 끊기지 않았는지 지키는 테스트다. 자리표시자 셸이
       // 들고 있던 것을 스텁으로 옮겼으므로 여기서 확인한다.
       await _pumpAtRole(tester, role: UserRole.student);
-      await tester.tap(find.text('성적'));
+      // 라벨이 홈의 퀵 레일에도 있으므로 탭 바의 칸을 키로 누른다.
+      await tester.tap(find.byKey(const ValueKey('tab-/student/scores')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('student-logout')), findsOneWidget);
     });
@@ -196,5 +229,49 @@ void main() {
     router.go(AppRoutes.privacy);
     await tester.pumpAndSettle();
     expect(find.byType(PrivacyPage), findsOneWidget);
+  });
+
+  testWidgets('홈 퀵 레일의 여덟 칸이 모두 라우트로 간다', (tester) async {
+    // 레일은 8칸인데 탭은 다섯이다. 나머지 넷(클리닉·온라인테스트·출석·공지)은
+    // AppRoutes 에 상수만 있고 **라우트가 없었다** — 누르면 go_router 오류
+    // 화면이 떴다. 화면 단위 테스트로는 안 드러나고 실제 라우트 테이블을 쓰는
+    // 여기서만 드러난다.
+    //
+    // RoleShell 이 남아 있는지도 함께 본다. 넷은 셸 **안**의 자식 라우트라
+    // 하단 탭 바가 그대로 있어야 하고, 라우트가 없으면 오류 화면이 셸째로
+    // 덮으므로 이 단언이 그것까지 잡는다.
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    const routes = [
+      AppRoutes.studentHomeworks,
+      AppRoutes.studentLessons,
+      AppRoutes.studentClinics,
+      AppRoutes.studentScores,
+      AppRoutes.studentOnlineTests,
+      AppRoutes.studentAttendances,
+      AppRoutes.studentNotices,
+      AppRoutes.studentQna,
+    ];
+
+    for (final route in routes) {
+      router.go(AppRoutes.student);
+      await tester.pumpAndSettle();
+
+      // 마지막 칸은 카드 끝에서 잘려 있다(그게 「옆으로 넘길 수 있다」의
+      // 유일한 신호다) — 누르기 전에 레일을 굴린다.
+      final tile = find.byKey(Key('rail-$route'));
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        route,
+        reason: '$route 로 가야 한다',
+      );
+      expect(find.byType(RoleShell), findsOneWidget, reason: '$route 가 셸 밖이다');
+    }
   });
 }

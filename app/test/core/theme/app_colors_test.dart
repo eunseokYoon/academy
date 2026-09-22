@@ -8,6 +8,8 @@ void main() {
     expect(AppColors.brand600.toARGB32(), 0xFF1E5AA8);
     expect(AppColors.brand50.toARGB32(), 0xFFEFF4FC);
     expect(AppColors.accent500.toARGB32(), 0xFFD9542B);
+    expect(AppColors.accent600.toARGB32(), 0xFFBF4522);
+    expect(AppColors.accent700.toARGB32(), 0xFF98371C);
     expect(AppColors.paper.toARGB32(), 0xFFEDF1F7);
   });
 
