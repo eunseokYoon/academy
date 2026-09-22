@@ -108,6 +108,25 @@ void main() {
     expect(find.byType(NoticeCard), findsOneWidget);
   });
 
+  testWidgets('인사말은 이름 한 곳만 주황이다', (tester) async {
+    // 웹 tailwind.config.js 의 accent 주석이 이 색을 쓸 자리를 다섯으로 못
+    // 박았고, 「장식으로 딱 세 곳」 중 하나가 「홈 인사말의 이름」이다. 빠지면
+    // 학생이 가장 자주 여는 화면에 브랜드색이 한 점도 안 남는다.
+    await pump(tester, _home(lesson: _lesson));
+    final greeting = tester.widget<Text>(find.text('김하늘 학생,\n미완료 숙제가 없어요'));
+    final spans = <InlineSpan>[];
+    // textSpan 이 null 이면 지면이 평문 Text 로 되돌아간 것이다.
+    greeting.textSpan!.visitChildren((span) {
+      spans.add(span);
+      return true;
+    });
+    expect(spans.length, 2);
+    expect((spans.first as TextSpan).text, '김하늘');
+    expect((spans.first as TextSpan).style!.color, AppColors.accent300);
+    // 나머지 글자는 지면의 기본색을 물려받는다 — 주황이 번지면 안 된다.
+    expect((spans.last as TextSpan).style?.color, isNot(AppColors.accent300));
+  });
+
   testWidgets('레일은 여덟 칸이고 숙제만 primary 다', (tester) async {
     await pump(tester, _home(lesson: _lesson));
     final rail = tester.widget<QuickRail>(find.byType(QuickRail));

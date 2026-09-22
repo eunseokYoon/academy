@@ -61,7 +61,18 @@ class HeroField extends StatelessWidget {
 
   /// 값 위의 작은 줄. 보통 오늘 날짜다.
   final String? eyebrow;
-  final String title;
+
+  /// 인사말. **`String` 이 아니라 [InlineSpan] 이다** — 웹은 인사말에서
+  /// **이름 한 곳만** 주황(`text-accent-300`)이다. `tailwind.config.js` 의
+  /// accent 주석이 이 색을 쓸 수 있는 자리를 다섯으로 못 박았고, 「장식으로 딱
+  /// 세 곳」(워드마크의 LAB, **홈 인사말의 이름**, 주간 레포트의 「지금 보고
+  /// 있는 주」) 중 하나가 여기다. 문자열로 받으면 그 한 곳이 사라지고, 학생이
+  /// 가장 자주 여는 화면에 브랜드색이 한 점도 안 남는다.
+  ///
+  /// **서체·크기·기본색의 정본은 여전히 여기다** — [Text.rich] 가 아래
+  /// `style` 을 스팬 트리 전체의 기본으로 적용하므로, 부르는 쪽은 한 단어의
+  /// **색만** 덮는다. 크기·굵기를 화면에서 다시 적지 마라.
+  final InlineSpan title;
   final List<HeroStat> stats;
 
   /// 칸 아래. 학부모 홈의 자녀 선택이 여기 들어간다.
@@ -95,7 +106,7 @@ class HeroField extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(height: 2),
-                Text(
+                Text.rich(
                   title,
                   style: const TextStyle(
                     fontSize: 25,

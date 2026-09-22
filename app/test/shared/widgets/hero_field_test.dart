@@ -5,12 +5,17 @@ import 'package:academy_app/core/theme/app_theme.dart';
 import 'package:academy_app/shared/widgets/hero_field.dart';
 
 void main() {
-  Widget host({List<HeroStat> stats = const [], Widget? child}) => MaterialApp(
+  Widget host({
+    List<HeroStat> stats = const [],
+    Widget? child,
+    // 웹은 인사말에서 이름 한 곳만 주황이다 — 그래서 title 이 InlineSpan 이다.
+    InlineSpan title = const TextSpan(text: '김하늘 님,'),
+  }) => MaterialApp(
     home: Scaffold(
       body: SingleChildScrollView(
         child: HeroField(
           eyebrow: '9월 19일 (토)',
-          title: '김하늘 님,',
+          title: title,
           stats: stats,
           child: child,
         ),
@@ -34,6 +39,38 @@ void main() {
     await tester.pumpWidget(host());
     expect(find.text('9월 19일 (토)'), findsOneWidget);
     expect(find.text('김하늘 님,'), findsOneWidget);
+  });
+
+  testWidgets('title 스팬이 준 색이 지면의 기본색을 이긴다', (tester) async {
+    // 웹은 인사말에서 **이름 한 곳만** accent300 이다(tailwind.config.js 의
+    // accent 주석이 허용한 장식 세 곳 중 하나). 지면이 자기 스타일을 스팬
+    // 트리의 **기본**으로만 얹어야 그 한 단어가 살아남는다 — 평문 Text 로
+    // 되돌리거나 스팬에 흰색을 강제하면 여기서 깨진다.
+    await tester.pumpWidget(
+      host(
+        title: const TextSpan(
+          children: [
+            TextSpan(
+              text: '김하늘',
+              style: TextStyle(color: AppColors.accent300),
+            ),
+            TextSpan(text: ' 학생,'),
+          ],
+        ),
+      ),
+    );
+    final greeting = tester.widget<Text>(find.text('김하늘 학생,'));
+    // 크기·굵기·기본색의 정본은 여기다 — 화면이 다시 적지 않는다.
+    expect(greeting.style!.fontSize, 25);
+    expect(greeting.style!.fontWeight, FontWeight.w800);
+    expect(greeting.style!.color, Colors.white);
+    final spans = <InlineSpan>[];
+    greeting.textSpan!.visitChildren((span) {
+      spans.add(span);
+      return true;
+    });
+    expect((spans.first as TextSpan).style!.color, AppColors.accent300);
+    expect((spans.last as TextSpan).style?.color, isNull);
   });
 
   testWidgets('칸을 준 개수만큼 그린다', (tester) async {

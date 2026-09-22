@@ -509,10 +509,25 @@ class _ErrorView extends StatelessWidget {
 
 /// 인사말 두 줄. 이름 뒤는 **「학생,」** 이고(웹과 같다), 아랫줄이 오늘 해야
 /// 할 일을 한 문장으로 말한다.
-String _greeting(StudentHome home) {
+///
+/// **이름 한 곳만 주황이다**(웹 `StudentHomePage.tsx` 의
+/// `<span className="text-accent-300">`). `frontend/tailwind.config.js` 의
+/// accent 주석이 이 색을 쓸 자리를 다섯으로 못 박았고, 장식으로 허용된 세 곳
+/// 중 하나가 여기다 — 지우면 학생이 가장 자주 여는 화면에 브랜드색이 한 점도
+/// 없다. **나머지 글자는 색을 주지 마라** — [HeroField] 의 기본색을 물려받는
+/// 것이 맞고, 여기서 흰색을 다시 적으면 지면의 색 정본이 둘이 된다.
+InlineSpan _greeting(StudentHome home) {
   final pending = home.currentHomeworks.length;
   final line = pending > 0 ? '미완료 숙제가 $pending개 있어요' : '미완료 숙제가 없어요';
-  return '${home.studentName} 학생,\n$line';
+  return TextSpan(
+    children: [
+      TextSpan(
+        text: home.studentName,
+        style: const TextStyle(color: AppColors.accent300),
+      ),
+      TextSpan(text: ' 학생,\n$line'),
+    ],
+  );
 }
 
 /// 지면의 숫자 칸. **값이 없는 항목은 뺀다** — null 을 「미정」으로 채우면
