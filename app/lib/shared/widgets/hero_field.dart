@@ -75,7 +75,7 @@ class HeroField extends StatelessWidget {
   final InlineSpan title;
   final List<HeroStat> stats;
 
-  /// 칸 아래. 학부모 홈의 자녀 선택이 여기 들어간다.
+  /// 칸 아래. 학부모 홈의 자녀 선택이 여기 들어간다. **위 여백은 자식 몫이다.**
   final Widget? child;
 
   @override
@@ -131,7 +131,11 @@ class HeroField extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (child != null) ...[const SizedBox(height: 12), child],
+                // **사이 여백을 여기서 주지 마라.** 웹 `HeroField.tsx` 는
+                // `{children}` 을 칸 줄 바로 뒤에 그대로 두고, 여백은 자식이
+                // 자기 `mt-4` 로 갖는다(학부모 홈의 자녀 선택). 여기서 12 를
+                // 더하면 자식의 16 과 겹쳐 28 이 된다.
+                ?child,
               ],
             ),
           ),

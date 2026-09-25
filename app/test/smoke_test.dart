@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
@@ -17,7 +20,6 @@ import 'package:academy_app/features/auth/password_change_page.dart';
 import 'package:academy_app/features/auth/privacy_page.dart';
 import 'package:academy_app/features/auth/teacher_notice_page.dart';
 import 'package:academy_app/features/auth/terms_page.dart';
-import 'package:academy_app/core/api/fake_adapter.dart';
 import 'package:academy_app/main.dart';
 import 'package:academy_app/shared/widgets/bottom_tab_bar.dart';
 import 'package:academy_app/shared/widgets/full_screen_loader.dart';
@@ -58,8 +60,75 @@ class _FakeAuthRepo implements AuthRepository {
   }) => throw UnimplementedError('스모크 테스트는 가입을 거치지 않는다');
 }
 
-/// 학생 홈(S-1)이 부르는 유일한 API. 눌러 볼 대상(숙제 줄·공지 줄·지난 수업)이
-/// 있어야 하므로 하나씩 깐다. 대본이 떨어지면 FakeAdapter가 던지므로 넉넉히 깐다.
+/// 경로로 답하는 어댑터. 학부모 쪽은 자녀 목록 → 그 아이의 홈 두 번을
+/// 부르는데, 순서 대본(FakeAdapter)은 부르는 순서가 바뀌면 엉뚱한 응답을
+/// 준다 — 여기서는 경로가 곧 대본이다. 대본에 없는 경로는 던진다.
+class _RoutingAdapter implements HttpClientAdapter {
+  _RoutingAdapter(this.routes);
+
+  final Map<String, Map<String, dynamic>> routes;
+  final List<String> received = [];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    received.add(options.path);
+    final body = routes[options.path];
+    if (body == null) {
+      throw StateError('대본에 없는 요청이다: ${options.method} ${options.path}');
+    }
+    return ResponseBody.fromString(
+      jsonEncode(body),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+/// 학부모 홈(P-1). 눌러 볼 대상(공지 줄)이 있어야 하므로 하나 깐다.
+const _parentHome = {
+  'success': true,
+  'data': {
+    'student': {'name': '김하늘'},
+    'nextExam': null,
+    'nextLessonDate': '2026-09-21',
+    'nextLessonTime': '19:00',
+    'nextLessonDDay': 2,
+    'notices': {
+      'totalCount': 1,
+      'recent': [
+        {
+          'noticeId': 1,
+          'title': '추석 휴원 안내',
+          'pinned': false,
+          'hasAttachment': false,
+          'publishedAt': '2026-09-15T10:00:00+09:00',
+        },
+      ],
+    },
+    'pendingHomeworkCount': 2,
+    'nextClinic': null,
+    'thisMonthAttendance': {
+      'present': 6,
+      'late': 1,
+      'absent': 0,
+      'sick': 0,
+      'excused': 0,
+      'makeup': 2,
+    },
+  },
+};
+
+/// 학생 홈(S-1)과 학부모 홈(P-1)이 부르는 API. 눌러 볼 대상(숙제 줄·공지 줄·
+/// 지난 수업)이 있어야 하므로 하나씩 깐다.
 Dio _fakeDio() {
   const home = {
     'success': true,
@@ -102,9 +171,16 @@ Dio _fakeDio() {
     },
   };
   return Dio(BaseOptions(baseUrl: 'https://example.test'))
-    ..httpClientAdapter = FakeAdapter(
-      replies: List.filled(10, const FakeReply(statusCode: 200, body: home)),
-    );
+    ..httpClientAdapter = _RoutingAdapter({
+      '/api/student/home': home,
+      '/api/parent/children': {
+        'success': true,
+        'data': [
+          {'studentId': 1, 'name': '김하늘'},
+        ],
+      },
+      '/api/parent/children/1/home': _parentHome,
+    });
 }
 
 /// 토큰을 미리 심고 `bootstrap()`으로 `me()`를 태워 해당 역할·상태의
@@ -133,7 +209,7 @@ Future<void> _pumpAtRole(
   );
 
   await auth.bootstrap();
-  await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio()));
+  await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio(), store: kv));
   await tester.pumpAndSettle();
 }
 
@@ -149,7 +225,7 @@ void main() {
       jar: CookieJar(),
     );
 
-    await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio()));
+    await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio(), store: kv));
     await tester.pump();
 
     expect(find.byType(FullScreenLoader), findsOneWidget);
@@ -336,6 +412,81 @@ void main() {
 
     for (final (name, target, route) in cases) {
       router.go(AppRoutes.student);
+      await tester.pumpAndSettle();
+      expect(target, findsOneWidget, reason: '$name 이 홈에 없다');
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        route,
+        reason: '$name 은 $route 로 가야 한다',
+      );
+      expect(find.byType(RoleShell), findsOneWidget, reason: '$name 이 셸 밖이다');
+    }
+  });
+
+  testWidgets('학부모 홈 퀵 레일의 여섯 칸이 모두 라우트로 간다', (tester) async {
+    // 레일은 6칸인데 탭은 다섯이다. 숙제·공지는 AppRoutes 에 상수만 있고
+    // 라우트가 없었다 — 누르면 go_router 오류 화면이 떴다.
+    //
+    // **라우터로 가지 않고 칸을 실제로 누른다.** 레일은 지면 위로
+    // Transform 으로 끌어올려져 있어서, 겹침 Column 을 ListView 자식으로
+    // 펴거나 RepaintBoundary 를 끼우면 그려진 칸 대부분이 손가락에 안 닿는다
+    // (학생 홈에서 실제로 겪었다). 여기가 그것을 잡는 유일한 곳이다.
+    await _pumpAtRole(tester, role: UserRole.parent);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    const routes = [
+      AppRoutes.parentSchedule,
+      AppRoutes.parentHomeworks,
+      AppRoutes.parentScores,
+      AppRoutes.parentLessons,
+      AppRoutes.parentNotices,
+      AppRoutes.parentMe,
+    ];
+
+    for (final route in routes) {
+      router.go(AppRoutes.parent);
+      await tester.pumpAndSettle();
+
+      final tile = find.byKey(Key('rail-$route'));
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        route,
+        reason: '$route 로 가야 한다',
+      );
+      expect(find.byType(RoleShell), findsOneWidget, reason: '$route 가 셸 밖이다');
+    }
+  });
+
+  testWidgets('학부모 홈의 구획 머리·공지 줄이 제자리로 간다', (tester) async {
+    await _pumpAtRole(tester, role: UserRole.parent);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    Finder headAction(String title) => find.descendant(
+      of: find.ancestor(
+        of: find.text(title),
+        matching: find.byType(SectionHead),
+      ),
+      matching: find.text('전체 ›'),
+    );
+
+    final cases = <(String, Finder, String)>[
+      ('숙제 머리', headAction('숙제'), AppRoutes.parentHomeworks),
+      ('이번 달 출석 머리', headAction('이번 달 출석'), AppRoutes.parentSchedule),
+      ('공지 머리', headAction('학원 공지'), AppRoutes.parentNotices),
+      ('공지 줄', find.byKey(const Key('notice-row')), AppRoutes.parentNotices),
+    ];
+
+    for (final (name, target, route) in cases) {
+      router.go(AppRoutes.parent);
       await tester.pumpAndSettle();
       expect(target, findsOneWidget, reason: '$name 이 홈에 없다');
       await tester.ensureVisible(target);

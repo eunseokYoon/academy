@@ -24,6 +24,10 @@ import 'features/auth/privacy_page.dart';
 import 'features/auth/signup_page.dart';
 import 'features/auth/teacher_notice_page.dart';
 import 'features/auth/terms_page.dart';
+import 'features/parent/home/parent_home_controller.dart';
+import 'features/parent/home/parent_home_page.dart';
+import 'features/parent/home/parent_home_repository.dart';
+import 'features/parent/selected_child.dart';
 import 'features/parent/stubs/parent_stubs.dart';
 import 'features/student/home/student_home_controller.dart';
 import 'features/student/home/student_home_page.dart';
@@ -96,15 +100,24 @@ void main() {
     jar: jar,
   );
 
-  runApp(AcademyApp(auth: auth, dio: dio));
+  runApp(AcademyApp(auth: auth, dio: dio, store: secure));
   // 첫 프레임을 막지 않는다. splash가 떠 있는 동안 복원한다.
   unawaited(auth.bootstrap());
 }
 
 class AcademyApp extends StatefulWidget {
-  const AcademyApp({super.key, required this.auth, required this.dio});
+  const AcademyApp({
+    super.key,
+    required this.auth,
+    required this.dio,
+    required this.store,
+  });
 
   final AuthController auth;
+
+  /// 기기 저장소. 학부모가 고른 자녀를 앱을 껐다 켜도 기억한다
+  /// ([SelectedChild] 의 주석).
+  final KeyValueStore store;
 
   /// 화면들의 저장소가 쓰는 Dio. 인터셉터가 붙은 것 하나뿐이다 —
   /// 화면에서 새로 만들지 마라.
@@ -119,6 +132,17 @@ class _AcademyAppState extends State<AcademyApp> {
   /// 규칙이 뜻을 갖는다 — 화면이 만들면 홈에 돌아올 때마다 새로 부른다.
   late final StudentHomeController _studentHome = StudentHomeController(
     repository: StudentHomeRepository(widget.dio),
+  );
+
+  /// 학부모 쪽 둘. 학생 홈 컨트롤러와 같은 이유로 앱이 들고 있는다.
+  /// **자녀 목록은 셸이 한 곳에서 관리한다** — 하위 화면(B2~B3)도 같은
+  /// [SelectedChild] 를 받아야 자녀를 바꿨을 때 전부 같이 바뀐다.
+  late final SelectedChild _selectedChild = SelectedChild(
+    dio: widget.dio,
+    store: widget.store,
+  );
+  late final ParentHomeController _parentHome = ParentHomeController(
+    repository: ParentHomeRepository(widget.dio),
   );
 
   late final GoRouter _router = buildRouter(
@@ -217,7 +241,22 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.parent,
-                builder: (_, _) => const ParentHomePlaceholder(),
+                builder: (_, _) => ParentHomePage(
+                  controller: _parentHome,
+                  selectedChild: _selectedChild,
+                ),
+                // 홈 퀵 레일이 가는 둘. **셸 안의 자식 라우트다** — 하단 탭
+                // 바가 그대로 있어야 한다(학생 쪽 넷과 같은 방식).
+                routes: [
+                  GoRoute(
+                    path: 'homeworks',
+                    builder: (_, _) => const ParentHomeworksStub(),
+                  ),
+                  GoRoute(
+                    path: 'notices',
+                    builder: (_, _) => const ParentNoticesStub(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -270,13 +309,4 @@ class _AcademyAppState extends State<AcademyApp> {
       routerConfig: _router,
     );
   }
-}
-
-/// Task 19 가 ParentHomePage 로 바꾼다.
-class ParentHomePlaceholder extends StatelessWidget {
-  const ParentHomePlaceholder({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const Center(child: Text('학부모 홈은 다음 태스크에서 만듭니다.'));
 }

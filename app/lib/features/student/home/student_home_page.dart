@@ -5,7 +5,11 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/icons/icon_paths.dart';
+
+import 'package:academy_app/shared/lib/home_labels.dart';
+
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/exam_schedule_section.dart';
 import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/hero_field.dart';
@@ -119,7 +123,7 @@ class _StudentHomePageState extends State<StudentHomePage> {
               Transform.translate(
                 offset: const Offset(0, -40),
                 child: HeroField(
-                  eyebrow: _todayLabel(),
+                  eyebrow: todayLabel(),
                   title: _greeting(home),
                   stats: _stats(home),
                 ),
@@ -145,7 +149,13 @@ class _StudentHomePageState extends State<StudentHomePage> {
                     _constrain(_pendingSection(home)),
                     if (exam != null) ...[
                       const SizedBox(height: 20),
-                      _constrain(_examSection(exam)),
+                      _constrain(
+                        ExamScheduleSection(
+                          examType: exam.examType,
+                          startDate: exam.startDate,
+                          scopeNote: exam.scopeNote,
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 20),
                     _constrain(
@@ -156,7 +166,7 @@ class _StudentHomePageState extends State<StudentHomePage> {
                               (n) => NoticeSummary(
                                 id: n.noticeId,
                                 title: n.title,
-                                createdAt: _shortDate(n.publishedAt),
+                                createdAt: shortDate(n.publishedAt),
                                 // 빠뜨리면 고정 배지가 조용히 사라진다.
                                 pinned: n.pinned,
                               ),
@@ -294,77 +304,6 @@ class _StudentHomePageState extends State<StudentHomePage> {
                 ),
             ],
           ),
-      ],
-    );
-  }
-
-  /// 시험 범위는 D-day 와 같은 시험 이야기라 떨어뜨리지 않는다.
-  /// 남은 날짜는 위 지면 칸이 이미 말했으므로 여기서 다시 세지 않는다.
-  Widget _examSection(NextExam exam) {
-    final scopeNote = exam.scopeNote;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SectionHead(tone: SectionTone.brand, title: '시험 일정'),
-        TintBlock(
-          tone: SectionTone.brand,
-          children: [
-            Padding(
-              // 웹 `px-3.5 py-3.5`.
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text.rich(
-                    key: const Key('exam-title'),
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: _examLabel(exam.examType),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.brand900,
-                          ),
-                        ),
-                        // 웹 `ml-2`.
-                        const WidgetSpan(child: SizedBox(width: 8)),
-                        TextSpan(
-                          // 지면 칸의 sub 와 달리 **연도를 남긴다** —
-                          // 여기는 자른 날짜가 아니다.
-                          text: '${exam.startDate.replaceAll('-', '.')} 시작',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.brand600.withValues(alpha: 0.8),
-                            fontFeatures: kTabularFigures,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // 웹 `mt-1.5`.
-                  const SizedBox(height: 6),
-                  // 선생님이 아직 안 올렸으면 null 이다. **「미정」이라고
-                  // 지어내지 마라** — 대신 흐린 색으로 「미등록」을 적는다.
-                  // 줄바꿈은 살린다(`maxLines` 를 주지 마라).
-                  Text(
-                    scopeNote ?? '시험 범위 미등록',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.625,
-                      color: scopeNote != null
-                          ? AppColors.brand950.withValues(alpha: 0.8)
-                          : AppColors.brand600.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -546,9 +485,9 @@ List<HeroStat> _stats(StudentHome home) {
       ? null
       : HeroStatExtra(
           label: '다음 클리닉',
-          value: _dDayLabel(clinic.dDay),
+          value: dDayLabel(clinic.dDay),
           sub:
-              '${_dateLabel(clinic.clinicDate, null)} '
+              '${dateLabel(clinic.clinicDate, null)} '
               '${clinic.arrivalTime} 도착',
         );
 
@@ -556,8 +495,8 @@ List<HeroStat> _stats(StudentHome home) {
     stats.add(
       HeroStat(
         label: '다음 수업',
-        value: _dDayLabel(lesson.dDay),
-        sub: _dateLabel(lesson.lessonDate, lesson.startTime),
+        value: dDayLabel(lesson.dDay),
+        sub: dateLabel(lesson.lessonDate, lesson.startTime),
         // 같은 종류의 일정이라 한 칸에 묶는다. 칸을 넷으로 늘리면
         // 360px 에서 「D-61」이 줄바꿈된다.
         extra: clinicRow,
@@ -592,55 +531,16 @@ List<HeroStat> _stats(StudentHome home) {
     stats.add(
       HeroStat(
         // 라벨이 「시험」이 아니라 시험 종류다(웹과 같다).
-        label: _examLabel(exam.examType),
+        label: examLabel(exam.examType),
         value: 'D-${exam.dDay}',
         // 연도를 뺀다. 360px 에서 「2026.10.12 시작」은 잘린다.
-        sub: '${exam.startDate.substring(5).replaceFirst('-', '.')} 시작',
+        sub: examStartShort(exam.startDate),
       ),
     );
   }
 
   return stats;
 }
-
-/// 요일 한 글자. 1=월~7=일(ISO-8601). 웹 `shared/date.ts` 의 `DAY_LABELS` 와
-/// 같은 기준이고 `DateTime.weekday` 를 그대로 인덱스로 쓴다.
-const List<String> _dayLabels = ['월', '화', '수', '목', '금', '토', '일'];
-
-/// 「2026년 9월 21일 월요일」. 웹 `shared/date.ts` 의 `todayLabel`.
-///
-/// 장식이 아니라 **기준점**이다 — 아래의 D-3·마감 8일 지남이 전부 오늘을
-/// 기준으로 센 값이라, 오늘이 안 적혀 있으면 기기 시계가 틀어졌을 때 학생이
-/// 알아챌 방법이 없다. **표시용이라 `DateTime.now()` 를 써도 된다.**
-/// 금지된 것은 D-day 계산이다(서버가 준다).
-String _todayLabel() {
-  final now = DateTime.now();
-  return '${now.year}년 ${now.month}월 ${now.day}일 '
-      '${_dayLabels[now.weekday - 1]}요일';
-}
-
-/// 「D-2」 · 「오늘」. **서버가 준 dDay 를 그대로 쓴다.**
-/// 서버는 음수를 안 내려준다.
-String _dDayLabel(int dDay) => dDay == 0 ? '오늘' : 'D-$dDay';
-
-/// 「09/21」 또는 「09/21 19:00」 — 연도를 뺀다. 360px 에서 잘린다.
-/// **서버 문자열을 자를 뿐 날짜를 새로 만들지 않는다.**
-String _dateLabel(String date, String? time) {
-  final short = date.substring(5).replaceFirst('-', '/');
-  return time == null ? short : '$short $time';
-}
-
-/// 공지 줄의 「09/15」. `publishedAt` 에서 잘라낸다 — 웹도 목록에서 자른다.
-String _shortDate(String publishedAt) =>
-    publishedAt.substring(5, 10).replaceFirst('-', '/');
-
-/// 웹 `shared/score/types.ts` 의 `EXAM_TYPE_LABELS`. 백엔드 `ExamType` 은
-/// MIDTERM·FINAL 둘뿐이다 — 모르는 값이 오면 서버 문자열을 그대로 보여준다.
-String _examLabel(String examType) => switch (examType) {
-  'MIDTERM' => '중간고사',
-  'FINAL' => '기말고사',
-  _ => examType,
-};
 
 /// 남은 시간. 웹 `shared/homework/types.ts` 의 `remainingLabel` **그대로**다.
 ///
