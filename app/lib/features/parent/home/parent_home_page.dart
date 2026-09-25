@@ -143,12 +143,15 @@ class _ParentHomePageState extends State<ParentHomePage> {
   Widget build(BuildContext context) {
     final c = widget.controller;
     final sc = widget.selectedChild;
+    // **자녀 목록 오류가 먼저다.** 목록을 못 받았으면 지금 로그인한
+    // 사람의 자녀가 누군지 모르는 것이다 — 컨트롤러에 무엇이 남아 있든
+    // 그것을 그리지 않는다.
+    final childrenError = _childrenError;
+    if (childrenError != null) {
+      return _ErrorView(message: childrenError, onRetry: _retryChildren);
+    }
     final home = c.data;
     if (home == null) {
-      final childrenError = _childrenError;
-      if (childrenError != null) {
-        return _ErrorView(message: childrenError, onRetry: _retryChildren);
-      }
       if (c.status == HomeStatus.error) {
         return _ErrorView(message: c.error, onRetry: c.refresh);
       }

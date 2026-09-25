@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/fake_adapter.dart';
@@ -15,6 +19,29 @@ class _MemoryStore implements KeyValueStore {
 
   @override
   Future<void> delete(String key) async => map.remove(key);
+}
+
+/// 응답을 붙잡아 두는 어댑터. [release] 할 때 돌려준다.
+class _GateAdapter implements HttpClientAdapter {
+  final _body = Completer<Map<String, dynamic>>();
+
+  void release(Map<String, dynamic> body) => _body.complete(body);
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => ResponseBody.fromString(
+    jsonEncode(await _body.future),
+    200,
+    headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    },
+  );
+
+  @override
+  void close({bool force = false}) {}
 }
 
 Map<String, dynamic> _children(List<Map<String, dynamic>> items) => {
@@ -188,5 +215,24 @@ void main() {
     await s.select(1);
 
     expect(notes, 0);
+  });
+
+  test('reset 은 목록과 선택을 비우고, 그 뒤 도착한 앞 사람 목록은 버린다', () async {
+    final gate = _GateAdapter();
+    dio.httpClientAdapter = gate;
+    final sc = build();
+    final pending = sc.load();
+    sc.reset();
+    expect(sc.children, isEmpty);
+    expect(sc.selectedStudentId, isNull);
+    expect(sc.loading, isFalse);
+    gate.release(
+      _children([
+        {'studentId': 1, 'name': '김하늘'},
+      ]),
+    );
+    await pending;
+    expect(sc.children, isEmpty);
+    expect(sc.selectedStudentId, isNull);
   });
 }

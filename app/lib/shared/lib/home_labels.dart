@@ -16,8 +16,10 @@ const List<String> _dayLabels = ['월', '화', '수', '목', '금', '토', '일'
 /// 기준으로 센 값이라, 오늘이 안 적혀 있으면 기기 시계가 틀어졌을 때
 /// 알아챌 방법이 없다. **표시용이라 `DateTime.now()` 를 써도 된다.**
 /// 금지된 것은 D-day 계산이다(서버가 준다).
-String todayLabel() {
-  final now = DateTime.now();
+///
+/// `now` 는 테스트용이다. 화면은 넘기지 않는다.
+String todayLabel({DateTime? now}) {
+  now ??= DateTime.now();
   return '${now.year}년 ${now.month}월 ${now.day}일 '
       '${_dayLabels[now.weekday - 1]}요일';
 }

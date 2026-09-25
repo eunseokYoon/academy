@@ -181,6 +181,26 @@ class ParentHomeController extends ChangeNotifier {
   }
 
   /// dispose 뒤에는 [notifyListeners] 를 부르지 않는다.
+  /// **로그아웃하면 부른다**(`AcademyApp` 이 인증 상태를 듣고 부른다).
+  /// 이 컨트롤러는 앱 수명 동안 살아 있어서, 안 비우면 다음에 로그인한
+  /// 학부모에게 앞 사람 자녀의 홈이 그대로 보인다 — 서버의 접근 가드는
+  /// 새 요청을 막을 뿐 이미 받은 데이터는 못 지운다.
+  ///
+  /// **세대를 올린다.** 요청이 나간 사이 로그아웃했으면 그 응답은 앞 사람
+  /// 것이다 — 도착하면 [_run] 의 세대 검사가 버린다.
+  void reset() {
+    if (_disposed) return;
+    _generation++;
+    _status = HomeStatus.idle;
+    _data = null;
+    _error = null;
+    _loadedAt = null;
+    _studentId = null;
+    _inFlight = null;
+    _inFlightStudentId = null;
+    notifyListeners();
+  }
+
   void _notify() {
     if (_disposed) return;
     notifyListeners();

@@ -12,6 +12,7 @@ import 'core/api/password_gate_interceptor.dart';
 import 'core/api/refresh_interceptor.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_repository.dart';
+import 'core/auth/auth_status.dart';
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
 import 'core/storage/cookie_store.dart';
@@ -300,6 +301,42 @@ class _AcademyAppState extends State<AcademyApp> {
       ),
     ],
   );
+
+  @override
+  void initState() {
+    super.initState();
+    widget.auth.addListener(_onAuthChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant AcademyApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.auth != widget.auth) {
+      oldWidget.auth.removeListener(_onAuthChanged);
+      widget.auth.addListener(_onAuthChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.auth.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  /// **로그아웃하면 사람에게 딸린 상태를 전부 비운다.** 위 세 객체는 앱
+  /// 수명 동안 살아 있어서, 안 비우면 같은 폰으로 다음 사람(형제·자매,
+  /// 그 부모)이 로그인했을 때 앞 사람의 홈·자녀가 그대로 보인다. 서버의
+  /// 접근 가드는 새 요청을 막을 뿐 이미 받은 데이터는 못 지운다.
+  ///
+  /// 신호는 `loggedOut` 하나다 — 로그아웃·세션 만료·비밀번호 변경 후
+  /// 재로그인·부팅 복원 실패가 전부 [AuthController] 에서 이 상태로 간다.
+  /// 여러 번 불려도 무해하다.
+  void _onAuthChanged() {
+    if (widget.auth.snapshot.status != AuthStatus.loggedOut) return;
+    _studentHome.reset();
+    _parentHome.reset();
+    _selectedChild.reset();
+  }
 
   @override
   Widget build(BuildContext context) {

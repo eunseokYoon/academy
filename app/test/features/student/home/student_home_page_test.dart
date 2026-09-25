@@ -473,14 +473,24 @@ void main() {
     expect(find.text('09/15'), findsOneWidget);
   });
 
-  testWidgets('실패하면 오류와 다시 시도를 보여준다', (tester) async {
+  testWidgets('실패하면 오류와 다시 시도를 보여주고, 누르면 다시 부른다', (tester) async {
+    var fail = true;
     final c = StudentHomeController(
-      repository: _Repo(() async => throw Exception('x')),
+      repository: _Repo(() async {
+        if (fail) throw Exception('x');
+        return _home(lesson: _lesson);
+      }),
     );
     await tester.pumpWidget(_app(c));
     await tester.pumpAndSettle();
     expect(find.text('다시 시도'), findsOneWidget);
     expect(find.text('연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+
+    // 버튼이 아무 일도 안 해도 위 단언은 통과한다 — 실제로 누른다.
+    fail = false;
+    await tester.tap(find.text('다시 시도'));
+    await tester.pumpAndSettle();
+    expect(find.text('김하늘 학생,\n미완료 숙제가 없어요'), findsOneWidget);
   });
 
   testWidgets('360px 에서 가로로 넘치지 않는다', (tester) async {

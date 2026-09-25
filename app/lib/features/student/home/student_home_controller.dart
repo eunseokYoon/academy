@@ -66,6 +66,10 @@ class StudentHomeController extends ChangeNotifier {
   Future<void>? _inFlight;
   bool _disposed = false;
 
+  /// [reset] 이 올린다. 요청이 나간 사이 로그아웃했으면, 늦게 도착한 앞
+  /// 사람의 응답을 버리는 기준이다.
+  int _generation = 0;
+
   HomeStatus get status => _status;
   StudentHome? get data => _data;
   String? get error => _error;
@@ -98,7 +102,8 @@ class StudentHomeController extends ChangeNotifier {
     _run().whenComplete(() {
       // 성공이든 실패든 반드시 비운다 — 안 비우면 다음 호출이 영원히 이
       // future 를 기다리게 되어 화면이 옛 데이터·옛 오류에 묶인다.
-      _inFlight = null;
+      // 단, [reset] 뒤 새로 무장된 가드는 지우지 않는다.
+      if (identical(_inFlight, completer.future)) _inFlight = null;
       completer.complete();
     });
     return completer.future;
@@ -108,6 +113,7 @@ class StudentHomeController extends ChangeNotifier {
     // 유지할 데이터가 있었는지를 실행 시작 시점에 고정한다 — 실패 시
     // status 를 error 로 떨어뜨릴지, ready 로 남겨 기존 데이터를 지킬지의
     // 기준이다.
+    final gen = _generation;
     final keepDataOnError = _data != null;
     if (_data == null) _status = HomeStatus.loading;
     _error = null;
@@ -119,21 +125,39 @@ class StudentHomeController extends ChangeNotifier {
       // 쓰는 건 의미가 없고, 아래 _notify() 가 알리려 해도 dispose 뒤의
       // notifyListeners 호출은 Flutter 가 막는다.
       if (_disposed) return;
+      if (gen != _generation) return; // 로그아웃 뒤 도착했다. 버린다.
       _data = home;
       _loadedAt = _now();
       _error = null;
       _status = HomeStatus.ready;
     } on ApiException catch (e) {
       if (_disposed) return;
+      if (gen != _generation) return;
       // 서버 문구를 그대로 쓴다 — 앱에서 감싸거나 접두어를 붙이지 마라.
       _error = e.message;
       if (!keepDataOnError) _status = HomeStatus.error;
     } catch (_) {
       if (_disposed) return;
+      if (gen != _generation) return;
       _error = '연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
       if (!keepDataOnError) _status = HomeStatus.error;
     }
     _notify();
+  }
+
+  /// **로그아웃하면 부른다**(`AcademyApp` 이 인증 상태를 듣고 부른다).
+  /// 이 컨트롤러는 앱 수명 동안 살아 있어서, 안 비우면 같은 폰으로 다음에
+  /// 로그인한 학생에게 앞 사람의 홈이 60초 규칙 동안 그대로 보인다.
+  /// 세대를 올려 나가 있던 요청의 응답도 버린다.
+  void reset() {
+    if (_disposed) return;
+    _generation++;
+    _status = HomeStatus.idle;
+    _data = null;
+    _error = null;
+    _loadedAt = null;
+    _inFlight = null;
+    notifyListeners();
   }
 
   /// dispose 뒤에는 [notifyListeners] 를 부르지 않는다 — Flutter 가

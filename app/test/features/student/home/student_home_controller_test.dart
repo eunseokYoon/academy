@@ -213,4 +213,31 @@ void main() {
     await first;
     expect(repo.calls, 1);
   });
+
+  // ── 로그아웃(reset) ─────────────────────────────────────────
+  // 같은 폰으로 다음 학생이 로그인했을 때 앞 사람의 홈이 60초 동안 남으면
+  // 안 된다.
+
+  test('reset 뒤에는 60초 안이어도 다시 부른다', () async {
+    final repo = _FakeRepo(() async => _home('김하늘'));
+    final c = build(repo);
+    await c.load();
+    c.reset();
+    expect(c.data, isNull);
+    expect(c.status, HomeStatus.idle);
+    await c.load();
+    expect(repo.calls, 2);
+  });
+
+  test('reset 뒤에 도착한 앞 사람의 응답은 버린다', () async {
+    final slow = Completer<StudentHome>();
+    final repo = _FakeRepo(() => slow.future);
+    final c = build(repo);
+    final pending = c.load();
+    c.reset();
+    slow.complete(_home('김하늘'));
+    await pending;
+    expect(c.data, isNull);
+    expect(c.status, HomeStatus.idle);
+  });
 }

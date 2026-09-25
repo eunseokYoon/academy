@@ -300,4 +300,48 @@ void main() {
     await first;
     expect(repo.calls, [1]);
   });
+
+  // ── 로그아웃(reset) ─────────────────────────────────────────
+  // 컨트롤러는 앱 수명 동안 산다. 같은 폰으로 다음 학부모가 로그인했을 때
+  // 앞 사람 자녀의 홈이 남으면 안 된다.
+
+  test('reset 은 데이터·선택·60초 기록을 전부 비운다', () async {
+    final repo = _FakeRepo((id) async => _home('김하늘'));
+    final c = build(repo);
+    await c.load(1);
+    c.reset();
+    expect(c.data, isNull);
+    expect(c.error, isNull);
+    expect(c.status, HomeStatus.idle);
+    expect(c.studentId, isNull);
+    // 60초 안이어도 다시 부른다 — 앞 사람의 기록으로 건너뛰면 안 된다.
+    await c.load(1);
+    expect(repo.calls, [1, 1]);
+  });
+
+  test('reset 뒤에 도착한 앞 사람의 응답은 버린다', () async {
+    final slow = Completer<ParentHome>();
+    final repo = _FakeRepo((_) => slow.future);
+    final c = build(repo);
+    final pending = c.load(1);
+    c.reset();
+    slow.complete(_home('김하늘'));
+    await pending;
+    expect(c.data, isNull);
+    expect(c.status, HomeStatus.idle);
+  });
+
+  test('reset 뒤에 도착한 앞 사람의 실패도 버린다', () async {
+    final slow = Completer<ParentHome>();
+    final repo = _FakeRepo((_) => slow.future);
+    final c = build(repo);
+    final pending = c.load(1);
+    c.reset();
+    slow.completeError(
+      const ApiException(code: 'FORBIDDEN', message: '접근 권한이 없습니다.'),
+    );
+    await pending;
+    expect(c.error, isNull);
+    expect(c.status, HomeStatus.idle);
+  });
 }

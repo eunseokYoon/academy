@@ -483,6 +483,16 @@ void main() {
               'error': {'code': 'INTERNAL', 'message': '서버 오류입니다.'},
             },
           ),
+          // 다시 시도에서 받을 성공 응답.
+          FakeReply(
+            statusCode: 200,
+            body: {
+              'success': true,
+              'data': [
+                {'studentId': 1, 'name': '김하늘'},
+              ],
+            },
+          ),
         ],
       );
     final sc = SelectedChild(dio: dio, store: InMemoryKeyValueStore());
@@ -492,16 +502,57 @@ void main() {
     expect(find.text('다시 시도'), findsOneWidget);
     // 서버 문구 그대로다.
     expect(find.text('서버 오류입니다.'), findsOneWidget);
+
+    // **누르면 목록을 다시 부르고 홈이 뜬다.** 버튼이 아무 일도 안 해도
+    // 위 단언은 통과하므로 실제로 누른다.
+    await tester.tap(find.text('다시 시도'));
+    await tester.pumpAndSettle();
+    expect(find.text('김하늘 학생\n학부모님, 환영합니다'), findsOneWidget);
+    expect(find.text('다시 시도'), findsNothing);
   });
 
-  testWidgets('홈을 못 받으면 오류와 다시 시도를 보여준다', (tester) async {
+  testWidgets('자녀 목록 오류가 컨트롤러에 남은 홈보다 먼저다', (tester) async {
+    // 목록을 못 받았으면 지금 사람의 자녀가 누군지 모른다 — 컨트롤러에
+    // 남은 홈을 그리면 앞 사람 아이일 수 있다.
+    final c = ParentHomeController(repository: _Repo((_) async => _home()));
+    await c.load(1);
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
+      ..httpClientAdapter = FakeAdapter(
+        replies: const [
+          FakeReply(
+            statusCode: 500,
+            body: {
+              'success': false,
+              'data': null,
+              'error': {'code': 'INTERNAL', 'message': '서버 오류입니다.'},
+            },
+          ),
+        ],
+      );
+    final sc = SelectedChild(dio: dio, store: InMemoryKeyValueStore());
+    await tester.pumpWidget(_app(c, sc));
+    await tester.pumpAndSettle();
+    expect(find.text('서버 오류입니다.'), findsOneWidget);
+    expect(find.textContaining('김하늘'), findsNothing);
+  });
+
+  testWidgets('홈을 못 받으면 오류와 다시 시도를 보여주고, 누르면 다시 부른다', (tester) async {
+    var fail = true;
     final c = ParentHomeController(
-      repository: _Repo((_) async => throw Exception('x')),
+      repository: _Repo((_) async {
+        if (fail) throw Exception('x');
+        return _home();
+      }),
     );
     await tester.pumpWidget(_app(c, _selected(_one)));
     await tester.pumpAndSettle();
     expect(find.text('다시 시도'), findsOneWidget);
     expect(find.text('연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+
+    fail = false;
+    await tester.tap(find.text('다시 시도'));
+    await tester.pumpAndSettle();
+    expect(find.text('김하늘 학생\n학부모님, 환영합니다'), findsOneWidget);
   });
 
   testWidgets('360px 에서 가로로 넘치지 않는다', (tester) async {
