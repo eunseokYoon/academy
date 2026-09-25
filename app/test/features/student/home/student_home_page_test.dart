@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:academy_app/core/router/app_router.dart';
 import 'package:academy_app/core/theme/app_colors.dart';
 import 'package:academy_app/features/student/home/student_home_controller.dart';
 import 'package:academy_app/features/student/home/student_home_models.dart';
 import 'package:academy_app/features/student/home/student_home_page.dart';
 import 'package:academy_app/features/student/home/student_home_repository.dart';
+import 'package:academy_app/shared/icons/icon_paths.dart';
 import 'package:academy_app/shared/widgets/hero_field.dart';
 import 'package:academy_app/shared/widgets/notice_card.dart';
 import 'package:academy_app/shared/widgets/quick_rail.dart';
@@ -135,6 +137,100 @@ void main() {
     expect(rail.items.first.label, '숙제');
   });
 
+  testWidgets('레일의 칸마다 라벨·아이콘·경로가 웹 표와 짝이 맞다', (tester) async {
+    // 길이만 세면 「출석」 칸이 클리닉으로 가도 모른다. 웹 QUICK_ITEMS 의
+    // 순서·짝 그대로다(브리프 정정 §7).
+    await pump(tester, _home(lesson: _lesson));
+    final rail = tester.widget<QuickRail>(find.byType(QuickRail));
+    expect(rail.items.map((i) => (i.label, i.icon, i.route)).toList(), const [
+      ('숙제', AppIconName.homework, AppRoutes.studentHomeworks),
+      ('수업', AppIconName.video, AppRoutes.studentLessons),
+      ('스케줄', AppIconName.clock, AppRoutes.studentClinics),
+      ('성적', AppIconName.chart, AppRoutes.studentScores),
+      ('테스트', AppIconName.test, AppRoutes.studentOnlineTests),
+      ('출석', AppIconName.calendar, AppRoutes.studentAttendances),
+      ('공지', AppIconName.megaphone, AppRoutes.studentNotices),
+      ('질문', AppIconName.question, AppRoutes.studentQna),
+    ]);
+  });
+
+  testWidgets('숙제·공지 칸에 「볼 게 있다」 점이 붙는다', (tester) async {
+    // 점이 칸 위의 유일한 「볼 게 있다」 신호다. count 배선이 빠지면 사라진다.
+    await pump(tester, _home(lesson: _lesson, homeworks: [_hw]));
+    expect(
+      find.byKey(const Key('dot-${AppRoutes.studentHomeworks}')),
+      findsOneWidget,
+    );
+    // 공지 칸은 레일 뒤쪽이라 지연 생성된다 — 굴려서 만든 뒤 본다.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('rail-${AppRoutes.studentNotices}')),
+      100,
+      scrollable: find.descendant(
+        of: find.byType(QuickRail),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(
+      find.byKey(const Key('dot-${AppRoutes.studentNotices}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('오늘 수업은 「오늘」, 오늘 시험은 웹처럼 「D-0」이다', (tester) async {
+    // 수업은 dDayLabel, 시험은 `D-${dDay}` 를 그대로 쓴다(StudentHomePage.tsx
+    // :112). 웹의 불일치이지만 웹이 정본이라 두 방향 모두 고정한다 —
+    // 한쪽만 「정리」하면 여기서 깨진다.
+    await pump(
+      tester,
+      _home(
+        lesson: const NextLesson(
+          lessonDate: '2026-09-21',
+          startTime: '19:00',
+          dDay: 0,
+          classRoomName: 'A반',
+        ),
+        exam: const NextExam(
+          examType: 'MIDTERM',
+          startDate: '2026-09-21',
+          scopeNote: null,
+          dDay: 0,
+        ),
+      ),
+    );
+    final hero = tester.widget<HeroField>(find.byType(HeroField));
+    expect(hero.stats.first.label, '다음 수업');
+    expect(hero.stats.first.value, '오늘');
+    expect(hero.stats.last.label, '중간고사');
+    expect(hero.stats.last.value, 'D-0');
+    expect(find.text('오늘'), findsOneWidget);
+    expect(find.text('D-0'), findsOneWidget);
+  });
+
+  testWidgets('시험·클리닉 칸과 시험 구획의 글자가 웹과 같다', (tester) async {
+    await pump(tester, _home(lesson: _lesson, clinic: _clinic, exam: _exam));
+    // 지면 칸: 라벨은 시험 종류, sub 는 연도를 뺀 「10.01 시작」.
+    // 원시 enum(MIDTERM)이 학생 화면에 나오면 안 된다.
+    expect(find.text('MIDTERM'), findsNothing);
+    final hero = tester.widget<HeroField>(find.byType(HeroField));
+    expect(hero.stats.last.label, '중간고사');
+    expect(find.text('10.01 시작'), findsOneWidget);
+    // 클리닉 extra: 자기 dDay 와 「도착」 시각.
+    expect(hero.stats.first.extra!.value, 'D-1');
+    expect(find.text('09/20 17:00 도착'), findsOneWidget);
+    expect(find.text('09/21 19:00'), findsOneWidget);
+    // 시험 구획 첫 줄: 종류 + 연도를 남긴 「2026.10.01 시작」.
+    final title = tester.widget<Text>(find.byKey(const Key('exam-title')));
+    final spans = <InlineSpan>[];
+    title.textSpan!.visitChildren((span) {
+      spans.add(span);
+      return true;
+    });
+    expect(spans.whereType<TextSpan>().map((t) => t.text).toList(), [
+      '중간고사',
+      '2026.10.01 시작',
+    ]);
+  });
+
   testWidgets('없는 값은 칸을 만들지 않는다', (tester) async {
     // nextExam 이 null 인데 D-0 을 채우면 시험이 오늘로 읽힌다.
     await pump(tester, _home());
@@ -223,6 +319,9 @@ void main() {
     await pump(tester, _home(lesson: _lesson, exam: _exam));
     expect(_sectionTitle('시험 일정'), findsOneWidget);
     await pump(tester, _home(lesson: _lesson));
+    // 먼저 **그려진 화면**인지 확인한다 — 두 번째 pump 뒤 로딩 화면에서
+    // 「없다」를 단언하면 무엇을 지워도 통과한다(didUpdateWidget 회귀).
+    expect(_sectionTitle('미완료 숙제'), findsOneWidget);
     expect(_sectionTitle('시험 일정'), findsNothing);
     expect(find.text('시험 범위 미등록'), findsNothing);
   });
@@ -252,6 +351,8 @@ void main() {
     await pump(tester, _home(lesson: _lesson, last: _lastLesson));
     expect(_sectionTitle('지난 수업'), findsOneWidget);
     await pump(tester, _home(lesson: _lesson));
+    // 그려진 화면이어야 「없다」가 뜻을 갖는다(위 테스트와 같은 이유).
+    expect(_sectionTitle('학원 공지'), findsOneWidget);
     expect(find.text('지난 수업'), findsNothing);
   });
 

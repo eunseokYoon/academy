@@ -318,6 +318,7 @@ class _StudentHomePageState extends State<StudentHomePage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text.rich(
+                    key: const Key('exam-title'),
                     TextSpan(
                       children: [
                         TextSpan(

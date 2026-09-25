@@ -22,6 +22,7 @@ import 'package:academy_app/main.dart';
 import 'package:academy_app/shared/widgets/bottom_tab_bar.dart';
 import 'package:academy_app/shared/widgets/full_screen_loader.dart';
 import 'package:academy_app/shared/widgets/role_shell.dart';
+import 'package:academy_app/shared/widgets/section.dart';
 
 /// 역할 → 화면 배선만 확인하면 되므로 `me()`만 채운다.
 /// `auth_controller_test.dart`의 `_FakeRepo` 패턴을 그대로 따른다.
@@ -57,8 +58,8 @@ class _FakeAuthRepo implements AuthRepository {
   }) => throw UnimplementedError('스모크 테스트는 가입을 거치지 않는다');
 }
 
-/// 학생 홈(S-1)이 부르는 유일한 API. 라우팅만 보는 테스트라 값은 비운다 —
-/// 대본이 떨어지면 FakeAdapter가 던지므로 넉넉히 깐다.
+/// 학생 홈(S-1)이 부르는 유일한 API. 눌러 볼 대상(숙제 줄·공지 줄·지난 수업)이
+/// 있어야 하므로 하나씩 깐다. 대본이 떨어지면 FakeAdapter가 던지므로 넉넉히 깐다.
 Dio _fakeDio() {
   const home = {
     'success': true,
@@ -67,9 +68,37 @@ Dio _fakeDio() {
       'nextLesson': null,
       'nextExam': null,
       'nextClinic': null,
-      'currentHomeworks': <Object?>[],
-      'lastLesson': null,
-      'notices': {'totalCount': 0, 'recent': <Object?>[]},
+      'currentHomeworks': [
+        {
+          'homeworkId': 11,
+          'title': '단어 3과',
+          'dueAt': '2026-09-21T21:00:00+09:00',
+          'status': 'NOT_SUBMITTED',
+          'remainingMinutes': 1500,
+        },
+      ],
+      'lastLesson': {
+        'lessonId': 3,
+        'lessonDate': '2026-09-14',
+        'title': '관계대명사',
+        'videoId': null,
+        'embedUrl': null,
+        'videoCount': 0,
+        'content': '관계대명사 that',
+        'homeworkNote': null,
+      },
+      'notices': {
+        'totalCount': 1,
+        'recent': [
+          {
+            'noticeId': 1,
+            'title': '추석 휴원 안내',
+            'pinned': false,
+            'hasAttachment': false,
+            'publishedAt': '2026-09-15T10:00:00+09:00',
+          },
+        ],
+      },
     },
   };
   return Dio(BaseOptions(baseUrl: 'https://example.test'))
@@ -272,6 +301,53 @@ void main() {
         reason: '$route 로 가야 한다',
       );
       expect(find.byType(RoleShell), findsOneWidget, reason: '$route 가 셸 밖이다');
+    }
+  });
+
+  testWidgets('홈의 숙제 줄·구획 머리·공지가 제자리로 간다', (tester) async {
+    // 레일 말고도 눌리는 곳이 있다. 숙제 줄은 레일 다음으로 많이 눌리고
+    // (B1 에는 상세가 없어 숙제 목록으로 간다 — 브리프 정정 §4), 구획 머리의
+    // 「전체 ›」는 구획마다 목적지가 다르다. 콜백을 바꿔 끼워도 화면 테스트는
+    // 모르므로 실제 라우터로 누른다.
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    /// 그 구획 머리의 「전체 ›」. 「미완료 숙제」는 지면 칸 라벨로도 나오지만
+    /// 그쪽은 SectionHead 밑이 아니라 여기 걸리지 않는다.
+    Finder headAction(String title) => find.descendant(
+      of: find.ancestor(
+        of: find.text(title),
+        matching: find.byType(SectionHead),
+      ),
+      matching: find.text('전체 ›'),
+    );
+
+    final cases = <(String, Finder, String)>[
+      (
+        '숙제 줄',
+        find.byKey(const Key('homework-row')),
+        AppRoutes.studentHomeworks,
+      ),
+      ('미완료 숙제 머리', headAction('미완료 숙제'), AppRoutes.studentHomeworks),
+      ('공지 머리', headAction('학원 공지'), AppRoutes.studentNotices),
+      ('공지 줄', find.byKey(const Key('notice-row')), AppRoutes.studentNotices),
+      ('지난 수업 머리', headAction('지난 수업'), AppRoutes.studentLessons),
+    ];
+
+    for (final (name, target, route) in cases) {
+      router.go(AppRoutes.student);
+      await tester.pumpAndSettle();
+      expect(target, findsOneWidget, reason: '$name 이 홈에 없다');
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        route,
+        reason: '$name 은 $route 로 가야 한다',
+      );
+      expect(find.byType(RoleShell), findsOneWidget, reason: '$name 이 셸 밖이다');
     }
   });
 }
