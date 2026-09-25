@@ -180,6 +180,71 @@ void main() {
     expect(c.data!.studentName, '김바다');
   });
 
+  test('A→B→A: 같은 자녀로 되돌아온 옛 요청이 최신 데이터를 덮지 않는다', () async {
+    // load(1) 나감(A1) → load(2) 나감(B, A1 진행 중) → load(1) 나감(A2,
+    // 같은 자녀로 되돌아옴 — studentId 만 보면 A1 과 A2 를 구분할 수
+    // 없다). 도착 순서는 B, A2, A1 — 가장 늦게 끝나는 A1 이 A2 의 최신
+    // 데이터를 덮으면 안 된다.
+    final a1 = Completer<ParentHome>();
+    final a2 = Completer<ParentHome>();
+    final b = Completer<ParentHome>();
+    var childOneCalls = 0;
+    final repo = _FakeRepo((id) {
+      if (id == 2) return b.future;
+      childOneCalls++;
+      return childOneCalls == 1 ? a1.future : a2.future;
+    });
+    final c = build(repo);
+    final loadA1 = c.load(1);
+    final loadB = c.load(2);
+    final loadA2 = c.load(1);
+    expect(repo.calls, [1, 2, 1]);
+
+    b.complete(_home('김바다'));
+    await loadB;
+
+    a2.complete(_home('A2'));
+    await loadA2;
+    expect(c.data!.studentName, 'A2');
+
+    a1.complete(_home('A1-stale'));
+    await loadA1;
+    // 옛 요청(A1)이 최신 데이터(A2)를 덮으면 안 된다.
+    expect(c.data!.studentName, 'A2');
+    expect(c.status, HomeStatus.ready);
+  });
+
+  test('A→B→A: 늦게 실패한 옛 요청이 최신 데이터 위에 에러를 띄우지 않는다', () async {
+    final a1 = Completer<ParentHome>();
+    final a2 = Completer<ParentHome>();
+    final b = Completer<ParentHome>();
+    var childOneCalls = 0;
+    final repo = _FakeRepo((id) {
+      if (id == 2) return b.future;
+      childOneCalls++;
+      return childOneCalls == 1 ? a1.future : a2.future;
+    });
+    final c = build(repo);
+    final loadA1 = c.load(1);
+    final loadB = c.load(2);
+    final loadA2 = c.load(1);
+
+    b.complete(_home('김바다'));
+    await loadB;
+
+    a2.complete(_home('A2'));
+    await loadA2;
+    expect(c.data!.studentName, 'A2');
+
+    // A1 이 A2 보다 늦게, 그것도 실패로 끝난다 — A2 화면에 에러가 뜨면
+    // 안 된다.
+    a1.completeError(const ApiException(message: 'A1 실패', code: 'X'));
+    await loadA1;
+    expect(c.status, HomeStatus.ready);
+    expect(c.error, isNull);
+    expect(c.data!.studentName, 'A2');
+  });
+
   test('자녀를 바꾸면 60초 규칙을 건너뛴다', () async {
     final repo = _FakeRepo((id) async => _home(id == 1 ? '김하늘' : '김바다'));
     final c = build(repo);
