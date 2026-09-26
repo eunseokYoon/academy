@@ -109,8 +109,13 @@ export default function ParentReportPage() {
    * 출석은 <b>수업과 클리닉을 함께 센다.</b> 그 주에 둘 다 갔으면 2회다 —
    * 학부모가 세는 것은 "아이가 학원에 간 횟수"이지 수업 출석부가 아니다.
    * 지각도 간 것이므로 포함한다. null은 아직 확정 전이라 세지 않는다.
+   *
+   * <p><b>대체 등원(MAKEUP)도 간 것이다</b>(CLAUDE.md 5-1, 2026-09-27 확정). 이 화면은
+   * 대체 등원보다 먼저 만들어져 빠져 있었다. 앱(parent_report_data.dart의 _came)과 같은
+   * 규칙이다 — 한쪽만 고치면 같은 주가 웹과 앱에서 다른 숫자가 된다.
    */
-  const came = (status: AttendanceStatus | null) => status === "PRESENT" || status === "LATE";
+  const came = (status: AttendanceStatus | null) =>
+    status === "PRESENT" || status === "LATE" || status === "MAKEUP";
   const attended =
     lessonDetails.filter((lesson) => came(lesson.attendanceStatus)).length
     + clinicList.filter((clinic) => came(clinic.attendStatus)).length;

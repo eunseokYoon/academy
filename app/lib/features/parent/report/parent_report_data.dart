@@ -65,9 +65,9 @@ class WeeklyReport {
   int get doneHomeworks => homeworks.where((h) => h.$2.done).length;
 }
 
-/// 학원에 **온** 날로 세는 상태. 지각도 온 것이다. **대체 등원도 온 것이다**(5-1)
-/// — 웹 레포트는 대체 등원(2026-09-01)보다 먼저 만들어져 이것을 빠뜨리고 있다.
-/// 미확인은 아직 모르는 것이라 세지 않는다.
+/// 학원에 **온** 날로 세는 상태. 지각도 온 것이다. **대체 등원도 온 것이다**(5-1,
+/// 2026-09-27 확정). 웹 `ParentReportPage` 의 `came` 과 같은 규칙이다 — 한쪽만
+/// 고치면 같은 주가 웹과 앱에서 다른 숫자가 된다. 미확인은 아직 모르는 것이라 세지 않는다.
 bool _came(DayStatus? s) =>
     s == DayStatus.present || s == DayStatus.late || s == DayStatus.makeup;
 
