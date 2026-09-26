@@ -8,11 +8,13 @@ import '../../../shared/icons/icon_paths.dart';
 
 import 'package:academy_app/shared/lib/home_labels.dart';
 
+import '../../../shared/widgets/app_bar_band.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/exam_schedule_section.dart';
 import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/hero_field.dart';
+import '../../../shared/widgets/home_layout.dart';
 import '../../../shared/widgets/notice_card.dart';
 import '../../../shared/widgets/quick_rail.dart';
 import '../../../shared/widgets/section.dart';
@@ -32,13 +34,13 @@ import 'student_home_models.dart';
 /// 맨 아래 별도 카드에 있던 시절에는 D-61 을 보고 범위를 알려면 끝까지
 /// 내려야 했다.
 ///
-/// **이 화면은 [RoleShell] 안에 들어가므로 앱바를 직접 그리지 않는다.** 셸의
-/// `Column` 이 앱바를 먼저 그리고 그 아래 `Expanded` 에 이 화면이 들어가므로,
-/// 지면이 앱바(pb 32)를 파고들려면 **여기서 `-40` 을 적용해야 한다**(웹
-/// `.field` 의 `-mt-10`). `Transform.translate` 는 그리기만 옮기고 레이아웃은
-/// 안 옮기므로 **뒤따르는 형제 전부가 같은 누적 오프셋(-80)을 받아야** 틈이
-/// 안 생기고, 맨 끝 `SizedBox(height: 176)`(96 탭 바 + 80 누적)이 흡수한다.
-/// 176 을 줄이면 마지막 카드가 탭 바에 가린다.
+/// **앱바는 이 화면이 스크롤 맨 위에 직접 그린다**(셸은 안 그린다 — 웹의
+/// `<AppBar>` 도 페이지와 함께 스크롤된다). 지면이 앱바(pb 32)를 파고들려면
+/// **여기서 `-40` 을 적용해야 한다**(웹 `.field` 의 `-mt-10`).
+/// `Transform.translate` 는 그리기만 옮기고 레이아웃은 안 옮기므로 **뒤따르는
+/// 형제 전부가 같은 누적 오프셋(-80)을 받아야** 틈이 안 생긴다. 끝 여백은
+/// [homeTailSpace] 가 탭 바 높이와 그 누적 오프셋으로 계산한다 — 고정값을
+/// 넣지 마라.
 class StudentHomePage extends StatefulWidget {
   const StudentHomePage({super.key, required this.controller});
 
@@ -95,9 +97,12 @@ class _StudentHomePageState extends State<StudentHomePage> {
     // 기존 데이터를 지키므로 여기 오지 않는다.
     if (home == null) {
       if (c.status == HomeStatus.error) {
-        return _ErrorView(message: c.error, onRetry: c.refresh);
+        return HomeStatusFrame(
+          role: '학생',
+          child: _ErrorView(message: c.error, onRetry: c.refresh),
+        );
       }
-      return const FullScreenLoader();
+      return const HomeStatusFrame(role: '학생', child: FullScreenLoader());
     }
 
     final exam = home.nextExam;
@@ -119,7 +124,11 @@ class _StudentHomePageState extends State<StudentHomePage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 지면이 셸의 앱바(pb 32)를 40 파고든다 — 웹 `.field` 의 -mt-10.
+              // 앱바는 셸이 아니라 여기, 스크롤 안에 있다 — 웹처럼 같이
+              // 올라가고, 아래 지면의 -40 이 이 앱바 위에 얹힌다. 셸로 빼면
+              // 지면이 목록 뷰포트 밖으로 끌어올려져 날짜 줄이 잘린다.
+              const AppBarBand(role: '학생'),
+              // 지면이 앱바(pb 32)를 40 파고든다 — 웹 `.field` 의 -mt-10.
               Transform.translate(
                 offset: const Offset(0, -40),
                 child: HeroField(
@@ -185,8 +194,8 @@ class _StudentHomePageState extends State<StudentHomePage> {
                   ],
                 ),
               ),
-              // 96(탭 바 여백) + 80(누적 오프셋 흡수)
-              const SizedBox(height: 176),
+              // 마지막 카드가 탭 바 윗변에서 [kHomeTailGap] 만큼 떨어지게.
+              SizedBox(height: homeTailSpace(context)),
             ],
           ),
         ],

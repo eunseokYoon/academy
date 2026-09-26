@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import 'app_bar_band.dart';
 import 'app_card.dart';
 
 /// B2~B4 가 실물로 교체할 자리표시자.
+///
+/// **앱바를 스스로 그린다.** 셸은 앱바를 그리지 않는다(`RoleShell` 주석) —
+/// 실물 화면도 자기 스크롤 맨 위에 [AppBarBand] 를 둬야 한다.
+/// 본문은 `SafeArea` 가 하단 탭 바 높이만큼 띄운다 — 셸이 `extendBody` 라
+/// 본문이 바 밑까지 내려오고, 그 높이가 `MediaQuery` 의 아래 여백으로 온다.
 ///
 /// **탭 다섯이 모두 눌려야 한다.** 하단 바의 값어치는 「숙제는 항상 왼쪽에서
 /// 두 번째」라는 위치 기억인데, 절반이 비활성이면 그게 안 생긴다.
@@ -14,10 +20,14 @@ import 'app_card.dart';
 class StubPage extends StatelessWidget {
   const StubPage({
     super.key,
+    required this.role,
     required this.title,
     required this.stage,
     this.bottom,
   });
+
+  /// 앱바 칩. 「학생」 · 「학부모」
+  final String role;
 
   final String title;
 
@@ -31,46 +41,56 @@ class StubPage extends StatelessWidget {
     final bottom = this.bottom;
     return Scaffold(
       backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 384),
-              child: AppCard(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.slate900,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppBarBand(role: role),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Center(
+                child: SingleChildScrollView(
+                  key: const Key('stub-scroll'),
+                  padding: const EdgeInsets.all(16),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 384),
+                    child: AppCard(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.slate900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '이 화면은 $stage 단계에서 만듭니다.',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.slate500,
+                            ),
+                          ),
+                          if (bottom != null) ...[
+                            const SizedBox(height: 24),
+                            KeyedSubtree(
+                              key: const Key('stub-bottom'),
+                              child: bottom,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '이 화면은 $stage 단계에서 만듭니다.',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.slate500,
-                      ),
-                    ),
-                    if (bottom != null) ...[
-                      const SizedBox(height: 24),
-                      KeyedSubtree(
-                        key: const Key('stub-bottom'),
-                        child: bottom,
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

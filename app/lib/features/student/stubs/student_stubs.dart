@@ -8,7 +8,7 @@ class StudentHomeworksStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '숙제', stage: 'B2');
+      const StubPage(role: '학생', title: '숙제', stage: 'B2');
 }
 
 /// B3 가 만든다.
@@ -17,7 +17,7 @@ class StudentLessonsStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '수업', stage: 'B3');
+      const StubPage(role: '학생', title: '수업', stage: 'B3');
 }
 
 /// B3 가 만든다.
@@ -33,6 +33,7 @@ class StudentScoresStub extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StubPage(
+      role: '학생',
       title: '내 정보 · 성적',
       stage: 'B3',
       bottom: TextButton(
@@ -50,7 +51,7 @@ class StudentQnaStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '질문', stage: 'B4');
+      const StubPage(role: '학생', title: '질문', stage: 'B4');
 }
 
 // ── 홈 퀵 레일이 가는 곳 넷 ──────────────────────────────────
@@ -65,7 +66,7 @@ class StudentClinicsStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '스케줄', stage: 'B4');
+      const StubPage(role: '학생', title: '스케줄', stage: 'B4');
 }
 
 /// B4 가 만든다.
@@ -74,7 +75,7 @@ class StudentOnlineTestsStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '테스트', stage: 'B4');
+      const StubPage(role: '학생', title: '테스트', stage: 'B4');
 }
 
 /// B3 가 만든다.
@@ -83,7 +84,7 @@ class StudentAttendancesStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '출석', stage: 'B3');
+      const StubPage(role: '학생', title: '출석', stage: 'B3');
 }
 
 /// B3 가 만든다.
@@ -92,5 +93,5 @@ class StudentNoticesStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '공지', stage: 'B3');
+      const StubPage(role: '학생', title: '공지', stage: 'B3');
 }

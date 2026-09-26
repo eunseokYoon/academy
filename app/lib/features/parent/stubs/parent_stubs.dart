@@ -8,7 +8,7 @@ class ParentScheduleStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '일정', stage: 'B3');
+      const StubPage(role: '학부모', title: '일정', stage: 'B3');
 }
 
 /// B3 가 만든다. 주간 레포트는 그 주 수업·테스트·숙제를 한 장에 담는다.
@@ -17,7 +17,7 @@ class ParentLessonsStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '주간 레포트', stage: 'B3');
+      const StubPage(role: '학부모', title: '주간 레포트', stage: 'B3');
 }
 
 /// B3 가 만든다.
@@ -26,7 +26,7 @@ class ParentScoresStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '성적', stage: 'B3');
+      const StubPage(role: '학부모', title: '성적', stage: 'B3');
 }
 
 /// B3 가 만든다.
@@ -41,6 +41,7 @@ class ParentMeStub extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StubPage(
+      role: '학부모',
       title: '내 정보',
       stage: 'B3',
       bottom: TextButton(
@@ -63,7 +64,7 @@ class ParentHomeworksStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '숙제', stage: 'B2');
+      const StubPage(role: '학부모', title: '숙제', stage: 'B2');
 }
 
 /// B3 가 만든다.
@@ -72,5 +73,5 @@ class ParentNoticesStub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const StubPage(title: '공지', stage: 'B3');
+      const StubPage(role: '학부모', title: '공지', stage: 'B3');
 }

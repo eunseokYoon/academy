@@ -9,11 +9,13 @@ import '../../../shared/icons/icon_paths.dart';
 
 import 'package:academy_app/shared/lib/home_labels.dart';
 
+import '../../../shared/widgets/app_bar_band.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/exam_schedule_section.dart';
 import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/hero_field.dart';
+import '../../../shared/widgets/home_layout.dart';
 import '../../../shared/widgets/notice_card.dart';
 import '../../../shared/widgets/quick_rail.dart';
 import '../../../shared/widgets/section.dart';
@@ -36,7 +38,8 @@ import 'parent_home_models.dart';
 /// 선택이 바뀔 때마다 [ParentHomeController.load] 를 부른다. **여기서 홈을
 /// 직접 fetch 하지 마라** — 자녀를 빠르게 바꿀 때의 경합은 컨트롤러가 막는다.
 ///
-/// 지면 겹침 구조는 학생 홈과 같다(`-40`, `-80`, `-80`, 끝 `SizedBox(176)`).
+/// 지면 겹침 구조는 학생 홈과 같다(스크롤 안의 앱바, `-40`, `-80`, `-80`,
+/// 끝 [homeTailSpace]).
 /// 이유는 `student_home_page.dart` 의 클래스 주석에 있다.
 class ParentHomePage extends StatefulWidget {
   const ParentHomePage({
@@ -148,15 +151,21 @@ class _ParentHomePageState extends State<ParentHomePage> {
     // 그것을 그리지 않는다.
     final childrenError = _childrenError;
     if (childrenError != null) {
-      return _ErrorView(message: childrenError, onRetry: _retryChildren);
+      return HomeStatusFrame(
+        role: '학부모',
+        child: _ErrorView(message: childrenError, onRetry: _retryChildren),
+      );
     }
     final home = c.data;
     if (home == null) {
       if (c.status == HomeStatus.error) {
-        return _ErrorView(message: c.error, onRetry: c.refresh);
+        return HomeStatusFrame(
+          role: '학부모',
+          child: _ErrorView(message: c.error, onRetry: c.refresh),
+        );
       }
       // 웹도 자녀가 정해지기 전에는 「불러오는 중」이다.
-      return const FullScreenLoader();
+      return const HomeStatusFrame(role: '학부모', child: FullScreenLoader());
     }
 
     final exam = home.nextExam;
@@ -175,7 +184,11 @@ class _ParentHomePageState extends State<ParentHomePage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 지면이 셸의 앱바(pb 32)를 40 파고든다 — 웹 `.field` 의 -mt-10.
+              // 앱바는 셸이 아니라 여기, 스크롤 안에 있다 — 웹처럼 같이
+              // 올라가고, 아래 지면의 -40 이 이 앱바 위에 얹힌다. 셸로 빼면
+              // 지면이 목록 뷰포트 밖으로 끌어올려져 날짜 줄이 잘린다.
+              const AppBarBand(role: '학부모'),
+              // 지면이 앱바(pb 32)를 40 파고든다 — 웹 `.field` 의 -mt-10.
               Transform.translate(
                 offset: const Offset(0, -40),
                 child: HeroField(
@@ -246,8 +259,8 @@ class _ParentHomePageState extends State<ParentHomePage> {
                   ],
                 ),
               ),
-              // 96(탭 바 여백) + 80(누적 오프셋 흡수)
-              const SizedBox(height: 176),
+              // 마지막 카드가 탭 바 윗변에서 [kHomeTailGap] 만큼 떨어지게.
+              SizedBox(height: homeTailSpace(context)),
             ],
           ),
         ],

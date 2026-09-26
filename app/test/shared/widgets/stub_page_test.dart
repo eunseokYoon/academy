@@ -6,7 +6,7 @@ void main() {
   testWidgets('제목과 단계 안내를 보여준다', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: StubPage(title: '숙제', stage: 'B2'),
+        home: StubPage(role: '학생', title: '숙제', stage: 'B2'),
       ),
     );
     expect(find.text('숙제'), findsOneWidget);
@@ -16,7 +16,7 @@ void main() {
   testWidgets('bottom 을 안 주면 아무것도 더 그리지 않는다', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: StubPage(title: '수업', stage: 'B3'),
+        home: StubPage(role: '학생', title: '수업', stage: 'B3'),
       ),
     );
     expect(find.byKey(const Key('stub-bottom')), findsNothing);
@@ -26,6 +26,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: StubPage(
+          role: '학생',
           title: '성적',
           stage: 'B3',
           bottom: TextButton(
@@ -46,7 +47,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       const MaterialApp(
-        home: StubPage(title: '개인정보처리방침', stage: 'B3'),
+        home: StubPage(role: '학생', title: '개인정보처리방침', stage: 'B3'),
       ),
     );
     expect(tester.takeException(), isNull);

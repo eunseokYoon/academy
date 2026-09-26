@@ -37,11 +37,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('앱바와 하단 탭 바가 있다', (tester) async {
+  testWidgets('하단 탭 바는 셸이 그리고, 앱바는 셸이 그리지 않는다', (tester) async {
+    // 앱바는 화면이 자기 스크롤 맨 위에 그린다(웹 StudentLayout 처럼 같이
+    // 스크롤된다). 셸이 그리면 홈 지면의 -40 이 잘린다 —
+    // shell_geometry_test 의 (a) 가 그 기하를 잰다.
     await pump(tester);
-    expect(find.byType(AppBarBand), findsOneWidget);
     expect(find.byType(BottomTabBar), findsOneWidget);
-    expect(find.text('학생'), findsOneWidget);
+    expect(find.byType(AppBarBand), findsNothing);
   });
 
   testWidgets('처음에는 홈 갈래가 보인다', (tester) async {
@@ -67,19 +69,6 @@ void main() {
     expect(find.text('화면:홈'), findsOneWidget);
     // IndexedStack 은 보이지 않는 갈래도 트리에 남겨 둔다.
     expect(find.byType(IndexedStack), findsWidgets);
-  });
-
-  testWidgets('본문 아래에 탭 바 높이만큼 여백이 있다', (tester) async {
-    // 없으면 스크롤을 끝까지 내려도 마지막 카드가 탭 바에 가린다.
-    await pump(tester);
-    expect(find.byType(RoleShell), findsOneWidget);
-    final scaffold = tester.widget<Scaffold>(
-      find.descendant(
-        of: find.byType(RoleShell),
-        matching: find.byType(Scaffold),
-      ),
-    );
-    expect(scaffold.bottomNavigationBar, isA<BottomTabBar>());
   });
 
   testWidgets('탭 바의 currentIndex가 현재 갈래를 따른다', (tester) async {
