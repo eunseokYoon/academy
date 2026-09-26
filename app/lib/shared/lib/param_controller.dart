@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/api/api_exception.dart';
-import '../../features/student/home/student_home_controller.dart'
-    show HomeStatus;
+
+/// 화면 하나의 로딩 상태. 모든 화면 컨트롤러가 이것을 쓴다 — 다시 정의하지 마라.
+///
+/// 이름에 「Home」이 남은 것은 B1 의 학생 홈이 처음 정의해서다. 옛 경로
+/// (`student_home_controller.dart`)도 이것을 다시 내보낸다.
+enum HomeStatus { idle, loading, ready, error }
 
 /// 매개변수(숙제 id · 자녀 · 달…)가 있는 화면 컨트롤러의 **공용 본체**.
 ///
@@ -151,4 +155,21 @@ abstract class ParamController<P, T> extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
+}
+
+/// 두 요청을 함께 기다린다. **레코드의 `.wait` 를 쓰지 마라.**
+///
+/// `(a, b).wait` 는 실패하면 `ParallelWaitError` 로 감싸서 던진다 —
+/// [ParamController] 가 [ApiException] 을 못 알아보고 서버 문구 대신 「연결할 수
+/// 없습니다」를 띄운다(B2 의 숙제 목록이 그랬다). 이것은 처음 실패한 오류를
+/// **그대로** 던지고, 나머지 오류도 받아 둬서 「처리 안 된 오류」가 남지 않는다.
+Future<(A, B)> both<A, B>(Future<A> a, Future<B> b) async {
+  final r = await Future.wait<Object?>([a, b]);
+  return (r[0] as A, r[1] as B);
+}
+
+/// [both] 의 셋짜리.
+Future<(A, B, C)> all3<A, B, C>(Future<A> a, Future<B> b, Future<C> c) async {
+  final r = await Future.wait<Object?>([a, b, c]);
+  return (r[0] as A, r[1] as B, r[2] as C);
 }

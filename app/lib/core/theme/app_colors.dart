@@ -18,6 +18,9 @@ class AppColors {
   /// 남색 띠 위의 보조 글자(역할 칩·지면의 라벨). 흰색이면 본문과 같은 무게가 된다.
   static const brand200 = Color(0xFFB8CEEF);
   static const brand300 = Color(0xFF8AAFE2);
+
+  /// 출석 캘린더의 토요일 머리글(웹 `text-brand-400`).
+  static const brand400 = Color(0xFF5688D2);
   static const brand600 = Color(0xFF1E5AA8);
   static const brand700 = Color(0xFF1A4A8A);
   static const brand900 = Color(0xFF1B2A44);
@@ -52,8 +55,8 @@ class AppColors {
   /// 화면에 `Color(0xFFB91C1C)`처럼 박으면 같은 빨강이 두 곳에 생기고,
   /// 「빨강은 결석·위험 하나만」이 흐려진다.
   ///
-  /// **sky 를 넣지 마라.** 쓰는 화면이 없다 — 필요해지는 화면에서 같은
-  /// 방식으로 추가한다(emerald 는 B2 숙제 배지가 그렇게 넣었다).
+  /// 쓰는 화면이 생길 때 그 태스크가 추가한다 — emerald 는 B2 숙제 배지가,
+  /// sky·teal 은 B3 출석 캘린더가 그렇게 넣었다. 미리 올리지 마라.
   static const slate50 = Color(0xFFF8FAFC);
   static const slate100 = Color(0xFFF1F5F9);
   static const slate200 = Color(0xFFE2E8F0);
@@ -65,17 +68,50 @@ class AppColors {
   static const slate900 = Color(0xFF0F172A);
 
   static const red50 = Color(0xFFFEF2F2);
+
+  /// 여기부터 red 의 100·800·600 은 **출석 캘린더의 「결석」** 하나다(웹
+  /// `attendance/types.ts` 의 `DAY_STATUS_STYLE`·요약 칸). 400 은 일요일 머리글.
+  static const red100 = Color(0xFFFEE2E2);
   static const red200 = Color(0xFFFECACA);
+  static const red400 = Color(0xFFF87171);
+  static const red600 = Color(0xFFDC2626);
   static const red700 = Color(0xFFB91C1C);
+  static const red800 = Color(0xFF991B1B);
 
   /// 배지 `ok`(웹 `Badge.tsx` 의 `bg-emerald-50 text-emerald-700 ring-emerald-200`).
   /// ⭕·「제출 완료」 한 가지 뜻이다. B2 숙제 화면이 처음 쓴다 —
   /// 쓰는 화면 없이 초록 계열을 더 늘리지 마라.
   static const emerald50 = Color(0xFFECFDF5);
+
+  /// 100·800 은 캘린더 칩 「출석」, 600 은 요약 칸의 출석 숫자다(B3).
+  static const emerald100 = Color(0xFFD1FAE5);
   static const emerald200 = Color(0xFFA7F3D0);
+  static const emerald600 = Color(0xFF059669);
   static const emerald700 = Color(0xFF047857);
+  static const emerald800 = Color(0xFF065F46);
+
+  /// 캘린더 칩 「병결」과 요약 칸의 「병·공결」 숫자(B3). 이 둘 말고 쓰지 마라.
+  static const sky100 = Color(0xFFE0F2FE);
+  static const sky200 = Color(0xFFBAE6FD);
+  static const sky600 = Color(0xFF0284C7);
+  static const sky800 = Color(0xFF075985);
+
+  /// 캘린더 칩 「대체 등원」(B3). 출석으로 세지만 날은 구분해 보여준다(5-1).
+  static const teal100 = Color(0xFFCCFBF1);
+  static const teal200 = Color(0xFF99F6E4);
+  static const teal800 = Color(0xFF115E59);
+
+  /// 성적 배지 「재시험 통과」 **하나만**이다(웹 `ScoreValue.tsx` 의
+  /// `bg-blue-100 text-blue-700`). 위 brand 주석의 「tailwind blue 를 쓰지 않는다」는
+  /// 브랜드·링크 이야기고, 이것은 웹이 그 배지에 실제로 쓰는 값이다. 넓히지 마라.
+  static const blue100 = Color(0xFFDBEAFE);
+  static const blue700 = Color(0xFF1D4ED8);
 
   static const amber50 = Color(0xFFFFFBEB);
+
+  /// 캘린더 칩 「지각」 바탕과 요약 칸의 지각 숫자(B3).
+  static const amber100 = Color(0xFFFEF3C7);
+  static const amber600 = Color(0xFFD97706);
 
   /// 배지 `warn` 의 테두리·글자(웹 `Badge.tsx` 의 `ring-amber-200 text-amber-700`).
   /// 🔺·「다시 제출 필요」·「늦게 냄」이 이 색이다.

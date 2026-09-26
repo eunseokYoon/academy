@@ -8,4 +8,10 @@ void main() {
     expect(todayLabel(now: DateTime(2026, 9, 21)), '2026년 9월 21일 월요일');
     expect(todayLabel(now: DateTime(2026, 9, 27)), '2026년 9월 27일 일요일');
   });
+
+  test('날짜 문자열의 요일 — 시간대와 무관하다', () {
+    expect(dayOfWeekLabel('2026-09-21'), '월');
+    expect(dayOfWeekLabel('2026-09-27'), '일');
+    expect(dayOfWeekLabel('2026-03-01'), '일');
+  });
 }

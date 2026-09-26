@@ -24,6 +24,15 @@ String todayLabel({DateTime? now}) {
       '${_dayLabels[now.weekday - 1]}요일';
 }
 
+/// 날짜 문자열(`2026-09-08`)의 요일 한 글자. 웹 `shared/date.ts` 의 `dayLabel`.
+///
+/// 연·월·일로 바로 만든다 — 문자열을 `DateTime.parse` 해 기기 시간대를 타면
+/// 하루가 어긋날 수 있다. 달력 날짜의 요일은 시간대와 무관하다.
+String dayOfWeekLabel(String date) {
+  final p = date.split('-').map(int.parse).toList();
+  return _dayLabels[DateTime.utc(p[0], p[1], p[2]).weekday - 1];
+}
+
 /// 「D-2」 · 「오늘」. **서버가 준 dDay 를 그대로 쓴다.**
 /// 서버는 음수를 안 내려준다.
 ///

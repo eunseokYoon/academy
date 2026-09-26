@@ -14,6 +14,7 @@ import '../../../shared/widgets/reappear_reload.dart';
 import '../../../shared/widgets/section.dart';
 import '../../../shared/widgets/sub_page.dart';
 import '../../student/home/student_home_controller.dart' show HomeStatus;
+import '../child_gate.dart';
 import '../selected_child.dart';
 import 'parent_homework_data.dart';
 
@@ -63,11 +64,7 @@ class _ParentHomeworksPageState extends State<ParentHomeworksPage>
   void _attach() {
     widget.controller.addListener(_onChanged);
     widget.selectedChild.addListener(_onSelection);
-    final sc = widget.selectedChild;
-    if (!sc.loaded && !sc.loading) {
-      // 실패는 홈이 띄운다. 여기서는 로더가 남는다.
-      sc.load().catchError((Object _) {});
-    }
+    widget.selectedChild.ensureLoaded();
     _load();
   }
 
@@ -176,11 +173,8 @@ class _ParentHomeworksPageState extends State<ParentHomeworksPage>
           style: TextStyle(fontSize: 12.5, color: AppColors.slate500),
         ),
         const SizedBox(height: 16),
-        if (sc.loaded && sc.children.isEmpty)
-          const TintBlock(
-            tone: SectionTone.neutral,
-            children: [EmptyNote(text: '연결된 자녀가 없습니다.')],
-          )
+        if (childGate(sc) case final gate?)
+          gate
         else if (items == null)
           c.status == HomeStatus.error
               ? HomeErrorView(message: c.error, onRetry: c.refresh)
@@ -321,66 +315,6 @@ class _ParentHomeworkRow extends StatelessWidget {
     return item.status == 'NOT_SUBMITTED'
         ? const AppBadge(tone: BadgeTone.danger, label: '미제출')
         : const AppBadge(tone: BadgeTone.ok, label: '제출');
-  }
-}
-
-/// 하위 화면 제목 줄의 자녀 선택. 웹 `ChildSelect.tsx` 의 자리다.
-///
-/// **밝은 면 위에 그린다.** 웹은 흰 글씨(`text-white border-white/25`)인데, 그
-/// 주석이 전제한 「남색 띠 안」은 `PageTitle` 이 밝은 면으로 내려오면서
-/// (2026-08-18) 사라졌다 — 그대로 옮기면 흰 바탕에 흰 글씨라 안 보인다.
-/// 홈 지면의 `ChildSelector` 와는 다른 물건이다.
-///
-/// 자녀가 하나면 아무것도 그리지 않는다.
-class TitleChildSelect extends StatelessWidget {
-  const TitleChildSelect({
-    super.key,
-    required this.children,
-    required this.selectedStudentId,
-    required this.onSelect,
-  });
-
-  final List<Child> children;
-  final int? selectedStudentId;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    if (children.length <= 1) return const SizedBox.shrink();
-    // 목록에 없는 값을 value 로 주면 DropdownButton 이 assert 로 죽는다.
-    final selected = children.any((c) => c.studentId == selectedStudentId)
-        ? selectedStudentId
-        : null;
-    return Container(
-      key: const Key('title-child-select'),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadii.lg),
-        border: Border.all(color: AppColors.slate300),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: selected,
-          isDense: true,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: AppColors.brand900,
-          ),
-          items: [
-            for (final child in children)
-              DropdownMenuItem<int>(
-                value: child.studentId,
-                child: Text(child.name),
-              ),
-          ],
-          onChanged: (id) {
-            if (id != null) onSelect(id);
-          },
-        ),
-      ),
-    );
   }
 }
 

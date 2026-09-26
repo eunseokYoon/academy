@@ -77,7 +77,7 @@ GoRouter _router(StudentHomeController c) => GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.studentLessons,
-              builder: (_, _) => const StudentLessonsStub(),
+              builder: (_, _) => const SizedBox.shrink(),
             ),
           ],
         ),
@@ -85,7 +85,7 @@ GoRouter _router(StudentHomeController c) => GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.studentScores,
-              builder: (_, _) => StudentScoresStub(onLogout: () async {}),
+              builder: (_, _) => const SizedBox.shrink(),
             ),
           ],
         ),
@@ -187,11 +187,12 @@ void main() {
 
   testWidgets('스텁은 자기 앱바를 그리고 본문이 탭 바에 가리지 않는다', (tester) async {
     await pumpShell(tester);
-    await tester.tap(find.text('수업').last);
+    // 수업·성적은 B3 에서 실물이 됐다. 남은 스텁은 질문(B4)이다.
+    await tester.tap(find.text('질문').last);
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byType(StudentLessonsStub),
+        of: find.byType(StudentQnaStub),
         matching: find.byType(AppBarBand),
       ),
       findsOneWidget,

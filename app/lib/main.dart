@@ -31,8 +31,18 @@ import 'features/parent/home/parent_home_page.dart';
 import 'features/parent/home/parent_home_repository.dart';
 import 'features/parent/homeworks/parent_homework_data.dart';
 import 'features/parent/homeworks/parent_homeworks_page.dart';
+import 'features/parent/me/parent_me_data.dart';
+import 'features/parent/me/parent_me_page.dart';
+import 'features/parent/notices/parent_notices_page.dart';
+import 'features/parent/report/parent_report_data.dart';
+import 'features/parent/report/parent_report_page.dart';
+import 'features/parent/scores/parent_score_data.dart';
+import 'features/parent/scores/parent_scores_page.dart';
+import 'features/parent/schedule/parent_schedule_data.dart';
+import 'features/parent/schedule/parent_schedule_page.dart';
 import 'features/parent/selected_child.dart';
-import 'features/parent/stubs/parent_stubs.dart';
+import 'features/student/attendances/student_attendance_data.dart';
+import 'features/student/attendances/student_attendance_page.dart';
 import 'features/student/home/student_home_controller.dart';
 import 'features/student/home/student_home_page.dart';
 import 'features/student/home/student_home_repository.dart';
@@ -41,8 +51,16 @@ import 'features/student/homeworks/student_homework_detail_page.dart';
 import 'features/student/homeworks/student_homework_repository.dart';
 import 'features/student/homeworks/student_homeworks_page.dart';
 import 'features/student/homeworks/submission_media.dart';
+import 'features/student/lessons/student_lesson_data.dart';
+import 'features/student/lessons/student_lesson_detail_page.dart';
+import 'features/student/lessons/student_lessons_page.dart';
+import 'features/student/notices/student_notices_page.dart';
+import 'features/student/scores/student_score_data.dart';
+import 'features/student/scores/student_scores_page.dart';
 import 'features/student/stubs/student_stubs.dart';
 import 'shared/branding.dart';
+import 'shared/notice/notice_board.dart';
+import 'shared/notice/notice_data.dart';
 import 'shared/widgets/role_shell.dart';
 
 /// 운영은 `--dart-define=API_BASE_URL=https://...`로 넣는다.
@@ -121,12 +139,16 @@ class AcademyApp extends StatefulWidget {
     required this.dio,
     required this.store,
     this.mediaPicker,
+    this.openUrl,
   });
 
   final AuthController auth;
 
   /// 테스트가 가짜를 넣는다. 없으면 기기의 카메라·앨범이다.
   final MediaPicker? mediaPicker;
+
+  /// 공지 첨부 받기. 테스트가 가짜를 넣는다. 없으면 시스템 브라우저다.
+  final UrlOpener? openUrl;
 
   /// 기기 저장소. 학부모가 고른 자녀를 앱을 껐다 켜도 기억한다
   /// ([SelectedChild] 의 주석).
@@ -170,10 +192,34 @@ class _Session {
         repository: StudentHomeworkRepository(dio),
         s3: S3Uploader(),
       ),
+      studentAttendance = StudentAttendanceController(
+        repository: StudentAttendanceRepository(dio),
+      ),
+      studentNotices = NoticeListController(repository: NoticeRepository(dio)),
+      studentLessons = StudentLessonsController(
+        repository: StudentLessonRepository(dio),
+      ),
+      studentLessonDetail = StudentLessonDetailController(
+        repository: StudentLessonRepository(dio),
+      ),
+      studentScores = StudentScoreController(
+        repository: StudentScoreRepository(dio),
+      ),
       selectedChild = SelectedChild(dio: dio, store: store),
       parentHome = ParentHomeController(repository: ParentHomeRepository(dio)),
       parentHomeworks = ParentHomeworksController(
         repository: ParentHomeworkRepository(dio),
+      ),
+      parentSchedule = ParentScheduleController(
+        repository: ParentScheduleRepository(dio),
+      ),
+      parentNotices = NoticeListController(repository: NoticeRepository(dio)),
+      parentMe = ParentMeController(repository: ParentMeRepository(dio)),
+      parentScores = ParentScoreController(
+        repository: ParentScoreRepository(dio),
+      ),
+      parentReport = ParentReportController(
+        repository: ParentReportRepository(dio, ParentScoreRepository(dio)),
       );
 
   final StudentHomeController studentHome;
@@ -182,6 +228,12 @@ class _Session {
 
   /// 상태가 없다. 세션에 두는 이유는 저장소가 이 사람의 Dio 로 부르기 때문이다.
   final SubmissionUploader uploader;
+
+  final StudentAttendanceController studentAttendance;
+  final NoticeListController studentNotices;
+  final StudentLessonsController studentLessons;
+  final StudentLessonDetailController studentLessonDetail;
+  final StudentScoreController studentScores;
 
   /// 상세에서 올림·지움·제출이 성공했다 — 목록의 개수·배지와 홈의 미완료
   /// 숙제 수가 낡았다. 지금 부르지 않고 다음에 보일 때 부른다.
@@ -195,14 +247,29 @@ class _Session {
   final SelectedChild selectedChild;
   final ParentHomeController parentHome;
   final ParentHomeworksController parentHomeworks;
+  final ParentScheduleController parentSchedule;
+  final NoticeListController parentNotices;
+  final ParentMeController parentMe;
+  final ParentScoreController parentScores;
+  final ParentReportController parentReport;
 
   void dispose() {
     studentHome.dispose();
     studentHomeworks.dispose();
     studentHomeworkDetail.dispose();
+    studentAttendance.dispose();
+    studentNotices.dispose();
+    studentLessons.dispose();
+    studentLessonDetail.dispose();
+    studentScores.dispose();
     selectedChild.dispose();
     parentHome.dispose();
     parentHomeworks.dispose();
+    parentSchedule.dispose();
+    parentNotices.dispose();
+    parentMe.dispose();
+    parentScores.dispose();
+    parentReport.dispose();
   }
 }
 
@@ -218,6 +285,9 @@ class _AcademyAppState extends State<AcademyApp> {
   /// 카메라·앨범. 사람에게 딸린 상태가 없어 앱 수명이다.
   late final MediaPicker _mediaPicker =
       widget.mediaPicker ?? DeviceMediaPicker();
+
+  /// 공지 첨부를 여는 곳. 사람에게 딸린 상태가 없어 앱 수명이다.
+  late final UrlOpener _openUrl = widget.openUrl ?? openExternally;
 
   late final GoRouter _router = buildRouter(
     auth: widget.auth,
@@ -263,11 +333,16 @@ class _AcademyAppState extends State<AcademyApp> {
                   ),
                   GoRoute(
                     path: 'attendances',
-                    builder: (_, _) => const StudentAttendancesStub(),
+                    builder: (_, _) => StudentAttendancePage(
+                      controller: _session.studentAttendance,
+                    ),
                   ),
                   GoRoute(
                     path: 'notices',
-                    builder: (_, _) => const StudentNoticesStub(),
+                    builder: (_, _) => StudentNoticesPage(
+                      controller: _session.studentNotices,
+                      openUrl: _openUrl,
+                    ),
                   ),
                 ],
               ),
@@ -302,7 +377,20 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.studentLessons,
-                builder: (_, _) => const StudentLessonsStub(),
+                builder: (_, _) =>
+                    StudentLessonsPage(controller: _session.studentLessons),
+                // 상세는 목록의 자식이다 — 뒤로 가면 목록이고 탭 바가 남는다.
+                // 홈의 「지난 수업」 카드도 여기로 온다.
+                routes: [
+                  GoRoute(
+                    path: ':lessonId',
+                    builder: (_, state) => StudentLessonDetailPage(
+                      lessonId: int.parse(state.pathParameters['lessonId']!),
+                      controller: _session.studentLessonDetail,
+                      openUrl: _openUrl,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -310,8 +398,10 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.studentScores,
-                builder: (_, _) =>
-                    StudentScoresStub(onLogout: widget.auth.logout),
+                builder: (_, _) => StudentScoresPage(
+                  controller: _session.studentScores,
+                  onLogout: widget.auth.logout,
+                ),
               ),
             ],
           ),
@@ -349,7 +439,11 @@ class _AcademyAppState extends State<AcademyApp> {
                   ),
                   GoRoute(
                     path: 'notices',
-                    builder: (_, _) => const ParentNoticesStub(),
+                    builder: (_, _) => ParentNoticesPage(
+                      controller: _session.parentNotices,
+                      selectedChild: _session.selectedChild,
+                      openUrl: _openUrl,
+                    ),
                   ),
                 ],
               ),
@@ -359,7 +453,10 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.parentSchedule,
-                builder: (_, _) => const ParentScheduleStub(),
+                builder: (_, _) => ParentSchedulePage(
+                  controller: _session.parentSchedule,
+                  selectedChild: _session.selectedChild,
+                ),
               ),
             ],
           ),
@@ -367,7 +464,10 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.parentLessons,
-                builder: (_, _) => const ParentLessonsStub(),
+                builder: (_, _) => ParentReportPage(
+                  controller: _session.parentReport,
+                  selectedChild: _session.selectedChild,
+                ),
               ),
             ],
           ),
@@ -375,7 +475,10 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.parentScores,
-                builder: (_, _) => const ParentScoresStub(),
+                builder: (_, _) => ParentScoresPage(
+                  controller: _session.parentScores,
+                  selectedChild: _session.selectedChild,
+                ),
               ),
             ],
           ),
@@ -383,7 +486,10 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.parentMe,
-                builder: (_, _) => ParentMeStub(onLogout: widget.auth.logout),
+                builder: (_, _) => ParentMePage(
+                  controller: _session.parentMe,
+                  onLogout: widget.auth.logout,
+                ),
               ),
             ],
           ),

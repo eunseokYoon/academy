@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../core/api/api_exception.dart';
 import '../../core/api/api_response.dart';
 import '../../core/storage/key_value_store.dart';
 
@@ -56,9 +57,28 @@ class SelectedChild extends ChangeNotifier {
   bool get loaded => _loaded;
   int? get selectedStudentId => _selected;
 
+  /// 마지막 [load] 가 실패했으면 그 문구(서버 문구 그대로). 성공하거나 다시
+  /// 부르기 시작하면 지워진다.
+  ///
+  /// 홈은 [load] 가 던지는 예외를 직접 받아 띄운다. 이 값은 **홈을 거치지 않고
+  /// 열린 화면**(일정·레포트·성적·내 정보 탭, 레일의 하위 화면)이 [ensureLoaded]
+  /// 로 부른 뒤 읽는다 — 없으면 목록을 못 받은 그 화면이 로더에서 영영 안 끝난다.
+  String? get loadError => _loadError;
+  String? _loadError;
+
+  /// 아직 목록을 받지 않았고 받는 중도 아니면 부른다. 실패는 [loadError] 로 남는다.
+  ///
+  /// 학부모 하위 화면은 전부 `initState` 에서 이것을 부른다(14-6). 로그인 직후
+  /// 첫 화면이 홈이라 보통은 홈이 먼저 받아 두지만, 그것에 기대지 마라.
+  void ensureLoaded() {
+    if (_disposed || _loaded || _loading) return;
+    load().catchError((Object _) {});
+  }
+
   Future<void> load() async {
     if (_disposed) return;
     _loading = true;
+    _loadError = null;
     notifyListeners();
     try {
       final list = await unwrapCall<List<Child>>(
@@ -76,6 +96,12 @@ class SelectedChild extends ChangeNotifier {
       _selected = list.any((c) => c.studentId == saved)
           ? saved
           : (list.isEmpty ? null : list.first.studentId);
+    } on ApiException catch (e) {
+      if (!_disposed) _loadError = e.message;
+      rethrow;
+    } catch (_) {
+      if (!_disposed) _loadError = '연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+      rethrow;
     } finally {
       if (!_disposed) {
         _loading = false;

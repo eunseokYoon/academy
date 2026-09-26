@@ -241,4 +241,64 @@ void main() {
     await sc.load();
     expect(adapter.received, isEmpty);
   });
+
+  test('실패하면 loadError 에 서버 문구가 남고, 다시 부르면 지워진다', () async {
+    adapter = FakeAdapter(
+      replies: [
+        const FakeReply(
+          statusCode: 500,
+          body: {
+            'success': false,
+            'data': null,
+            'error': {'code': 'INTERNAL', 'message': '서버 오류입니다.'},
+          },
+        ),
+        FakeReply(
+          statusCode: 200,
+          body: _children([
+            {'studentId': 1, 'name': '김하늘'},
+          ]),
+        ),
+      ],
+    );
+    dio.httpClientAdapter = adapter;
+    final sc = SelectedChild(dio: dio, store: store);
+    sc.ensureLoaded();
+    await pumpEventQueue();
+    expect(sc.loadError, '서버 오류입니다.');
+    expect(sc.loaded, isFalse);
+
+    await sc.load();
+    expect(sc.loadError, isNull);
+    expect(sc.selectedStudentId, 1);
+    sc.dispose();
+  });
+
+  test('ensureLoaded 는 받았거나 받는 중이면 다시 부르지 않는다', () async {
+    final gate = _GateAdapter();
+    dio.httpClientAdapter = gate;
+    final sc = SelectedChild(dio: dio, store: store);
+    var requests = 0;
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (o, h) {
+          requests++;
+          h.next(o);
+        },
+      ),
+    );
+    sc.ensureLoaded();
+    sc.ensureLoaded();
+    gate.release(
+      _children([
+        {'studentId': 1, 'name': '김하늘'},
+      ]),
+    );
+    await pumpEventQueue();
+    sc.ensureLoaded();
+    await pumpEventQueue();
+    expect(requests, 1);
+    expect(sc.loaded, isTrue);
+    sc.dispose();
+  });
 }

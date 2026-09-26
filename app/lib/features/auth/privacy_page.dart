@@ -109,7 +109,11 @@ class PrivacyPage extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 32),
-                    child: BackLink(onTap: () => context.go(AppRoutes.login)),
+                    // 내 정보(P-5·S-7)에서 push 로 열렸으면 거기로 돌아간다.
+                    // 로그인 화면에서는 go 로 왔으니 쌓인 게 없다.
+                    child: (GoRouter.maybeOf(context)?.canPop() ?? false)
+                        ? BackLink(label: '돌아가기', onTap: context.pop)
+                        : BackLink(onTap: () => context.go(AppRoutes.login)),
                   ),
                 ],
               ),

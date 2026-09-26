@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/api_exception.dart';
-import 'package:academy_app/features/student/home/student_home_controller.dart'
-    show HomeStatus;
 import 'package:academy_app/shared/lib/param_controller.dart';
 
 /// 요청마다 Completer 하나. 테스트가 끝내는 순서를 정한다.
@@ -133,5 +131,25 @@ void main() {
     // dispose 뒤의 load 는 요청을 안 낸다.
     q.load(2);
     expect(q.calls, hasLength(1));
+  });
+
+  test('both·all3 는 처음 실패한 ApiException 을 그대로 던진다', () async {
+    // 레코드 `.wait` 는 ParallelWaitError 로 감싸 ParamController 가 서버
+    // 문구를 잃는다. 이 둘은 원래 오류를 넘겨야 한다.
+    const e = ApiException(code: 'FORBIDDEN', message: '접근 권한이 없습니다.');
+    await expectLater(
+      both(Future.value(1), Future<int>.error(e)),
+      throwsA(same(e)),
+    );
+    await expectLater(
+      all3(Future<int>.error(e), Future.value(2), Future.value(3)),
+      throwsA(same(e)),
+    );
+    expect(await both(Future.value(1), Future.value('a')), (1, 'a'));
+    expect(await all3(Future.value(1), Future.value('a'), Future.value(true)), (
+      1,
+      'a',
+      true,
+    ));
   });
 }

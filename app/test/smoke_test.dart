@@ -97,7 +97,10 @@ class _RoutingAdapter implements HttpClientAdapter {
 const _parentHome = {
   'success': true,
   'data': {
-    'student': {'name': '김하늘'},
+    'student': {
+      'name': '김하늘',
+      'classRooms': ['A반'],
+    },
     'nextExam': null,
     'nextLessonDate': '2026-09-21',
     'nextLessonTime': '19:00',
@@ -250,8 +253,139 @@ Dio _fakeDio() {
       '/api/student/homeworks/notes': {'success': true, 'data': []},
       '/api/student/homeworks/11': _studentHomeworkDetail,
       '/api/parent/children/1/homeworks': _parentHomeworks,
+      // B3a. 경로만 보고 답하므로 달·자녀 쿼리는 무시된다.
+      '/api/student/attendances': _attendanceMonth,
+      '/api/student/clinics': {'success': true, 'data': []},
+      '/api/parent/children/1/attendances': _attendanceMonth,
+      '/api/parent/children/1/clinics': {'success': true, 'data': []},
+      '/api/notices': {
+        'success': true,
+        'data': {
+          'items': [
+            {
+              'noticeId': 5,
+              'title': '추석 휴강 안내',
+              'pinned': false,
+              'hasAttachment': false,
+              'publishedAt': '2026-09-20T10:00:00+09:00',
+            },
+          ],
+        },
+      },
+      // B3b.
+      '/api/student/lessons': {
+        'success': true,
+        'data': {
+          'items': [
+            {
+              'lessonId': 3,
+              'lessonDate': '2026-09-14',
+              'title': '관계대명사',
+              'classRoomName': 'A반',
+              'hasVideo': false,
+              'isNew': true,
+              'homeworkTitle': null,
+            },
+          ],
+          'totalPages': 1,
+        },
+      },
+      '/api/student/lessons/3': {
+        'success': true,
+        'data': {
+          'lessonId': 3,
+          'lessonDate': '2026-09-14',
+          'title': '관계대명사',
+          'classRoomName': 'A반',
+          'videos': [],
+          'content': '관계대명사 that',
+          'keyPoints': null,
+          'homeworkNote': null,
+          'clinicNote': null,
+          'homework': null,
+          'attendanceStatus': 'PRESENT',
+        },
+      },
+      '/api/student/me': {
+        'success': true,
+        'data': {
+          'studentId': 1,
+          'name': '김하늘',
+          'classRooms': [
+            {'classRoomId': 1, 'name': 'A반'},
+          ],
+          'phone': '01011112222',
+          'parentLinked': true,
+        },
+      },
+      '/api/student/scores': _scores,
+      '/api/student/exam-schedules': {'success': true, 'data': []},
+      '/api/parent/children/1/scores': _scores,
+      '/api/parent/children/1/exam-schedules': {'success': true, 'data': []},
+      '/api/parent/children/1/lessons': {
+        'success': true,
+        'data': {'items': [], 'totalPages': 0},
+      },
+      '/api/parent/me': {
+        'success': true,
+        'data': {
+          'id': 9,
+          'name': '김하늘 학부모',
+          'phone': '01011112222',
+          'children': [
+            {'studentId': 1, 'name': '김하늘'},
+          ],
+        },
+      },
     });
 }
+
+const _scores = {
+  'success': true,
+  'data': {
+    'retestScheduled': [],
+    'sections': [
+      {
+        'testType': 'WORD',
+        'label': '단어 테스트',
+        'chartKind': 'NONE',
+        'items': [
+          {
+            'year': 2026,
+            'month': 9,
+            'week': 2,
+            'weekLabel': '9월 2주',
+            'correctCount': 12,
+            'totalCount': 15,
+            'result': 'PASS',
+            'retestPassed': false,
+            'retestScheduled': false,
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const _attendanceMonth = {
+  'success': true,
+  'data': {
+    'year': 2026,
+    'month': 9,
+    'summary': {
+      'present': 3,
+      'late': 0,
+      'absent': 0,
+      'sick': 0,
+      'excused': 0,
+      'makeup': 0,
+    },
+    'homeworkCompletionRate': null,
+    'days': [
+      {'date': '2026-09-01', 'status': 'PRESENT', 'homeworkRate': null},
+    ],
+  },
+};
 
 /// 토큰을 미리 심고 `bootstrap()`으로 `me()`를 태워 해당 역할·상태의
 /// `AuthSnapshot`을 만든 뒤 `AcademyApp`을 그 상태로 띄운다.
@@ -596,5 +730,106 @@ void main() {
       );
       expect(find.byType(RoleShell), findsOneWidget, reason: '$name 이 셸 밖이다');
     }
+  });
+
+  testWidgets('B3a 학생 화면이 셸 안에서 실물로 그려진다', (tester) async {
+    // 라우트만 보면 스텁이 남아 있어도, 화면이 오류 상태로 떠도 통과한다.
+    // 실제 라우트 테이블로 들어가 그 화면의 데이터가 그려졌는지 본다.
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    router.go(AppRoutes.studentAttendances);
+    await tester.pumpAndSettle();
+    expect(find.text('출석 현황'), findsOneWidget);
+    expect(find.byKey(const Key('calendar-month')), findsOneWidget);
+
+    router.go(AppRoutes.studentNotices);
+    await tester.pumpAndSettle();
+    expect(find.text('추석 휴강 안내'), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+  });
+
+  testWidgets('B3a 학부모 화면이 셸 안에서 실물로 그려진다', (tester) async {
+    // 한 테스트에서 역할을 바꿔 다시 띄우면 앞 앱의 라우터가 남는다 — 따로 둔다.
+    await _pumpAtRole(tester, role: UserRole.parent);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    router.go(AppRoutes.parentSchedule);
+    await tester.pumpAndSettle();
+    expect(find.text('수업 · 클리닉 일정'), findsOneWidget);
+    expect(find.byKey(const Key('calendar-month')), findsOneWidget);
+
+    router.go(AppRoutes.parentNotices);
+    await tester.pumpAndSettle();
+    expect(find.text('추석 휴강 안내'), findsOneWidget);
+
+    router.go(AppRoutes.parentMe);
+    await tester.pumpAndSettle();
+    expect(find.text('김하늘 학부모 님'), findsOneWidget);
+    // 학부모의 유일한 로그아웃이다(14-7).
+    expect(find.byKey(const Key('parent-logout')), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+  });
+
+  testWidgets('B3b 학생 화면이 셸 안에서 실물로 그려진다', (tester) async {
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    router.go(AppRoutes.studentLessons);
+    await tester.pumpAndSettle();
+    expect(find.text('수업영상 및 레포트'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('lesson-3')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '${AppRoutes.studentLessons}/3',
+    );
+    expect(find.text('관계대명사 that'), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('page-back')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.studentLessons,
+    );
+
+    router.go(AppRoutes.studentScores);
+    await tester.pumpAndSettle();
+    expect(find.text('내 정보 · 성적'), findsOneWidget);
+    expect(find.text('12/15'), findsOneWidget);
+    expect(find.byKey(const Key('student-logout')), findsOneWidget);
+  });
+
+  testWidgets('홈의 지난 수업 카드는 그 수업의 상세로 간다', (tester) async {
+    // 웹 LastLessonCard 의 링크가 `/student/lessons/{id}` 다. 상세가 없던
+    // B1·B2 에서는 목록으로 보냈다.
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+    final link = find.text('수업 레포트 전체 보기');
+    await tester.ensureVisible(link);
+    await tester.pumpAndSettle();
+    await tester.tap(link);
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '${AppRoutes.studentLessons}/3',
+    );
+  });
+
+  testWidgets('B3b 학부모 화면이 셸 안에서 실물로 그려진다', (tester) async {
+    await _pumpAtRole(tester, role: UserRole.parent);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    router.go(AppRoutes.parentScores);
+    await tester.pumpAndSettle();
+    expect(find.text('테스트 결과'), findsOneWidget);
+    expect(find.text('12/15'), findsOneWidget);
+
+    router.go(AppRoutes.parentLessons);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('report-letterhead')), findsOneWidget);
+    expect(find.text('이 주에 공개된 수업이 없습니다.'), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
   });
 }

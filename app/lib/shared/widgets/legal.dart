@@ -42,18 +42,21 @@ class LegalSection extends StatelessWidget {
 
 /// 약관·처리방침 하단, 로그인으로 돌아가는 링크. `TermsPage`·`PrivacyPage`
 /// 둘이 그대로 썼었다 — 여기 하나로 합친다.
+///
+/// 로그인한 채 내 정보에서 열었으면(쌓여 있으면) 「돌아가기」로 그 화면에 돌아간다.
 class BackLink extends StatelessWidget {
-  const BackLink({super.key, required this.onTap});
+  const BackLink({super.key, required this.onTap, this.label = '로그인으로 돌아가기'});
 
   final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: const Text(
-        '로그인으로 돌아가기',
-        style: TextStyle(
+      child: Text(
+        label,
+        style: const TextStyle(
           fontSize: 14,
           color: AppColors.slate500,
           decoration: TextDecoration.underline,

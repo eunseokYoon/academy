@@ -323,7 +323,11 @@ class _StudentHomePageState extends State<StudentHomePage>
         title: '지난 수업',
         onTapAction: _goLessons,
       ),
-      LastLessonCard(lesson: lesson, onTap: _goLessons),
+      // 웹처럼 그 수업의 상세로 간다(B3 에서 상세가 생겼다).
+      LastLessonCard(
+        lesson: lesson,
+        onTap: () => _go('${AppRoutes.studentLessons}/${lesson.lessonId}'),
+      ),
     ],
   );
 }
