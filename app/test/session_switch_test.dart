@@ -20,10 +20,11 @@ import 'package:academy_app/main.dart';
 /// 같은 폰으로 **다른 사람이 로그인**하는 경로. 형제·자매가 폰 하나를
 /// 나눠 쓰는 것은 이 학원에서 흔하다.
 ///
-/// 홈 컨트롤러·자녀 선택은 앱 수명 동안 살아 있다. 로그아웃에서 안 비우면
-/// 다음 사람에게 앞 사람의 홈이 보인다 — 서버의 접근 가드는 새 요청을
-/// 막을 뿐 이미 받은 데이터는 못 지운다. `AcademyApp` 이 인증 상태를 듣고
-/// `reset()` 을 부르는지를 **실제 앱·라우터로** 잠근다.
+/// 홈 컨트롤러·자녀 선택은 한 사람의 세션(`AcademyApp` 의 `_Session`) 동안
+/// 살아 있다. 로그아웃에서 안 버리면 다음 사람에게 앞 사람의 홈이 보인다 —
+/// 서버의 접근 가드는 새 요청을 막을 뿐 이미 받은 데이터는 못 지운다.
+/// `AcademyApp` 이 인증 상태를 듣고 세션을 dispose·새로 만드는지를 **실제
+/// 앱·라우터로** 잠근다.
 
 /// 로그인할 때마다 [next] 사용자가 된다.
 class _SwitchAuthRepo implements AuthRepository {
@@ -302,6 +303,52 @@ void main() {
     await tester.pumpAndSettle();
 
     // 그려진 화면인지 먼저 본다.
+    expect(find.textContaining('박바다'), findsWidgets);
+    expect(find.textContaining('김하늘'), findsNothing);
+  });
+
+  testWidgets('로그아웃 전에 나간 A 의 요청이 B 로그인 뒤 도착해도 B 에게 안 보인다', (tester) async {
+    // A 의 홈 요청이 느린 망에 걸린 채로 로그아웃한다. 세션을 버리지 않고
+    // 이어 쓰면 B 의 홈이 그 진행 중 요청에 합류해 A 의 응답을 그린다.
+    const studentA = UserSummary(
+      id: 1,
+      name: '김하늘',
+      role: UserRole.student,
+      mustChangePassword: false,
+    );
+    const studentB = UserSummary(
+      id: 2,
+      name: '박바다',
+      role: UserRole.student,
+      mustChangePassword: false,
+    );
+    final kv = InMemoryKeyValueStore();
+    final tokens = TokenStore(kv);
+    await tokens.write('at-1');
+    final repo = _SwitchAuthRepo(studentA);
+    final auth = AuthController(
+      repository: repo,
+      tokens: tokens,
+      cookies: CookieStore(kv, Uri.parse('https://example.test/api/auth')),
+      jar: CookieJar(),
+    );
+    final slowA = Completer<void>();
+    final adapter = _RoutingAdapter()
+      ..routes['/api/student/home'] = _Reply(_studentHome('김하늘'), gate: slowA);
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
+      ..httpClientAdapter = adapter;
+    await auth.bootstrap();
+    await tester.pumpWidget(AcademyApp(auth: auth, dio: dio, store: kv));
+    await _pumpFrames(tester); // A 의 홈은 로딩 중이다.
+    expect(find.textContaining('김하늘'), findsNothing);
+
+    adapter.routes['/api/student/home'] = _Reply(_studentHome('박바다'));
+    await _switchTo(tester, auth, repo, studentB);
+    await _pumpFrames(tester);
+
+    slowA.complete(); // A 의 응답이 이제야 도착한다.
+    await tester.pumpAndSettle();
+
     expect(find.textContaining('박바다'), findsWidgets);
     expect(find.textContaining('김하늘'), findsNothing);
   });

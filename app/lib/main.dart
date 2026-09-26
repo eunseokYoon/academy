@@ -128,23 +128,51 @@ class AcademyApp extends StatefulWidget {
   State<AcademyApp> createState() => _AcademyAppState();
 }
 
-class _AcademyAppState extends State<AcademyApp> {
-  /// **앱이 하나만 들고 있는다.** 탭을 옮겨도 살아 있어야 컨트롤러의 60초
-  /// 규칙이 뜻을 갖는다 — 화면이 만들면 홈에 돌아올 때마다 새로 부른다.
-  late final StudentHomeController _studentHome = StudentHomeController(
-    repository: StudentHomeRepository(widget.dio),
-  );
+/// **한 사람에게 딸린 상태 전부.** 로그인하면 만들고 로그아웃하면
+/// `dispose()` 한다 — 비우는(reset) 게 아니라 버린다.
+///
+/// 같은 폰으로 다음 사람(형제·자매, 그 부모)이 로그인했을 때 앞 사람의 홈·
+/// 자녀가 보이면 안 된다. 서버의 접근 가드는 새 요청을 막을 뿐 이미 받은
+/// 데이터는 못 지운다. 객체마다 reset 을 두고 로그아웃에서 하나씩 부르면
+/// 넷째를 더하는 사람이 그 줄을 잊는다 — 여기 넣으면 잊을 수가 없다.
+/// 로그아웃 뒤 도착한 앞 사람의 응답은 dispose 된 객체로 가서 버려진다.
+///
+/// **사람에게 딸린 것(B2~B4 의 화면 컨트롤러 포함)은 여기에 더하고
+/// [dispose] 에 한 줄 더한다.** 라우트 빌더는 `_AcademyAppState._session` 을
+/// 읽는다. 화면은 바뀐 컨트롤러를 `didUpdateWidget` 에서 갈아탄다.
+///
+/// 세션 안에서는 앱 수명처럼 산다 — 탭을 옮겨도 살아 있어야 컨트롤러의 60초
+/// 규칙이 뜻을 갖는다. 화면이 만들면 홈에 돌아올 때마다 새로 부른다.
+class _Session {
+  _Session({required Dio dio, required KeyValueStore store})
+    : studentHome = StudentHomeController(
+        repository: StudentHomeRepository(dio),
+      ),
+      selectedChild = SelectedChild(dio: dio, store: store),
+      parentHome = ParentHomeController(repository: ParentHomeRepository(dio));
 
-  /// 학부모 쪽 둘. 학생 홈 컨트롤러와 같은 이유로 앱이 들고 있는다.
-  /// **자녀 목록은 셸이 한 곳에서 관리한다** — 하위 화면(B2~B3)도 같은
+  final StudentHomeController studentHome;
+
+  /// **자녀 목록은 한 곳에서 관리한다** — 하위 화면(B2~B3)도 같은
   /// [SelectedChild] 를 받아야 자녀를 바꿨을 때 전부 같이 바뀐다.
-  late final SelectedChild _selectedChild = SelectedChild(
-    dio: widget.dio,
-    store: widget.store,
-  );
-  late final ParentHomeController _parentHome = ParentHomeController(
-    repository: ParentHomeRepository(widget.dio),
-  );
+  final SelectedChild selectedChild;
+  final ParentHomeController parentHome;
+
+  void dispose() {
+    studentHome.dispose();
+    selectedChild.dispose();
+    parentHome.dispose();
+  }
+}
+
+class _AcademyAppState extends State<AcademyApp> {
+  _Session? _currentSession;
+
+  /// 지금 로그인한 사람의 세션. 셸 라우트는 `ready` 에서만 그려지고, 그때는
+  /// [_onAuthChanged] 가 이미 만들어 둔다. 없으면 여기서 만든다(부팅 직후
+  /// 이미 로그인된 채로 뜬 경우의 방어) — 로그아웃이 오면 그대로 버려진다.
+  _Session get _session =>
+      _currentSession ??= _Session(dio: widget.dio, store: widget.store);
 
   late final GoRouter _router = buildRouter(
     auth: widget.auth,
@@ -174,7 +202,8 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.student,
-                builder: (_, _) => StudentHomePage(controller: _studentHome),
+                builder: (_, _) =>
+                    StudentHomePage(controller: _session.studentHome),
                 // 홈 퀵 레일이 가는 넷. **셸 안의 자식 라우트다** — 하단 탭
                 // 바가 그대로 있어야 한다. 경로에 앞 `/` 를 붙이지 마라,
                 // go_router 가 부모와 안 맞물린다.
@@ -243,8 +272,8 @@ class _AcademyAppState extends State<AcademyApp> {
               GoRoute(
                 path: AppRoutes.parent,
                 builder: (_, _) => ParentHomePage(
-                  controller: _parentHome,
-                  selectedChild: _selectedChild,
+                  controller: _session.parentHome,
+                  selectedChild: _session.selectedChild,
                 ),
                 // 홈 퀵 레일이 가는 둘. **셸 안의 자식 라우트다** — 하단 탭
                 // 바가 그대로 있어야 한다(학생 쪽 넷과 같은 방식).
@@ -306,6 +335,7 @@ class _AcademyAppState extends State<AcademyApp> {
   void initState() {
     super.initState();
     widget.auth.addListener(_onAuthChanged);
+    _onAuthChanged();
   }
 
   @override
@@ -320,22 +350,28 @@ class _AcademyAppState extends State<AcademyApp> {
   @override
   void dispose() {
     widget.auth.removeListener(_onAuthChanged);
+    _currentSession?.dispose();
     super.dispose();
   }
 
-  /// **로그아웃하면 사람에게 딸린 상태를 전부 비운다.** 위 세 객체는 앱
-  /// 수명 동안 살아 있어서, 안 비우면 같은 폰으로 다음 사람(형제·자매,
-  /// 그 부모)이 로그인했을 때 앞 사람의 홈·자녀가 그대로 보인다. 서버의
-  /// 접근 가드는 새 요청을 막을 뿐 이미 받은 데이터는 못 지운다.
+  /// 로그인하면 세션을 만들고, 로그아웃하면 버린다([_Session]).
   ///
-  /// 신호는 `loggedOut` 하나다 — 로그아웃·세션 만료·비밀번호 변경 후
+  /// 버리는 신호는 `loggedOut` 하나다 — 로그아웃·세션 만료·비밀번호 변경 후
   /// 재로그인·부팅 복원 실패가 전부 [AuthController] 에서 이 상태로 간다.
-  /// 여러 번 불려도 무해하다.
+  /// 여러 번 불려도 무해하다. `setState` 를 부르지 않는다 — 라우터가 같은
+  /// 신호로 로그인 화면으로 옮기고, 다음 로그인 때 셸이 새로 그려지며
+  /// 빌더가 새 세션을 읽는다.
   void _onAuthChanged() {
-    if (widget.auth.snapshot.status != AuthStatus.loggedOut) return;
-    _studentHome.reset();
-    _parentHome.reset();
-    _selectedChild.reset();
+    switch (widget.auth.snapshot.status) {
+      case AuthStatus.loggedOut:
+        _currentSession?.dispose();
+        _currentSession = null;
+      case AuthStatus.ready:
+        _currentSession ??= _Session(dio: widget.dio, store: widget.store);
+      case AuthStatus.unknown:
+      case AuthStatus.mustChangePassword:
+        break;
+    }
   }
 
   @override

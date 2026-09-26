@@ -217,22 +217,28 @@ void main() {
     expect(notes, 0);
   });
 
-  test('reset 은 목록과 선택을 비우고, 그 뒤 도착한 앞 사람 목록은 버린다', () async {
+  test('dispose 뒤 도착한 앞 사람 목록은 쓰지도 알리지도 않는다', () async {
+    // 로그아웃하면 AcademyApp 이 세션째 dispose 한다. 목록이 그 뒤에
+    // 도착하면 notifyListeners 가 "used after being disposed"로 던진다.
     final gate = _GateAdapter();
     dio.httpClientAdapter = gate;
     final sc = build();
     final pending = sc.load();
-    sc.reset();
-    expect(sc.children, isEmpty);
-    expect(sc.selectedStudentId, isNull);
-    expect(sc.loading, isFalse);
+    sc.dispose();
     gate.release(
       _children([
         {'studentId': 1, 'name': '김하늘'},
       ]),
     );
-    await pending;
+    await expectLater(pending, completes);
     expect(sc.children, isEmpty);
     expect(sc.selectedStudentId, isNull);
+  });
+
+  test('dispose 뒤 load 는 요청을 보내지 않는다', () async {
+    final sc = build();
+    sc.dispose();
+    await sc.load();
+    expect(adapter.received, isEmpty);
   });
 }

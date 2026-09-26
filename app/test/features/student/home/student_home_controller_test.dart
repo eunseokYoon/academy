@@ -214,30 +214,16 @@ void main() {
     expect(repo.calls, 1);
   });
 
-  // ── 로그아웃(reset) ─────────────────────────────────────────
-  // 같은 폰으로 다음 학생이 로그인했을 때 앞 사람의 홈이 60초 동안 남으면
-  // 안 된다.
+  // ── 로그아웃(세션 dispose) ─────────────────────────────────
+  // 로그아웃하면 AcademyApp 이 세션째 dispose 한다. 버려진 컨트롤러가
+  // 요청을 내보내면 앞 사람의 토큰 없는 요청이 나가고, 응답을 쓸 곳도 없다.
 
-  test('reset 뒤에는 60초 안이어도 다시 부른다', () async {
+  test('dispose 뒤 load·refresh 는 요청을 보내지 않는다', () async {
     final repo = _FakeRepo(() async => _home('김하늘'));
     final c = build(repo);
+    c.dispose();
     await c.load();
-    c.reset();
-    expect(c.data, isNull);
-    expect(c.status, HomeStatus.idle);
-    await c.load();
-    expect(repo.calls, 2);
-  });
-
-  test('reset 뒤에 도착한 앞 사람의 응답은 버린다', () async {
-    final slow = Completer<StudentHome>();
-    final repo = _FakeRepo(() => slow.future);
-    final c = build(repo);
-    final pending = c.load();
-    c.reset();
-    slow.complete(_home('김하늘'));
-    await pending;
-    expect(c.data, isNull);
-    expect(c.status, HomeStatus.idle);
+    await c.refresh();
+    expect(repo.calls, 0);
   });
 }

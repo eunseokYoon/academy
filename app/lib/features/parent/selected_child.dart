@@ -24,6 +24,10 @@ class Child {
 /// 앱에는 대응물이 없고 프로세스가 며칠씩 산다 — 둘째 아이를 고른 학부모가
 /// 앱을 껐다 켜도 그 아이가 선택돼 있어야 한다.
 ///
+/// 기기에 저장한 선택값은 로그아웃해도 지우지 않는다 — 다음 [load] 가
+/// 「내 자녀인가」를 검사하므로 남의 아이를 고르지 않고, 같은 사람이 다시
+/// 들어오면 그 아이가 그대로 골라져 있다.
+///
 /// **자녀가 하나면 화면이 선택 UI 를 안 그린다.** 고를 게 없는 선택지는
 /// 화면만 어지럽힌다.
 class SelectedChild extends ChangeNotifier {
@@ -38,16 +42,16 @@ class SelectedChild extends ChangeNotifier {
   bool _loading = false;
   int? _selected;
 
-  /// [reset] 이 올린다. 목록 요청이 나간 사이 로그아웃했으면, 늦게 도착한
-  /// 앞 사람의 목록을 버리는 기준이다.
-  int _generation = 0;
+  /// 로그아웃하면 세션째 dispose 된다(`AcademyApp` 의 `_Session`). 그 뒤에
+  /// 도착한 앞 사람의 목록은 쓰지도 알리지도 않는다.
+  bool _disposed = false;
 
   List<Child> get children => _children;
   bool get loading => _loading;
   int? get selectedStudentId => _selected;
 
   Future<void> load() async {
-    final gen = _generation;
+    if (_disposed) return;
     _loading = true;
     notifyListeners();
     try {
@@ -57,42 +61,32 @@ class SelectedChild extends ChangeNotifier {
             .map((e) => Child.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
-      if (gen != _generation) return; // 로그아웃 뒤 도착했다. 버린다.
+      if (_disposed) return; // 로그아웃 뒤 도착했다. 버린다.
       final saved = int.tryParse(await _store.read(_storageKey) ?? '');
-      if (gen != _generation) return;
+      if (_disposed) return;
       _children = list;
       // 저장된 값이 더 이상 내 자녀가 아니면 첫째로 되돌린다.
       _selected = list.any((c) => c.studentId == saved)
           ? saved
           : (list.isEmpty ? null : list.first.studentId);
     } finally {
-      // reset 뒤라면 로딩 표시도 이미 새 세대의 것이다 — 건드리지 않는다.
-      if (gen == _generation) {
+      if (!_disposed) {
         _loading = false;
         notifyListeners();
       }
     }
   }
 
-  /// **로그아웃하면 부른다**(`AcademyApp` 이 인증 상태를 듣고 부른다).
-  /// 이 객체는 앱 수명 동안 살아 있어서, 안 비우면 같은 폰으로 다음 사람
-  /// (형제·자매의 부모)이 로그인했을 때 앞 사람 자녀의 이름·선택이 남는다.
-  ///
-  /// 기기에 저장한 선택값은 지우지 않는다 — 다음 [load] 가 「내 자녀인가」
-  /// 를 검사하므로 남의 아이를 고르지 않고, 같은 사람이 다시 들어오면
-  /// 그 아이가 그대로 골라져 있다.
-  void reset() {
-    _generation++;
-    _children = const [];
-    _selected = null;
-    _loading = false;
-    notifyListeners();
-  }
-
   Future<void> select(int studentId) async {
     if (_selected == studentId) return;
     _selected = studentId;
     await _store.write(_storageKey, '$studentId');
-    notifyListeners();
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
