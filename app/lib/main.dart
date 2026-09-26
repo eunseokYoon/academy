@@ -55,9 +55,16 @@ import 'features/student/lessons/student_lesson_data.dart';
 import 'features/student/lessons/student_lesson_detail_page.dart';
 import 'features/student/lessons/student_lessons_page.dart';
 import 'features/student/notices/student_notices_page.dart';
+import 'features/student/online_tests/online_test_data.dart';
+import 'features/student/online_tests/student_online_test_page.dart';
+import 'features/student/online_tests/student_online_tests_page.dart';
+import 'features/student/qna/qna_data.dart';
+import 'features/student/qna/student_qna_detail_page.dart';
+import 'features/student/qna/student_qna_page.dart';
+import 'features/student/schedule/student_schedule_data.dart';
+import 'features/student/schedule/student_schedule_page.dart';
 import 'features/student/scores/student_score_data.dart';
 import 'features/student/scores/student_scores_page.dart';
-import 'features/student/stubs/student_stubs.dart';
 import 'shared/branding.dart';
 import 'shared/notice/notice_board.dart';
 import 'shared/notice/notice_data.dart';
@@ -205,6 +212,21 @@ class _Session {
       studentScores = StudentScoreController(
         repository: StudentScoreRepository(dio),
       ),
+      studentSchedule = StudentScheduleController(
+        repository: StudentScheduleRepository(dio),
+      ),
+      studentQna = QnaBoardController(repository: QnaRepository(dio)),
+      studentQnaDetail = QnaDetailController(repository: QnaRepository(dio)),
+      studentOnlineTests = OnlineTestListController(
+        repository: OnlineTestRepository(dio),
+      ),
+      studentOnlineTest = OnlineTestTakeController(
+        repository: OnlineTestRepository(dio),
+      ),
+      qnaUploader = QnaUploader(
+        repository: QnaRepository(dio),
+        s3: S3Uploader(),
+      ),
       selectedChild = SelectedChild(dio: dio, store: store),
       parentHome = ParentHomeController(repository: ParentHomeRepository(dio)),
       parentHomeworks = ParentHomeworksController(
@@ -234,6 +256,29 @@ class _Session {
   final StudentLessonsController studentLessons;
   final StudentLessonDetailController studentLessonDetail;
   final StudentScoreController studentScores;
+  final StudentScheduleController studentSchedule;
+  final QnaBoardController studentQna;
+  final QnaDetailController studentQnaDetail;
+  final OnlineTestListController studentOnlineTests;
+  final OnlineTestTakeController studentOnlineTest;
+
+  /// 온라인 테스트를 냈다 — 목록의 상태가 바뀌었고, 그 주차 클리닉 칸이
+  /// 자동으로 채워졌을 수 있다(성적 화면).
+  void studentOnlineTestSubmitted() {
+    studentOnlineTests.markStale();
+    studentScores.markStale();
+  }
+
+  /// 상태가 없다. 세션에 두는 이유는 저장소가 이 사람의 Dio 로 부르기 때문이다.
+  final QnaUploader qnaUploader;
+
+  /// 클리닉을 옮겼다 — 공지가 한 건 발행됐고(10-1) 홈의 「다음 클리닉」과
+  /// 출석 캘린더의 클리닉 칸이 낡았다.
+  void studentClinicChanged() {
+    studentNotices.markStale();
+    studentHome.markStale();
+    studentAttendance.markStale();
+  }
 
   /// 상세에서 올림·지움·제출이 성공했다 — 목록의 개수·배지와 홈의 미완료
   /// 숙제 수가 낡았다. 지금 부르지 않고 다음에 보일 때 부른다.
@@ -262,6 +307,11 @@ class _Session {
     studentLessons.dispose();
     studentLessonDetail.dispose();
     studentScores.dispose();
+    studentSchedule.dispose();
+    studentQna.dispose();
+    studentQnaDetail.dispose();
+    studentOnlineTests.dispose();
+    studentOnlineTest.dispose();
     selectedChild.dispose();
     parentHome.dispose();
     parentHomeworks.dispose();
@@ -325,11 +375,28 @@ class _AcademyAppState extends State<AcademyApp> {
                 routes: [
                   GoRoute(
                     path: 'clinics',
-                    builder: (_, _) => const StudentClinicsStub(),
+                    builder: (_, _) => StudentSchedulePage(
+                      controller: _session.studentSchedule,
+                      onClinicChanged: _session.studentClinicChanged,
+                    ),
                   ),
                   GoRoute(
                     path: 'online-tests',
-                    builder: (_, _) => const StudentOnlineTestsStub(),
+                    builder: (_, _) => StudentOnlineTestsPage(
+                      controller: _session.studentOnlineTests,
+                    ),
+                    // 응시는 목록의 자식이다 — 뒤로 가면 목록이고 탭 바가 남는다.
+                    routes: [
+                      GoRoute(
+                        path: ':testId',
+                        builder: (_, state) => StudentOnlineTestPage(
+                          testId: int.parse(state.pathParameters['testId']!),
+                          controller: _session.studentOnlineTest,
+                          openUrl: _openUrl,
+                          onSubmitted: _session.studentOnlineTestSubmitted,
+                        ),
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'attendances',
@@ -409,7 +476,24 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.studentQna,
-                builder: (_, _) => const StudentQnaStub(),
+                builder: (_, _) => StudentQnaPage(
+                  controller: _session.studentQna,
+                  uploader: _session.qnaUploader,
+                  picker: _mediaPicker,
+                ),
+                // 상세는 목록의 자식이다 — 뒤로 가면 목록이고 탭 바가 남는다.
+                routes: [
+                  GoRoute(
+                    path: ':postId',
+                    builder: (_, state) => StudentQnaDetailPage(
+                      postId: int.parse(state.pathParameters['postId']!),
+                      controller: _session.studentQnaDetail,
+                      uploader: _session.qnaUploader,
+                      picker: _mediaPicker,
+                      onChanged: _session.studentQna.markStale,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

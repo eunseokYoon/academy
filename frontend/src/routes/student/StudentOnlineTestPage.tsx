@@ -33,9 +33,11 @@ export default function StudentOnlineTestPage() {
           /*
             아직 안 낸 것만 주황이다. 제출한 테스트까지 주황이면 "지금 할 일"이라는
             뜻이 사라진다 — 숙제 목록(S-2)과 같은 규칙이다.
+            오프라인 응시(OFFLINE)도 끝난 쪽이다(2026-09-27) — 반 전체가 종이로 본
+            주에 전원이 "응시할 테스트"로 뜨지 않게 하려고 서버가 만든 값이다.
           */
-          const todo = data.filter((test) => test.status !== "SUBMITTED");
-          const done = data.filter((test) => test.status === "SUBMITTED");
+          const todo = data.filter((test) => !isFinished(test.status));
+          const done = data.filter((test) => isFinished(test.status));
           return (
             <>
               {todo.length > 0 && (
@@ -66,6 +68,11 @@ export default function StudentOnlineTestPage() {
   );
 }
 
+/** 더 할 것이 없는 테스트. 앱 `isTakeFinished` 와 같은 판정이다. */
+function isFinished(status: StudentOnlineTestListItem["status"]): boolean {
+  return status === "SUBMITTED" || status === "OFFLINE";
+}
+
 /** 목록의 한 줄. 두 덩어리가 같은 모양을 쓰고 배경만 다르다. */
 function TestRow({
   test,
@@ -76,6 +83,7 @@ function TestRow({
 }) {
   const closed = test.remainingMinutes != null && test.remainingMinutes < 0;
   const submitted = test.status === "SUBMITTED";
+  const finished = isFinished(test.status);
 
   return (
     <Link
@@ -93,7 +101,7 @@ function TestRow({
         {test.classRoomName} · {test.questionCount}문항
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <Badge tone={submitted ? "ok" : closed ? "danger" : "warn"}>
+        <Badge tone={submitted ? "ok" : finished ? "neutral" : closed ? "danger" : "warn"}>
           {TAKE_STATUS_LABELS[test.status]}
         </Badge>
         {!submitted && test.status === "IN_PROGRESS" && (
@@ -102,7 +110,7 @@ function TestRow({
           </Badge>
         )}
         {/* 서버가 계산한 값이다. 클라이언트 시계로 다시 계산하지 않는다 */}
-        {!submitted && test.remainingMinutes != null && (
+        {!finished && test.remainingMinutes != null && (
           <span
             className={`tnum text-[11.5px] font-semibold ${
               closed ? "text-red-600" : "text-slate-500"

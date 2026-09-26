@@ -113,6 +113,10 @@ class AppColors {
   static const amber100 = Color(0xFFFEF3C7);
   static const amber600 = Color(0xFFD97706);
 
+  /// 수강 후기의 **채운 별 하나뿐이다**(웹 `StarRating.tsx` 의 `text-amber-400`, B4).
+  /// 배지·버튼으로 넓히지 마라 — 경고(amber700)와 헷갈린다.
+  static const amber400 = Color(0xFFFBBF24);
+
   /// 배지 `warn` 의 테두리·글자(웹 `Badge.tsx` 의 `ring-amber-200 text-amber-700`).
   /// 🔺·「다시 제출 필요」·「늦게 냄」이 이 색이다.
   static const amber200 = Color(0xFFFDE68A);

@@ -255,7 +255,107 @@ Dio _fakeDio() {
       '/api/parent/children/1/homeworks': _parentHomeworks,
       // B3a. 경로만 보고 답하므로 달·자녀 쿼리는 무시된다.
       '/api/student/attendances': _attendanceMonth,
-      '/api/student/clinics': {'success': true, 'data': []},
+      // B4a 스케줄이 「내 클리닉」 한 줄을 그리도록 배정 하나를 깐다. 출석
+      // 캘린더(B3a)도 같은 응답을 쓴다.
+      '/api/student/clinics': {
+        'success': true,
+        'data': [
+          {
+            'clinicId': 21,
+            'clinicDate': '2026-09-03',
+            'startTime': '17:00',
+            'endTime': '22:00',
+            'slots': ['17:00', '18:00', '19:00', '20:00', '21:00'],
+            'capacity': null,
+            'reservedCount': 1,
+            'full': false,
+            'weekLabel': '9월 1주',
+            'myReservation': {
+              'reservationId': 1,
+              'status': 'RESERVED',
+              'arrivalTime': '18:00',
+              'attendStatus': null,
+            },
+          },
+        ],
+      },
+      '/api/student/lesson-changes': {'success': true, 'data': []},
+      '/api/student/qna': {
+        'success': true,
+        'data': {
+          'items': [
+            {
+              'postId': 31,
+              'title': '관계대명사 질문',
+              'authorName': '김하늘',
+              'classRoomId': 1,
+              'classRoomName': 'A반',
+              'isPublic': false,
+              'mine': true,
+              'hasPhoto': false,
+              'answerCount': 1,
+              'createdAt': '2026-09-20T10:00:00+09:00',
+            },
+          ],
+          'totalPages': 1,
+        },
+      },
+      '/api/student/qna/31': {
+        'success': true,
+        'data': {
+          'postId': 31,
+          'title': '관계대명사 질문',
+          'authorName': '김하늘',
+          'classRoomId': 1,
+          'classRoomName': 'A반',
+          'isPublic': false,
+          'content': 'that 과 which 차이가 뭔가요?',
+          'photos': [],
+          'editable': true,
+          'createdAt': '2026-09-20T10:00:00+09:00',
+          'answers': [
+            {
+              'answerId': 32,
+              'authorName': '선생님',
+              'byTeacher': true,
+              'content': '수업 때 다시 볼게요.',
+              'photos': [],
+              'editable': false,
+              'createdAt': '2026-09-20T11:00:00+09:00',
+            },
+          ],
+        },
+      },
+      '/api/student/reviews/me': {'success': true, 'data': null},
+      // B4b. 목록은 마감 없는 것 하나, 응시는 3문항.
+      '/api/student/online-tests': {
+        'success': true,
+        'data': [
+          {
+            'testId': 41,
+            'title': '9월 2주 클리닉',
+            'classRoomName': 'A반',
+            'questionCount': 3,
+            'closesAt': null,
+            'remainingMinutes': null,
+            'status': 'NOT_STARTED',
+            'answeredCount': 0,
+          },
+        ],
+      },
+      '/api/student/online-tests/41': {
+        'success': true,
+        'data': {
+          'testId': 41,
+          'title': '9월 2주 클리닉',
+          'classRoomName': 'A반',
+          'questionCount': 3,
+          'choiceCount': 5,
+          'closesAt': null,
+          'chosenChoices': [null, null, null],
+          'status': 'IN_PROGRESS',
+        },
+      },
       '/api/parent/children/1/attendances': _attendanceMonth,
       '/api/parent/children/1/clinics': {'success': true, 'data': []},
       '/api/notices': {
@@ -799,6 +899,63 @@ void main() {
     expect(find.text('내 정보 · 성적'), findsOneWidget);
     expect(find.text('12/15'), findsOneWidget);
     expect(find.byKey(const Key('student-logout')), findsOneWidget);
+  });
+
+  testWidgets('B4a 학생 화면이 셸 안에서 실물로 그려진다', (tester) async {
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    router.go(AppRoutes.studentClinics);
+    await tester.pumpAndSettle();
+    expect(find.text('스케줄 관리'), findsOneWidget);
+    expect(find.text('09-03 18:00 도착'), findsOneWidget);
+    expect(find.text('변경 요청한 수업이 없습니다.'), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+
+    router.go(AppRoutes.studentQna);
+    await tester.pumpAndSettle();
+    expect(find.text('질의응답'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('qna-31')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '${AppRoutes.studentQna}/31',
+    );
+    expect(find.text('that 과 which 차이가 뭔가요?'), findsOneWidget);
+    expect(find.text('수업 때 다시 볼게요.'), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('page-back')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.studentQna,
+    );
+  });
+
+  testWidgets('B4b 온라인 테스트가 셸 안에서 실물로 그려진다', (tester) async {
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+
+    router.go(AppRoutes.studentOnlineTests);
+    await tester.pumpAndSettle();
+    expect(find.text('온라인 테스트'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('test-41')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '${AppRoutes.studentOnlineTests}/41',
+    );
+    expect(find.text('0 / 3 입력'), findsOneWidget);
+    expect(find.byKey(const ValueKey('q-2-5')), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('page-back')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.studentOnlineTests,
+    );
   });
 
   testWidgets('홈의 지난 수업 카드는 그 수업의 상세로 간다', (tester) async {

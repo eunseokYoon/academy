@@ -7,12 +7,12 @@ import 'package:academy_app/features/student/home/student_home_controller.dart';
 import 'package:academy_app/features/student/home/student_home_models.dart';
 import 'package:academy_app/features/student/home/student_home_page.dart';
 import 'package:academy_app/features/student/home/student_home_repository.dart';
-import 'package:academy_app/features/student/stubs/student_stubs.dart';
 import 'package:academy_app/shared/lib/home_labels.dart';
 import 'package:academy_app/shared/widgets/app_bar_band.dart';
 import 'package:academy_app/shared/widgets/bottom_tab_bar.dart';
 import 'package:academy_app/shared/widgets/notice_card.dart';
 import 'package:academy_app/shared/widgets/role_shell.dart';
+import 'package:academy_app/shared/widgets/sub_page.dart';
 
 /// 실제 셸(RoleShell + 실제 학생 홈)의 기하. 웹 `StudentLayout` 과 같은
 /// 모양인지 — 앱바가 페이지와 함께 스크롤되고, 하단 바가 고정·반투명이라
@@ -93,7 +93,20 @@ GoRouter _router(StudentHomeController c) => GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.studentQna,
-              builder: (_, _) => const StudentQnaStub(),
+              // 하위 화면의 틀(SubPageScroll)을 이 탭 자리에 둬서 셸 안
+              // 하위 화면의 기하를 잰다. 길어야 끝까지 굴렸을 때를 잴 수 있다.
+              builder: (_, _) => SubPageScroll(
+                role: '학생',
+                children: [
+                  for (var i = 0; i < 20; i++)
+                    SizedBox(height: 80, child: Text('줄 $i')),
+                  const SizedBox(
+                    key: Key('sub-last'),
+                    height: 40,
+                    child: Text('마지막'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -185,28 +198,23 @@ void main() {
     expect(vp.bottom, 844);
   });
 
-  testWidgets('스텁은 자기 앱바를 그리고 본문이 탭 바에 가리지 않는다', (tester) async {
+  testWidgets('하위 화면은 자기 앱바를 그리고 마지막 줄이 탭 바에 가리지 않는다', (tester) async {
     await pumpShell(tester);
-    // 수업·성적은 B3 에서 실물이 됐다. 남은 스텁은 질문(B4)이다.
     await tester.tap(find.text('질문').last);
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byType(StudentQnaStub),
+        of: find.byType(SubPageScroll),
         matching: find.byType(AppBarBand),
       ),
       findsOneWidget,
     );
-    // 카드는 가운데 정렬이라 짧으면 어차피 안 가린다 — 카드를 가운데 놓는
-    // **영역**(Center)이 바 위에서 끝나는지 본다.
-    final region = tester.getRect(
-      find
-          .ancestor(
-            of: find.byKey(const Key('stub-scroll')),
-            matching: find.byType(Center),
-          )
-          .first,
-    );
-    expect(region.bottom, lessThanOrEqualTo(tabBarTop(tester)));
+    await tester.drag(find.byType(SubPageScroll), const Offset(0, -5000));
+    await tester.pumpAndSettle();
+    final last = tester.getRect(find.byKey(const Key('sub-last')));
+    final barTop = tabBarTop(tester);
+    expect(last.bottom, lessThanOrEqualTo(barTop));
+    // 틈이 과하지도 않다(예전 고정값 176 은 바를 두 번 셌다).
+    expect(barTop - last.bottom, lessThanOrEqualTo(_maxGap));
   });
 }

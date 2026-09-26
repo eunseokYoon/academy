@@ -18,6 +18,7 @@ import '../../../shared/widgets/submit_button.dart';
 import '../../student/home/student_home_controller.dart' show HomeStatus;
 import 'student_homework_controllers.dart';
 import 'student_homework_models.dart';
+import 'media_source_sheet.dart';
 import 'submission_media.dart';
 import 'submission_video_player.dart';
 
@@ -138,7 +139,7 @@ class _StudentHomeworkDetailPageState extends State<StudentHomeworkDetailPage>
   // ── 사진 ──────────────────────────────────────────────
 
   Future<void> _addPhotos(StudentHomeworkDetail detail) async {
-    final from = await _chooseSource('사진 추가');
+    final from = await chooseMediaSource(context);
     if (from == null || !mounted) return;
     final room = kMaxPhotos - detail.photos.length - _uploading.length;
     setState(() {
@@ -207,7 +208,7 @@ class _StudentHomeworkDetailPageState extends State<StudentHomeworkDetailPage>
   // ── 영상 ──────────────────────────────────────────────
 
   Future<void> _pickVideo() async {
-    final from = await _chooseSource('영상 추가');
+    final from = await chooseMediaSource(context);
     if (from == null || !mounted) return;
     setState(() => _error = null);
     final PickedVideo? video;
@@ -271,35 +272,6 @@ class _StudentHomeworkDetailPageState extends State<StudentHomeworkDetailPage>
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  /// 카메라·앨범 중 하나. 버튼 하나가 둘 다 연다(2026-09-26 확정).
-  Future<MediaFrom?> _chooseSource(String title) {
-    return showModalBottomSheet<MediaFrom>(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              key: const Key('source-camera'),
-              title: const Text('카메라로 찍기'),
-              onTap: () => Navigator.of(context).pop(MediaFrom.camera),
-            ),
-            ListTile(
-              key: const Key('source-gallery'),
-              title: const Text('앨범에서 고르기'),
-              onTap: () => Navigator.of(context).pop(MediaFrom.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
