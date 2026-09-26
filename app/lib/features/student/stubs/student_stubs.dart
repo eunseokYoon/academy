@@ -2,15 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/stub_page.dart';
 
-/// B2 가 만든다.
-class StudentHomeworksStub extends StatelessWidget {
-  const StudentHomeworksStub({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const StubPage(role: '학생', title: '숙제', stage: 'B2');
-}
-
 /// B3 가 만든다.
 class StudentLessonsStub extends StatelessWidget {
   const StudentLessonsStub({super.key});

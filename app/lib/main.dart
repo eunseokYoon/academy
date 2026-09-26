@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/api/dio_client.dart';
 import 'core/api/password_gate_interceptor.dart';
+import 'core/api/s3_uploader.dart';
 import 'core/api/refresh_interceptor.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_repository.dart';
@@ -28,11 +29,18 @@ import 'features/auth/terms_page.dart';
 import 'features/parent/home/parent_home_controller.dart';
 import 'features/parent/home/parent_home_page.dart';
 import 'features/parent/home/parent_home_repository.dart';
+import 'features/parent/homeworks/parent_homework_data.dart';
+import 'features/parent/homeworks/parent_homeworks_page.dart';
 import 'features/parent/selected_child.dart';
 import 'features/parent/stubs/parent_stubs.dart';
 import 'features/student/home/student_home_controller.dart';
 import 'features/student/home/student_home_page.dart';
 import 'features/student/home/student_home_repository.dart';
+import 'features/student/homeworks/student_homework_controllers.dart';
+import 'features/student/homeworks/student_homework_detail_page.dart';
+import 'features/student/homeworks/student_homework_repository.dart';
+import 'features/student/homeworks/student_homeworks_page.dart';
+import 'features/student/homeworks/submission_media.dart';
 import 'features/student/stubs/student_stubs.dart';
 import 'shared/branding.dart';
 import 'shared/widgets/role_shell.dart';
@@ -112,9 +120,13 @@ class AcademyApp extends StatefulWidget {
     required this.auth,
     required this.dio,
     required this.store,
+    this.mediaPicker,
   });
 
   final AuthController auth;
+
+  /// 테스트가 가짜를 넣는다. 없으면 기기의 카메라·앨범이다.
+  final MediaPicker? mediaPicker;
 
   /// 기기 저장소. 학부모가 고른 자녀를 앱을 껐다 켜도 기억한다
   /// ([SelectedChild] 의 주석).
@@ -148,20 +160,49 @@ class _Session {
     : studentHome = StudentHomeController(
         repository: StudentHomeRepository(dio),
       ),
+      studentHomeworks = StudentHomeworksController(
+        repository: StudentHomeworkRepository(dio),
+      ),
+      studentHomeworkDetail = StudentHomeworkDetailController(
+        repository: StudentHomeworkRepository(dio),
+      ),
+      uploader = SubmissionUploader(
+        repository: StudentHomeworkRepository(dio),
+        s3: S3Uploader(),
+      ),
       selectedChild = SelectedChild(dio: dio, store: store),
-      parentHome = ParentHomeController(repository: ParentHomeRepository(dio));
+      parentHome = ParentHomeController(repository: ParentHomeRepository(dio)),
+      parentHomeworks = ParentHomeworksController(
+        repository: ParentHomeworkRepository(dio),
+      );
 
   final StudentHomeController studentHome;
+  final StudentHomeworksController studentHomeworks;
+  final StudentHomeworkDetailController studentHomeworkDetail;
+
+  /// 상태가 없다. 세션에 두는 이유는 저장소가 이 사람의 Dio 로 부르기 때문이다.
+  final SubmissionUploader uploader;
+
+  /// 상세에서 올림·지움·제출이 성공했다 — 목록의 개수·배지와 홈의 미완료
+  /// 숙제 수가 낡았다. 지금 부르지 않고 다음에 보일 때 부른다.
+  void studentHomeworkChanged() {
+    studentHomeworks.markStale();
+    studentHome.markStale();
+  }
 
   /// **자녀 목록은 한 곳에서 관리한다** — 하위 화면(B2~B3)도 같은
   /// [SelectedChild] 를 받아야 자녀를 바꿨을 때 전부 같이 바뀐다.
   final SelectedChild selectedChild;
   final ParentHomeController parentHome;
+  final ParentHomeworksController parentHomeworks;
 
   void dispose() {
     studentHome.dispose();
+    studentHomeworks.dispose();
+    studentHomeworkDetail.dispose();
     selectedChild.dispose();
     parentHome.dispose();
+    parentHomeworks.dispose();
   }
 }
 
@@ -173,6 +214,10 @@ class _AcademyAppState extends State<AcademyApp> {
   /// 이미 로그인된 채로 뜬 경우의 방어) — 로그아웃이 오면 그대로 버려진다.
   _Session get _session =>
       _currentSession ??= _Session(dio: widget.dio, store: widget.store);
+
+  /// 카메라·앨범. 사람에게 딸린 상태가 없어 앱 수명이다.
+  late final MediaPicker _mediaPicker =
+      widget.mediaPicker ?? DeviceMediaPicker();
 
   late final GoRouter _router = buildRouter(
     auth: widget.auth,
@@ -232,7 +277,24 @@ class _AcademyAppState extends State<AcademyApp> {
             routes: [
               GoRoute(
                 path: AppRoutes.studentHomeworks,
-                builder: (_, _) => const StudentHomeworksStub(),
+                builder: (_, _) =>
+                    StudentHomeworksPage(controller: _session.studentHomeworks),
+                // 상세(S-3·S-4)는 목록의 자식이다 — 뒤로 가면 목록이고, 하단
+                // 탭 바가 그대로 있다. 홈의 숙제 줄도 여기로 온다.
+                routes: [
+                  GoRoute(
+                    path: ':homeworkId',
+                    builder: (_, state) => StudentHomeworkDetailPage(
+                      homeworkId: int.parse(
+                        state.pathParameters['homeworkId']!,
+                      ),
+                      controller: _session.studentHomeworkDetail,
+                      uploader: _session.uploader,
+                      picker: _mediaPicker,
+                      onChanged: _session.studentHomeworkChanged,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -280,7 +342,10 @@ class _AcademyAppState extends State<AcademyApp> {
                 routes: [
                   GoRoute(
                     path: 'homeworks',
-                    builder: (_, _) => const ParentHomeworksStub(),
+                    builder: (_, _) => ParentHomeworksPage(
+                      controller: _session.parentHomeworks,
+                      selectedChild: _session.selectedChild,
+                    ),
                   ),
                   GoRoute(
                     path: 'notices',

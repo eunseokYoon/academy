@@ -14,7 +14,7 @@ void main() {
   });
 
   // 값의 정본은 tailwind 기본 팔레트다(frontend/node_modules/tailwindcss/colors).
-  // 웹이 인증 화면에서 쓰는 음영만 옮긴다 — emerald·sky 는 쓰지 않으므로 넣지 않는다.
+  // 웹이 쓰는 음영만 옮긴다 — sky 는 쓰는 화면이 없어 넣지 않는다.
   test('상태색이 tailwind 기본 팔레트와 같다', () {
     expect(AppColors.slate50.toARGB32(), 0xFFF8FAFC);
     expect(AppColors.slate100.toARGB32(), 0xFFF1F5F9);
@@ -31,5 +31,10 @@ void main() {
     expect(AppColors.amber50.toARGB32(), 0xFFFFFBEB);
     expect(AppColors.amber800.toARGB32(), 0xFF92400E);
     expect(AppColors.amber900.toARGB32(), 0xFF78350F);
+    expect(AppColors.amber200.toARGB32(), 0xFFFDE68A);
+    expect(AppColors.amber700.toARGB32(), 0xFFB45309);
+    expect(AppColors.emerald50.toARGB32(), 0xFFECFDF5);
+    expect(AppColors.emerald200.toARGB32(), 0xFFA7F3D0);
+    expect(AppColors.emerald700.toARGB32(), 0xFF047857);
   });
 }

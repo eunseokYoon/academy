@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/routes.dart';
@@ -37,17 +38,43 @@ class RoleShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      extendBody: true,
-      body: navigationShell,
-      bottomNavigationBar: BottomTabBar(
-        tabs: tabs,
-        currentIndex: navigationShell.currentIndex,
-        // 같은 탭을 다시 누르면 그 갈래의 첫 화면으로 돌아간다.
-        onTap: (i) => navigationShell.goBranch(
-          i,
-          initialLocation: i == navigationShell.currentIndex,
+    // 상태 표시줄 위의 글자·아이콘은 흰색이다 — 아래 가림막이 남색이다.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.paper,
+        extendBody: true,
+        // **상태 표시줄 가림막.** 앱바는 화면 스크롤 안에 있어서(위 주석) 스크롤로
+        // 올라가 사라지면 본문이 시계·배터리 밑을 지나간다. 셸이 그 높이만큼
+        // 남색을 **위에** 덮는다 — 맨 위에서는 앱바의 남색과 이어져 안 보이고,
+        // 스크롤하면 본문이 그 밑으로 들어간다(2026-09-26 확정). 웹에는 없다 —
+        // 브라우저는 상태 표시줄 밑에 페이지를 그리지 않는다.
+        body: Stack(
+          children: [
+            navigationShell,
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: MediaQuery.paddingOf(context).top,
+              // 눌림을 가로채지 않는다. 가림막 밑의 본문은 어차피 안 보인다.
+              child: const IgnorePointer(
+                child: ColoredBox(
+                  key: Key('status-bar-scrim'),
+                  color: AppColors.brand900,
+                ),
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: BottomTabBar(
+          tabs: tabs,
+          currentIndex: navigationShell.currentIndex,
+          // 같은 탭을 다시 누르면 그 갈래의 첫 화면으로 돌아간다.
+          onTap: (i) => navigationShell.goBranch(
+            i,
+            initialLocation: i == navigationShell.currentIndex,
+          ),
         ),
       ),
     );

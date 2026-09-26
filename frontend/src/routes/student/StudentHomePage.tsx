@@ -102,7 +102,8 @@ export default function StudentHomePage() {
   if (nextExam) {
     stats.push({
       label: EXAM_TYPE_LABELS[nextExam.examType],
-      value: `D-${nextExam.dDay}`,
+      /* 수업·클리닉 칸과 같은 함수다. 시험 당일만 "D-0"이면 같은 지면에 "오늘"과 섞인다 */
+      value: dDayLabel(nextExam.dDay),
       /* 연도를 뺀다. 360px에서 "2026.10.12 시작"은 잘려서 "2026.10.12 시…"가 된다 */
       sub: `${nextExam.startDate.slice(5).replace("-", ".")} 시작`,
     });

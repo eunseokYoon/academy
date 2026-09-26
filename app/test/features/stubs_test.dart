@@ -37,10 +37,9 @@ void main() {
     expect(calls, 1);
   });
 
-  testWidgets('나머지 여섯 스텁은 로그아웃을 갖지 않는다', (tester) async {
+  testWidgets('나머지 다섯 스텁은 로그아웃을 갖지 않는다', (tester) async {
     // 로그아웃이 여러 화면에 흩어지면 어디서 내려놓는지 알 수 없다.
     final others = <Widget>[
-      const StudentHomeworksStub(),
       const StudentLessonsStub(),
       const StudentQnaStub(),
       const ParentScheduleStub(),
@@ -57,9 +56,8 @@ void main() {
     }
   });
 
-  testWidgets('여덟 스텁이 모두 자기 제목을 보여준다', (tester) async {
+  testWidgets('일곱 스텁이 모두 자기 제목을 보여준다', (tester) async {
     final cases = <Widget, String>{
-      const StudentHomeworksStub(): '숙제',
       const StudentLessonsStub(): '수업',
       StudentScoresStub(onLogout: () async {}): '내 정보 · 성적',
       const StudentQnaStub(): '질문',

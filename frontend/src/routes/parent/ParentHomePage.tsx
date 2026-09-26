@@ -92,7 +92,8 @@ export default function ParentHomePage() {
   if (nextExam) {
     stats.push({
       label: EXAM_TYPE_LABELS[nextExam.examType],
-      value: `D-${nextExam.dDay}`,
+      /* 수업·클리닉 칸과 같은 함수다. 시험 당일만 "D-0"이면 같은 지면에 "오늘"과 섞인다 */
+      value: dDayLabel(nextExam.dDay),
       sub: `${nextExam.startDate.slice(5).replace("-", ".")} 시작`,
     });
   }
@@ -195,7 +196,12 @@ export default function ParentHomePage() {
         <SectionHead tone="brand" title="이번 달 출석" to="/parent/schedule" />
         <TintBlock tone="brand">
           <div className="grid grid-cols-3 divide-x divide-brand-100">
-            <AttendanceCell label="출석" value={thisMonthAttendance.present} />
+            {/* 대체 등원(makeup)도 출석이다(CLAUDE.md 5-1). 서버의 present는 makeup을
+                포함하지 않아서, present만 쓰면 대체 등원한 날이 세 칸 어디에도 안 잡힌다 */}
+            <AttendanceCell
+              label="출석"
+              value={thisMonthAttendance.present + thisMonthAttendance.makeup}
+            />
             <AttendanceCell label="지각" value={thisMonthAttendance.late} />
             <AttendanceCell label="결석" value={thisMonthAttendance.absent} />
           </div>

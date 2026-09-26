@@ -8,12 +8,15 @@ import 'package:flutter_test/flutter_test.dart';
 /// (최종 리뷰 I7), B단계는 화면이 13개다. 색이 화면으로 새면 「빨강은
 /// 결석·위험 하나만」 같은 규칙이 지켜지는지 아무도 확인할 수 없다.
 ///
-/// 잡는 대상은 `app/lib/shared/widgets/` 뿐이다. `core/theme/` 는 값이
-/// 사는 곳이므로 당연히 리터럴이 있다.
+/// 잡는 대상은 `app/lib/shared/widgets/` 와 `app/lib/features/` 다(화면이
+/// 사는 곳 — B2 에서 넓혔다). `core/theme/` 는 값이 사는 곳이므로 당연히
+/// 리터럴이 있다.
 void main() {
-  test('공용 위젯 안에 16진 색 리터럴이 없다', () {
-    final dir = Directory('lib/shared/widgets');
-    expect(dir.existsSync(), isTrue, reason: '위젯 디렉터리가 있어야 한다');
+  test('공용 위젯·화면 안에 16진 색 리터럴이 없다', () {
+    final dirs = [Directory('lib/shared/widgets'), Directory('lib/features')];
+    for (final dir in dirs) {
+      expect(dir.existsSync(), isTrue, reason: '${dir.path} 가 있어야 한다');
+    }
 
     // Color(0x…), Color.fromARGB(…), 맨 16진수 0xAARRGGBB, #RRGGBB 를 잡는다.
     // 맨 16진수 대안이 있는 이유 — `Color(` 가 줄바꿈으로 쪼개져도
@@ -23,7 +26,11 @@ void main() {
     );
     final offenders = <String>[];
 
-    for (final f in dir.listSync(recursive: true).whereType<File>()) {
+    final files = [
+      for (final dir in dirs)
+        ...dir.listSync(recursive: true).whereType<File>(),
+    ];
+    for (final f in files) {
       if (!f.path.endsWith('.dart')) continue;
       final lines = f.readAsLinesSync();
       for (var i = 0; i < lines.length; i++) {

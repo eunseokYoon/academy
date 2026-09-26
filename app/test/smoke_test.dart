@@ -127,6 +127,71 @@ const _parentHome = {
   },
 };
 
+const _homeworkItem = {
+  'homeworkId': 11,
+  'title': '단어 3과',
+  'description': null,
+  'classRoomName': 'A반',
+  'kind': 'ONLINE',
+  'lessonDate': '2026-09-14',
+  'result': null,
+  'completionRate': null,
+  'resolvedByResubmission': false,
+  'resubmitRequired': false,
+  'dueAt': '2026-09-21T21:00:00+09:00',
+  'status': 'NOT_SUBMITTED',
+  'isLate': false,
+  'photoCount': 0,
+  'hasVideo': false,
+  'remainingMinutes': 1500,
+};
+
+const _studentHomeworks = {
+  'success': true,
+  'data': {
+    'items': [_homeworkItem],
+    'page': 0,
+    'size': 20,
+    'totalElements': 1,
+    'totalPages': 1,
+  },
+};
+
+const _studentHomeworkDetail = {
+  'success': true,
+  'data': {
+    'homework': {
+      'id': 11,
+      'title': '단어 3과',
+      'description': null,
+      'kind': 'ONLINE',
+      'lessonDate': '2026-09-14',
+      'dueAt': '2026-09-21T21:00:00+09:00',
+      'classRoomName': 'A반',
+    },
+    'submission': {
+      'id': 5,
+      'status': 'NOT_SUBMITTED',
+      'submittedAt': null,
+      'isLate': false,
+      'photos': [],
+      'video': null,
+    },
+    'resubmitRequired': false,
+  },
+};
+
+const _parentHomeworks = {
+  'success': true,
+  'data': {
+    'items': [],
+    'page': 0,
+    'size': 20,
+    'totalElements': 0,
+    'totalPages': 0,
+  },
+};
+
 /// 학생 홈(S-1)과 학부모 홈(P-1)이 부르는 API. 눌러 볼 대상(숙제 줄·공지 줄·
 /// 지난 수업)이 있어야 하므로 하나씩 깐다.
 Dio _fakeDio() {
@@ -180,6 +245,11 @@ Dio _fakeDio() {
         ],
       },
       '/api/parent/children/1/home': _parentHome,
+      // B2 숙제 화면들. 레일·숙제 줄이 여기로 간다.
+      '/api/student/homeworks': _studentHomeworks,
+      '/api/student/homeworks/notes': {'success': true, 'data': []},
+      '/api/student/homeworks/11': _studentHomeworkDetail,
+      '/api/parent/children/1/homeworks': _parentHomeworks,
     });
 }
 
@@ -382,7 +452,7 @@ void main() {
 
   testWidgets('홈의 숙제 줄·구획 머리·공지가 제자리로 간다', (tester) async {
     // 레일 말고도 눌리는 곳이 있다. 숙제 줄은 레일 다음으로 많이 눌리고
-    // (B1 에는 상세가 없어 숙제 목록으로 간다 — 브리프 정정 §4), 구획 머리의
+    // (그 숙제의 상세로 간다), 구획 머리의
     // 「전체 ›」는 구획마다 목적지가 다르다. 콜백을 바꿔 끼워도 화면 테스트는
     // 모르므로 실제 라우터로 누른다.
     await _pumpAtRole(tester, role: UserRole.student);
@@ -399,10 +469,11 @@ void main() {
     );
 
     final cases = <(String, Finder, String)>[
+      // 웹과 같이 그 숙제의 상세로 간다(B2).
       (
         '숙제 줄',
         find.byKey(const Key('homework-row')),
-        AppRoutes.studentHomeworks,
+        '${AppRoutes.studentHomeworks}/11',
       ),
       ('미완료 숙제 머리', headAction('미완료 숙제'), AppRoutes.studentHomeworks),
       ('공지 머리', headAction('학원 공지'), AppRoutes.studentNotices),
@@ -425,6 +496,31 @@ void main() {
       );
       expect(find.byType(RoleShell), findsOneWidget, reason: '$name 이 셸 밖이다');
     }
+  });
+
+  testWidgets('숙제 목록 → 상세 → 목록이 셸 안에서 오간다', (tester) async {
+    // 상세는 숙제 갈래의 자식 라우트다. 라우트가 빠지면 go_router 오류 화면이
+    // 셸째로 덮고, 뒤로 가기가 홈으로 튄다.
+    await _pumpAtRole(tester, role: UserRole.student);
+    final router = GoRouter.of(tester.element(find.byType(RoleShell)));
+    router.go(AppRoutes.studentHomeworks);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('homework-11')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '${AppRoutes.studentHomeworks}/11',
+    );
+    expect(find.byKey(const Key('homework-header')), findsOneWidget);
+    expect(find.byType(RoleShell), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('page-back')));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.studentHomeworks,
+    );
   });
 
   testWidgets('학부모 홈 퀵 레일의 여섯 칸이 모두 라우트로 간다', (tester) async {

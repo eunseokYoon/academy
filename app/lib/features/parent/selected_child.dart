@@ -40,6 +40,7 @@ class SelectedChild extends ChangeNotifier {
 
   List<Child> _children = const [];
   bool _loading = false;
+  bool _loaded = false;
   int? _selected;
 
   /// 로그아웃하면 세션째 dispose 된다(`AcademyApp` 의 `_Session`). 그 뒤에
@@ -48,6 +49,11 @@ class SelectedChild extends ChangeNotifier {
 
   List<Child> get children => _children;
   bool get loading => _loading;
+
+  /// 목록을 한 번이라도 받았는가. **빈 목록과 아직 안 받음을 가른다** —
+  /// 둘 다 [children] 이 비어 있어서, 이게 없으면 자녀가 0명인 학부모의
+  /// 홈이 「불러오는 중」에서 영원히 안 끝난다(부를 id 가 없다).
+  bool get loaded => _loaded;
   int? get selectedStudentId => _selected;
 
   Future<void> load() async {
@@ -65,6 +71,7 @@ class SelectedChild extends ChangeNotifier {
       final saved = int.tryParse(await _store.read(_storageKey) ?? '');
       if (_disposed) return;
       _children = list;
+      _loaded = true;
       // 저장된 값이 더 이상 내 자녀가 아니면 첫째로 되돌린다.
       _selected = list.any((c) => c.studentId == saved)
           ? saved
