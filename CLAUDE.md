@@ -383,10 +383,11 @@ D-0 을 넣으면 없는 시험이 오늘로 읽힌다. `nextLessonTime` 이 nul
 머리 아래 9월이 뜬다. 빠진 가드는 복제된 수만큼 빠진다. 전부 리뷰에서 실제로 재현된 결함이다.
 - **60초 규칙.** `load()` 는 마지막 성공이 60초 이내면 건너뛴다. `refresh()` 는 무시한다.
   **새로고침 실패는 기존 데이터를 유지한다.**
-- **`load()` 를 부르는 곳은 화면이 아니라 `ReappearReload` 믹스인이다**
-  (`app/lib/shared/widgets/reappear_reload.dart`). 처음 뜰 때, **다시 보일 때**(`TickerMode` 가
-  꺼졌다 켜짐 — 탭 재진입과 홈 브랜치 자식 화면에서 돌아옴), **앱이 포그라운드로 돌아올 때**
-  (`AppLifecycleListener.onResume`, 보이는 중일 때만). `initState` 에서만 부르면
+- **`load()` 는 두 곳이 부른다.** 첫 로드는 **화면이** `initState`(와 컨트롤러가 바뀐
+  `didUpdateWidget`)에서 부른다 — 빼먹으면 로더가 영원히 돈다. 그 위에 `ReappearReload` 믹스인
+  (`app/lib/shared/widgets/reappear_reload.dart`)이 **다시 보일 때**(`TickerMode` 가 꺼졌다 켜짐 —
+  탭 재진입과 홈 브랜치 자식 화면에서 돌아옴)와 **앱이 포그라운드로 돌아올 때**
+  (`AppLifecycleListener.onResume`, 보이는 중일 때만)를 더한다. `initState` 만 두면
   `StatefulShellRoute.indexedStack` 이 State 를 살려 둬서 수요일에 월요일 화면이 뜬다.
   `TickerMode` 신호는 go_router 18 이 안 보이는 브랜치를 감싸는 방식에 기댄다 —
   업그레이드하면 `app/test/home_reload_test.dart` 가 잡는다.
