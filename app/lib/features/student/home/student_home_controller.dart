@@ -43,17 +43,10 @@ enum HomeStatus { idle, loading, ready, error }
 /// 컨트롤러는 [dispose] 이후로는 상태를 쓰지도 알리지도 않는다.
 class StudentHomeController extends ChangeNotifier {
   StudentHomeController({
-    required StudentHomeRepository repository,
-    Duration staleAfter = const Duration(seconds: 60),
+    required this._repository,
+    this._staleAfter = const Duration(seconds: 60),
     DateTime Function()? now,
-  }) : // named 매개변수에 private 이름(`this._repository`)을 쓰는 것을 Dart가
-       // 금지한다(컴파일 에러다, 조용히 깨지는 게 아니다). 필드를 private으로
-       // 두려면 이 방식뿐이다.
-       // ignore: prefer_initializing_formals
-       _repository = repository,
-       // ignore: prefer_initializing_formals
-       _staleAfter = staleAfter,
-       _now = now ?? DateTime.now;
+  }) : _now = now ?? DateTime.now;
 
   final StudentHomeRepository _repository;
   final Duration _staleAfter;

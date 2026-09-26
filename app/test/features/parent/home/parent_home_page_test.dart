@@ -1,11 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/fake_adapter.dart';
 import 'package:academy_app/core/router/app_router.dart';
 import 'package:academy_app/core/storage/key_value_store.dart';
 import 'package:academy_app/core/theme/app_colors.dart';
-import 'package:academy_app/features/parent/home/child_selector.dart';
 import 'package:academy_app/features/parent/home/parent_home_controller.dart';
 import 'package:academy_app/features/parent/home/parent_home_models.dart';
 import 'package:academy_app/features/parent/home/parent_home_page.dart';
@@ -459,8 +459,24 @@ void main() {
     expect(sc.selectedStudentId, 2);
     expect(repo.calls.last, 2);
     expect(find.text('김바다 학생\n학부모님, 환영합니다'), findsOneWidget);
-    // 드롭다운 글자 16 이상(CLAUDE.md 13-4).
-    expect(ChildSelector.fontSize, greaterThanOrEqualTo(16));
+    // 드롭다운에 **그려진** 글자가 16 이상(CLAUDE.md 13-4). 상수가 아니라
+    // 실제 문단의 스타일을 본다 — 스타일을 어느 한 곳에서 빼먹어도 잡힌다.
+    final painted = tester
+        .renderObjectList<RenderParagraph>(
+          find.descendant(
+            of: find.byKey(const Key('child-dropdown')),
+            matching: find.byType(RichText),
+          ),
+        )
+        .toList();
+    expect(painted, isNotEmpty);
+    for (final p in painted) {
+      expect(
+        p.text.style?.fontSize,
+        greaterThanOrEqualTo(16),
+        reason: p.text.toPlainText(),
+      );
+    }
   });
 
   testWidgets('홈은 요약이다 — 후기·공부 시간·랭킹이 없다', (tester) async {

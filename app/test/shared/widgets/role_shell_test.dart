@@ -7,7 +7,8 @@ import 'package:academy_app/shared/widgets/app_bar_band.dart';
 import 'package:academy_app/shared/widgets/bottom_tab_bar.dart';
 import 'package:academy_app/shared/widgets/role_shell.dart';
 
-/// 탭마다 식별 가능한 글자만 그리는 최소 라우터.
+/// 탭마다 식별 가능한 글자만 그리는 최소 라우터. 홈 갈래에는 실제 앱처럼
+/// 하위 화면(`/student/clinics`)이 하나 있다.
 GoRouter buildTestShell() {
   return GoRouter(
     initialLocation: AppRoutes.student,
@@ -22,6 +23,13 @@ GoRouter buildTestShell() {
                 GoRoute(
                   path: t.route,
                   builder: (_, _) => Center(child: Text('화면:${t.label}')),
+                  routes: [
+                    if (t.route == AppRoutes.student)
+                      GoRoute(
+                        path: 'clinics',
+                        builder: (_, _) => const Center(child: Text('화면:스케줄')),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -32,8 +40,18 @@ GoRouter buildTestShell() {
 }
 
 void main() {
+  late GoRouter router;
+
   Future<void> pump(WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp.router(routerConfig: buildTestShell()));
+    router = buildTestShell();
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+  }
+
+  String path() => router.routerDelegate.currentConfiguration.uri.path;
+
+  Future<void> tapTab(WidgetTester tester, String route) async {
+    await tester.tap(find.byKey(ValueKey('tab-$route')));
     await tester.pumpAndSettle();
   }
 
@@ -101,5 +119,31 @@ void main() {
       ),
     );
     expect(tabBar.currentIndex, 2, reason: '수업 탭으로 이동 후(인덱스 2)');
+  });
+
+  // goBranch(initialLocation: i == currentIndex) — 다른 탭으로 갔다 오면
+  // 그 갈래에 있던 자리로, 지금 탭을 다시 누르면 그 갈래의 첫 화면으로.
+
+  testWidgets('홈 하위 화면에서 다른 탭에 갔다 돌아오면 그 하위 화면이다', (tester) async {
+    await pump(tester);
+    router.go(AppRoutes.studentClinics);
+    await tester.pumpAndSettle();
+    expect(path(), AppRoutes.studentClinics);
+
+    await tapTab(tester, AppRoutes.studentHomeworks);
+    expect(path(), AppRoutes.studentHomeworks);
+    await tapTab(tester, AppRoutes.student);
+    expect(path(), AppRoutes.studentClinics);
+    expect(find.text('화면:스케줄'), findsOneWidget);
+  });
+
+  testWidgets('홈 하위 화면에서 홈 탭을 누르면 홈 첫 화면이다', (tester) async {
+    await pump(tester);
+    router.go(AppRoutes.studentClinics);
+    await tester.pumpAndSettle();
+
+    await tapTab(tester, AppRoutes.student);
+    expect(path(), AppRoutes.student);
+    expect(find.text('화면:홈'), findsOneWidget);
   });
 }

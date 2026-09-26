@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import 'app_bar_band.dart';
+import 'app_card.dart';
+import 'form_error.dart';
 
 /// 홈(S-1·P-1)의 겹침 구조가 끝에서 한 번 더 끌어올리는 양. 지면 `-40` 뒤에
 /// 레일 카드와 나머지 구획이 누적 `-80` 으로 그려진다.
@@ -45,4 +47,52 @@ class HomeStatusFrame extends StatelessWidget {
       Expanded(child: SafeArea(top: false, child: child)),
     ],
   );
+}
+
+/// 웹 `main` 의 `mx-auto max-w-screen-sm p-4` 의 가로 부분. `HeroField` 가
+/// 자기 안에서 쓰는 값과 같아야 지면과 카드의 좌우가 맞는다.
+Widget homeConstrain(Widget child) => Center(
+  child: ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 384),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: child,
+    ),
+  ),
+);
+
+/// 홈의 첫 로딩이 실패했을 때. 문구는 **서버 문구 그대로**다 — 감싸거나
+/// 접두어를 붙이지 마라.
+class HomeErrorView extends StatelessWidget {
+  const HomeErrorView({
+    super.key,
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String? message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 384),
+          child: AppCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FormError(message: message),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: onRetry, child: const Text('다시 시도')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

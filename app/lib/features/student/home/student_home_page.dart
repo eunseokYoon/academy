@@ -11,7 +11,6 @@ import 'package:academy_app/shared/lib/home_labels.dart';
 import '../../../shared/widgets/app_bar_band.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/exam_schedule_section.dart';
-import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/hero_field.dart';
 import '../../../shared/widgets/home_layout.dart';
@@ -104,7 +103,7 @@ class _StudentHomePageState extends State<StudentHomePage>
       if (c.status == HomeStatus.error) {
         return HomeStatusFrame(
           role: '학생',
-          child: _ErrorView(message: c.error, onRetry: c.refresh),
+          child: HomeErrorView(message: c.error, onRetry: c.refresh),
         );
       }
       return const HomeStatusFrame(role: '학생', child: FullScreenLoader());
@@ -145,7 +144,7 @@ class _StudentHomePageState extends State<StudentHomePage>
               // 카드가 지면의 pb 64 안으로 40 더 올라온다(`.hero-lift`). 누적 -80.
               Transform.translate(
                 offset: const Offset(0, -80),
-                child: _constrain(
+                child: homeConstrain(
                   _card(
                     child: QuickRail(items: _railItems(home), onTap: _go),
                   ),
@@ -160,10 +159,10 @@ class _StudentHomePageState extends State<StudentHomePage>
                   children: [
                     // 구획 사이 간격은 웹 `mt-5` = 20 이다.
                     const SizedBox(height: 20),
-                    _constrain(_pendingSection(home)),
+                    homeConstrain(_pendingSection(home)),
                     if (exam != null) ...[
                       const SizedBox(height: 20),
-                      _constrain(
+                      homeConstrain(
                         ExamScheduleSection(
                           examType: exam.examType,
                           startDate: exam.startDate,
@@ -172,7 +171,7 @@ class _StudentHomePageState extends State<StudentHomePage>
                       ),
                     ],
                     const SizedBox(height: 20),
-                    _constrain(
+                    homeConstrain(
                       NoticeCard(
                         totalCount: home.notices.totalCount,
                         recent: home.notices.recent
@@ -194,7 +193,7 @@ class _StudentHomePageState extends State<StudentHomePage>
                     // 지난 수업이 통째로 비어 있으면 null 이다 — **머리까지 숨긴다.**
                     if (lastLesson != null) ...[
                       const SizedBox(height: 20),
-                      _constrain(_lastLessonSection(lastLesson)),
+                      homeConstrain(_lastLessonSection(lastLesson)),
                     ],
                   ],
                 ),
@@ -207,18 +206,6 @@ class _StudentHomePageState extends State<StudentHomePage>
       ),
     );
   }
-
-  /// 웹 `main` 의 `mx-auto max-w-screen-sm p-4`. [HeroField] 가 자기 안에서
-  /// 쓰는 값과 같아야 지면과 카드의 좌우가 맞는다.
-  Widget _constrain(Widget child) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 384),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: child,
-      ),
-    ),
-  );
 
   /// 레일을 감싸는 흰 카드. **가로 패딩을 주지 마라** — 레일이 자기 여백을
   /// 갖고, 마지막 칸이 카드 끝에서 잘려야 「옆으로 넘길 수 있다」가 읽힌다
@@ -429,38 +416,6 @@ class _HomeworkRow extends StatelessWidget {
   }
 }
 
-/// 첫 로딩이 실패했을 때. 문구는 컨트롤러가 담은 **서버 문구 그대로**다 —
-/// 감싸거나 접두어를 붙이지 마라.
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String? message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 384),
-          child: AppCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FormError(message: message),
-                const SizedBox(height: 16),
-                FilledButton(onPressed: onRetry, child: const Text('다시 시도')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 인사말 두 줄. 이름 뒤는 **「학생,」** 이고(웹과 같다), 아랫줄이 오늘 해야
 /// 할 일을 한 문장으로 말한다.
 ///
@@ -575,11 +530,14 @@ String _remainingLabel(int minutes) {
 
 /// 「9월 21일 21:00」. 웹 `shared/homework/types.ts` 의 `formatDueAt`.
 ///
-/// **`DateTime.parse` 는 `+09:00` 을 UTC 로 돌려준다 — `.toLocal()` 을
-/// 빼먹지 마라.** 빼먹으면 마감이 9시간 어긋난 채 조용히 표시된다.
-/// 웹의 `new Date()` 도 로컬로 읽는다.
+/// **한국 시각으로 명시 변환한다 — `.toLocal()` 을 쓰지 마라.**
+/// `DateTime.parse` 는 `+09:00` 을 UTC 로 돌려주고, `.toLocal()` 은 **기기
+/// 시간대**를 따른다 — 해외에 나간 학생·UTC 로 도는 테스트 러너에서 마감이
+/// 9시간 어긋난다. 날짜 칸(`dateLabel` 등)은 서버의 KST 문자열을 자르므로
+/// 여기도 KST 로 맞춰야 한 화면의 시각이 한 기준이 된다. 한국은 서머타임이
+/// 없어서 `+9h` 가 정확하다.
 String _formatDueAt(String iso) {
-  final at = DateTime.parse(iso).toLocal();
+  final at = DateTime.parse(iso).toUtc().add(const Duration(hours: 9));
   final hour = at.hour.toString().padLeft(2, '0');
   final minute = at.minute.toString().padLeft(2, '0');
   return '${at.month}월 ${at.day}일 $hour:$minute';

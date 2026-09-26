@@ -447,10 +447,29 @@ void main() {
   });
 
   testWidgets('마감 시각이 9시간 어긋나지 않는다', (tester) async {
-    // DateTime.parse 는 +09:00 을 UTC 로 돌려준다. .toLocal() 을 빼면
-    // 21:00 마감이 12:00 으로 조용히 바뀐다.
+    // DateTime.parse 는 +09:00 을 UTC 로 돌려준다. 기기 시간대(.toLocal())
+    // 로 읽으면 UTC 러너·해외 기기에서 21:00 마감이 12:00 으로 조용히
+    // 바뀐다. `TZ=UTC flutter test` 로도 통과해야 한다.
     await pump(tester, _home(homeworks: [_hw]));
     expect(find.text('9월 21일 21:00 마감'), findsOneWidget);
+  });
+
+  testWidgets('UTC 로 온 마감도 한국 시각으로 그린다(날짜가 넘어가는 경우)', (tester) async {
+    await pump(
+      tester,
+      _home(
+        homeworks: [
+          const HomeHomework(
+            homeworkId: 1,
+            title: '단어 3과',
+            dueAt: '2026-09-21T15:30:00Z',
+            status: 'NOT_SUBMITTED',
+            remainingMinutes: 1500,
+          ),
+        ],
+      ),
+    );
+    expect(find.text('9월 22일 00:30 마감'), findsOneWidget);
   });
 
   testWidgets('공지 줄의 고정 배지가 나온다', (tester) async {

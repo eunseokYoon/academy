@@ -20,28 +20,16 @@ import 'api_response.dart';
 /// 리프레시 호출이 401이어도 재귀하지 않고, 재시도가 정확히 한 번이다.
 /// 쿠키 자는 공유해야 한다. 리프레시 토큰이 쿠키로 실려 나가기 때문이다.
 class RefreshInterceptor extends QueuedInterceptor {
+  // `_plain` 을 공개 필드로 바꾸지 마라 — `plain` 은 이 클래스가 숨기려고
+  // 존재하는, 인터셉터 없는 Dio 다. 공개되면 인터셉터 목록을 훑어 꺼내서
+  // 인증도 401 복구도 없이 요청을 보낼 수 있다.
   RefreshInterceptor({
-    required Dio plain,
-    required TokenStore tokens,
-    required CookieStore cookies,
-    required CookieJar jar,
-    required Future<void> Function() onSessionExpired,
-  })
-    // named 매개변수에 private 이름(`this._plain`)을 쓰는 것을 Dart가 금지하므로,
-    // 필드를 private으로 두려면 이 방식뿐이다. 필드를 공개로 바꿔 린트를
-    // 만족시키지 마라 — `plain`은 이 클래스가 숨기려고 존재하는, 인터셉터 없는
-    // Dio다. 공개되면 인터셉터 목록을 훑어 꺼내서 인증도 401 복구도 없이
-    // 요청을 보낼 수 있다.
-    // ignore: prefer_initializing_formals
-    : _plain = plain,
-       // ignore: prefer_initializing_formals
-       _tokens = tokens,
-       // ignore: prefer_initializing_formals
-       _cookies = cookies,
-       // ignore: prefer_initializing_formals
-       _jar = jar,
-       // ignore: prefer_initializing_formals
-       _onSessionExpired = onSessionExpired;
+    required this._plain,
+    required this._tokens,
+    required this._cookies,
+    required this._jar,
+    required this._onSessionExpired,
+  });
 
   final Dio _plain;
   final TokenStore _tokens;

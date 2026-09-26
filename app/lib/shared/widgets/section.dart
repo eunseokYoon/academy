@@ -64,8 +64,9 @@ class SectionHead extends StatelessWidget {
   final SectionTone tone;
   final String title;
 
-  /// 제목 옆 알약. **0이면 넘기지 마라** — 회색 0은 "없음"을 굳이 강조한다.
-  /// null이면 알약 자체가 안 그려진다.
+  /// 제목 옆 알약. **null 이거나 0 이면 알약을 안 그린다** — 회색 0은
+  /// "없음"을 굳이 강조한다. 그래서 개수를 걸러 넘길 필요가 없다(두 홈은
+  /// 0 도 그대로 넘긴다).
   final int? count;
 
   /// 오른쪽 링크의 동작. null이면 안 그린다.

@@ -51,16 +51,10 @@ import 'parent_home_repository.dart';
 /// 의미가 없고, 후자는 Flutter 가 "used after being disposed"로 던진다.
 class ParentHomeController extends ChangeNotifier {
   ParentHomeController({
-    required ParentHomeRepository repository,
-    Duration staleAfter = const Duration(seconds: 60),
+    required this._repository,
+    this._staleAfter = const Duration(seconds: 60),
     DateTime Function()? now,
-  }) : // named 매개변수에 private 이름을 바로 쓸 수 없어(컴파일 에러) 이
-       // 방식으로 필드를 채운다. student_home_controller.dart 와 동일.
-       // ignore: prefer_initializing_formals
-       _repository = repository,
-       // ignore: prefer_initializing_formals
-       _staleAfter = staleAfter,
-       _now = now ?? DateTime.now;
+  }) : _now = now ?? DateTime.now;
 
   final ParentHomeRepository _repository;
   final Duration _staleAfter;

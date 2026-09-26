@@ -12,7 +12,6 @@ import 'package:academy_app/shared/lib/home_labels.dart';
 import '../../../shared/widgets/app_bar_band.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/exam_schedule_section.dart';
-import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/hero_field.dart';
 import '../../../shared/widgets/home_layout.dart';
@@ -163,7 +162,7 @@ class _ParentHomePageState extends State<ParentHomePage>
     if (childrenError != null) {
       return HomeStatusFrame(
         role: '학부모',
-        child: _ErrorView(message: childrenError, onRetry: _retryChildren),
+        child: HomeErrorView(message: childrenError, onRetry: _retryChildren),
       );
     }
     final home = c.data;
@@ -171,7 +170,7 @@ class _ParentHomePageState extends State<ParentHomePage>
       if (c.status == HomeStatus.error) {
         return HomeStatusFrame(
           role: '학부모',
-          child: _ErrorView(message: c.error, onRetry: c.refresh),
+          child: HomeErrorView(message: c.error, onRetry: c.refresh),
         );
       }
       // 웹도 자녀가 정해지기 전에는 「불러오는 중」이다.
@@ -217,7 +216,7 @@ class _ParentHomePageState extends State<ParentHomePage>
               // 카드가 지면의 pb 64 안으로 40 더 올라온다(`.hero-lift`). 누적 -80.
               Transform.translate(
                 offset: const Offset(0, -80),
-                child: _constrain(
+                child: homeConstrain(
                   AppCard(
                     // 가로 패딩을 주지 마라 — 레일이 자기 여백을 갖는다.
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -234,10 +233,10 @@ class _ParentHomePageState extends State<ParentHomePage>
                   children: [
                     // 구획 사이 간격은 웹 `mt-5` = 20 이다.
                     const SizedBox(height: 20),
-                    _constrain(_homeworkSection(pending)),
+                    homeConstrain(_homeworkSection(pending)),
                     if (exam != null) ...[
                       const SizedBox(height: 20),
-                      _constrain(
+                      homeConstrain(
                         ExamScheduleSection(
                           examType: exam.examType,
                           startDate: exam.startDate,
@@ -246,9 +245,9 @@ class _ParentHomePageState extends State<ParentHomePage>
                       ),
                     ],
                     const SizedBox(height: 20),
-                    _constrain(_attendanceSection(home.thisMonthAttendance)),
+                    homeConstrain(_attendanceSection(home.thisMonthAttendance)),
                     const SizedBox(height: 20),
-                    _constrain(
+                    homeConstrain(
                       NoticeCard(
                         totalCount: home.notices.totalCount,
                         recent: home.notices.recent
@@ -277,17 +276,6 @@ class _ParentHomePageState extends State<ParentHomePage>
       ),
     );
   }
-
-  /// 웹 `main` 의 `mx-auto max-w-screen-sm p-4`. [HeroField] 안쪽과 같다.
-  Widget _constrain(Widget child) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 384),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: child,
-      ),
-    ),
-  );
 
   /// 순서·아이콘·라벨·경로가 웹 `ParentHomePage.tsx` 의 `QUICK_ITEMS` 그대로다.
   ///
@@ -474,37 +462,6 @@ class _CellDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       const SizedBox(width: 1, child: ColoredBox(color: AppColors.brand100));
-}
-
-/// 첫 로딩이 실패했을 때. 문구는 **서버 문구 그대로**다.
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String? message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 384),
-          child: AppCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FormError(message: message),
-                const SizedBox(height: 16),
-                FilledButton(onPressed: onRetry, child: const Text('다시 시도')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// 인사말 두 줄: 「{이름} 학생」 / 「학부모님, 환영합니다」.

@@ -10,21 +10,11 @@ import 'models/signup_response.dart';
 /// 로그인 상태의 정본. 라우터가 이것을 듣고 화면을 고른다(Task 10).
 class AuthController extends ChangeNotifier {
   AuthController({
-    required AuthRepository repository,
-    required TokenStore tokens,
-    required CookieStore cookies,
-    required CookieJar jar,
-  }) : // named 매개변수에 private 이름(`this._repository`)을 쓰는 것을 Dart가
-       // 금지한다(컴파일 에러다, 조용히 깨지는 게 아니다). 필드를 private으로
-       // 두려면 이 방식뿐이다. 아래 세 줄도 동일.
-       // ignore: prefer_initializing_formals
-       _repository = repository,
-       // ignore: prefer_initializing_formals
-       _tokens = tokens,
-       // ignore: prefer_initializing_formals
-       _cookies = cookies,
-       // ignore: prefer_initializing_formals
-       _jar = jar;
+    required this._repository,
+    required this._tokens,
+    required this._cookies,
+    required this._jar,
+  });
 
   final AuthRepository _repository;
   final TokenStore _tokens;
