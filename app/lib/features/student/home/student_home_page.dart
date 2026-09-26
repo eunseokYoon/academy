@@ -17,6 +17,7 @@ import '../../../shared/widgets/hero_field.dart';
 import '../../../shared/widgets/home_layout.dart';
 import '../../../shared/widgets/notice_card.dart';
 import '../../../shared/widgets/quick_rail.dart';
+import '../../../shared/widgets/reappear_reload.dart';
 import '../../../shared/widgets/section.dart';
 import 'last_lesson_card.dart';
 import 'student_home_controller.dart';
@@ -50,15 +51,19 @@ class StudentHomePage extends StatefulWidget {
   State<StudentHomePage> createState() => _StudentHomePageState();
 }
 
-class _StudentHomePageState extends State<StudentHomePage> {
+class _StudentHomePageState extends State<StudentHomePage>
+    with ReappearReload<StudentHomePage> {
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
-    // 탭을 옮겼다 돌아온 경우는 컨트롤러의 60초 규칙이 막는다 —
-    // 여기서 조건을 다시 만들지 마라.
     widget.controller.load();
   }
+
+  /// 탭 재진입·앱 복귀([ReappearReload]). 60초 안이면 컨트롤러가 무시한다 —
+  /// 여기서 조건을 다시 만들지 마라.
+  @override
+  void onReappear() => widget.controller.load();
 
   /// 컨트롤러가 바뀌면 **듣는 대상도 바꾼다.** 배선상 앱이 하나를 계속 들고
   /// 있지만, 안 갈아타면 새 컨트롤러는 아무도 안 듣는 채로 남아 화면이 옛

@@ -18,6 +18,7 @@ import '../../../shared/widgets/hero_field.dart';
 import '../../../shared/widgets/home_layout.dart';
 import '../../../shared/widgets/notice_card.dart';
 import '../../../shared/widgets/quick_rail.dart';
+import '../../../shared/widgets/reappear_reload.dart';
 import '../../../shared/widgets/section.dart';
 import '../../student/home/student_home_controller.dart' show HomeStatus;
 import '../selected_child.dart';
@@ -58,7 +59,8 @@ class ParentHomePage extends StatefulWidget {
   State<ParentHomePage> createState() => _ParentHomePageState();
 }
 
-class _ParentHomePageState extends State<ParentHomePage> {
+class _ParentHomePageState extends State<ParentHomePage>
+    with ReappearReload<ParentHomePage> {
   /// 자녀 목록을 못 받았을 때의 서버 문구. 목록이 없으면 홈을 부를 id 가
   /// 없으므로 컨트롤러의 오류와 별개로 들고 있어야 한다.
   String? _childrenError;
@@ -93,11 +95,19 @@ class _ParentHomePageState extends State<ParentHomePage> {
     c.addListener(_onChanged);
     if (sc == null) return;
     sc.addListener(_onSelection);
-    // 이미 골라져 있으면(탭을 옮겼다 돌아온 경우) 바로 부른다. 60초 규칙은
+    // 이미 골라져 있으면(컨트롤러가 바뀐 경우 등) 바로 부른다. 60초 규칙은
     // 컨트롤러가 지킨다 — 여기서 조건을 다시 만들지 마라.
     final id = sc.selectedStudentId;
     if (id != null) c.load(id);
     if (!sc.loading) _loadChildren(sc);
+  }
+
+  /// 탭 재진입·앱 복귀([ReappearReload]). 지금 고른 자녀를 다시 부른다 —
+  /// 60초 안이면 컨트롤러가 무시한다. 여기서 조건을 다시 만들지 마라.
+  @override
+  void onReappear() {
+    final id = widget.selectedChild?.selectedStudentId;
+    if (id != null) widget.controller.load(id);
   }
 
   void _detach(ParentHomeController c, SelectedChild? sc) {
