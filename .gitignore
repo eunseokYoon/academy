@@ -34,3 +34,7 @@ spec/
 
 # superpowers 작업 기록 (SDD 원장·리뷰 패키지). 커밋 대상 아님
 .superpowers/
+
+# 로컬 실행 스크립트 (환경변수·로컬 시크릿이 들어간다)
+backend/run-local.sh
+backend/bin/

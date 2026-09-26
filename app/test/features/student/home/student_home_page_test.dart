@@ -176,10 +176,9 @@ void main() {
     );
   });
 
-  testWidgets('오늘 수업은 「오늘」, 오늘 시험은 웹처럼 「D-0」이다', (tester) async {
-    // 수업은 dDayLabel, 시험은 `D-${dDay}` 를 그대로 쓴다(StudentHomePage.tsx
-    // :112). 웹의 불일치이지만 웹이 정본이라 두 방향 모두 고정한다 —
-    // 한쪽만 「정리」하면 여기서 깨진다.
+  testWidgets('오늘 수업도 오늘 시험도 「오늘」이다 — D-0 은 없다', (tester) async {
+    // 시험 칸만 `D-${dDay}` 를 쓰면 시험 당일 한 지면에 「오늘」과 「D-0」이
+    // 섞인다. 웹과 함께 dDayLabel 하나로 맞췄다.
     await pump(
       tester,
       _home(
@@ -201,9 +200,9 @@ void main() {
     expect(hero.stats.first.label, '다음 수업');
     expect(hero.stats.first.value, '오늘');
     expect(hero.stats.last.label, '중간고사');
-    expect(hero.stats.last.value, 'D-0');
-    expect(find.text('오늘'), findsOneWidget);
-    expect(find.text('D-0'), findsOneWidget);
+    expect(hero.stats.last.value, '오늘');
+    expect(find.text('오늘'), findsNWidgets(2));
+    expect(find.text('D-0'), findsNothing);
   });
 
   testWidgets('시험·클리닉 칸과 시험 구획의 글자가 웹과 같다', (tester) async {

@@ -53,19 +53,10 @@ class ParentMeStub extends StatelessWidget {
   }
 }
 
-// ── 홈 퀵 레일이 가는 곳 둘 ──────────────────────────────────
+// ── 홈 퀵 레일이 가는 곳(숙제는 B2 가 실물로 바꿨다) ──────────────────────────────────
 // 탭 다섯 밖이라 스텁이 없었고, 레일을 누르면 go_router 오류 화면이 떴다.
 // **라우트는 셸 안(학부모 브랜치 0의 자식)이다** — 하단 탭 바가 그대로
 // 있어야 한다. 학생 쪽 넷(student_stubs.dart)과 같은 방식이다.
-
-/// B2 가 만든다.
-class ParentHomeworksStub extends StatelessWidget {
-  const ParentHomeworksStub({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const StubPage(role: '학부모', title: '숙제', stage: 'B2');
-}
 
 /// B3 가 만든다.
 class ParentNoticesStub extends StatelessWidget {

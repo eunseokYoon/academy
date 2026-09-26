@@ -64,6 +64,25 @@ void main() {
     expect(find.byType(AppBarBand), findsNothing);
   });
 
+  testWidgets('상태 표시줄 높이만큼 남색 가림막이 본문 위에 있다', (tester) async {
+    // 앱바가 스크롤로 올라간 뒤 본문이 시계·배터리 밑을 지나가지 않게 한다.
+    tester.view.padding = const FakeViewPadding(top: 72);
+    addTearDown(tester.view.resetPadding);
+    await pump(tester);
+    final scrim = find.byKey(const Key('status-bar-scrim'));
+    expect(scrim, findsOneWidget);
+    // 기기 비율 3.0 기준 72 물리 픽셀 = 24 논리 픽셀.
+    final rect = tester.getRect(scrim);
+    expect(rect.top, 0);
+    expect(rect.height, 72 / tester.view.devicePixelRatio);
+    expect(rect.width, tester.getSize(find.byType(RoleShell)).width);
+    // 본문보다 **나중에** 그려져야 위를 덮는다.
+    final stack = tester.widget<Stack>(
+      find.ancestor(of: scrim, matching: find.byType(Stack)).first,
+    );
+    expect(stack.children.last, isA<Positioned>());
+  });
+
   testWidgets('처음에는 홈 갈래가 보인다', (tester) async {
     await pump(tester);
     expect(find.text('화면:홈'), findsOneWidget);

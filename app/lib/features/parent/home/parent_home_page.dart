@@ -165,6 +165,13 @@ class _ParentHomePageState extends State<ParentHomePage>
         child: HomeErrorView(message: childrenError, onRetry: _retryChildren),
       );
     }
+    // 목록을 받았는데 비었다 — 부를 홈이 없다. 로더를 두면 영원히 돈다.
+    if (sc != null && sc.loaded && sc.children.isEmpty) {
+      return HomeStatusFrame(
+        role: '학부모',
+        child: _NoChildrenView(onRetry: _retryChildren),
+      );
+    }
     final home = c.data;
     if (home == null) {
       if (c.status == HomeStatus.error) {
@@ -373,13 +380,10 @@ class _ParentHomePageState extends State<ParentHomePage>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // **웹과 다르다 — 의도다.** 웹은 `present` 만 쓰는데 백엔드의
-                // `present` 는 MAKEUP(대체 등원)을 포함하지 않는다
+                // 백엔드의 `present` 는 MAKEUP(대체 등원)을 포함하지 않는다
                 // (`AttendanceSummaryResponse` 의 switch). CLAUDE.md 5-1:
-                // 「MAKEUP 은 출석이다 … 결석 쪽으로 세지 마라 — 학부모
-                // 캘린더 요약의 「출석」 칸이 present + makeup」. `present` 로
-                // 「웹에 맞춰」 되돌리면 대체 등원한 날이 세 칸 어디에도 안
-                // 잡힌다. 웹을 고치는 것은 별도 작업이다.
+                // 「MAKEUP 은 출석이다」. `present` 로 되돌리면 대체 등원한
+                // 날이 세 칸 어디에도 안 잡힌다. 웹도 같은 합을 쓴다.
                 _AttendanceCell(
                   key: const Key('attendance-present'),
                   label: '출석',
@@ -539,13 +543,50 @@ List<HeroStat> _stats(ParentHome home) {
     stats.add(
       HeroStat(
         label: examLabel(exam.examType),
-        // 웹 그대로 `D-${dDay}` — 오늘이면 「D-0」이다(학생 홈과 같은 불일치,
-        // 웹이 정본이라 그대로 둔다).
-        value: 'D-${exam.dDay}',
+        // 수업·클리닉 칸과 같은 [dDayLabel] — 시험 당일은 「오늘」이다.
+        value: dDayLabel(exam.dDay),
         sub: examStartShort(exam.startDate),
       ),
     );
   }
 
   return stats;
+}
+
+/// 연결된 자녀가 없을 때. 가입 경로상 학부모 계정은 자녀와 함께 생기므로
+/// 흔하지 않다 — 퇴원 등으로 목록이 빈 경우다. **오류가 아니라서 빨강이
+/// 아니다**(빨강은 결석·위험 하나다). 「다시 시도」는 학원이 연결을 바로잡은
+/// 뒤 앱을 껐다 켜지 않고 확인하는 길이다.
+class _NoChildrenView extends StatelessWidget {
+  const _NoChildrenView({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 384),
+          child: AppCard(
+            key: const Key('no-children'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '연결된 자녀가 없습니다.\n학원에 문의해 주세요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: AppColors.slate600),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: onRetry, child: const Text('다시 시도')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

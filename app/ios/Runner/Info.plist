@@ -26,6 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- 숙제 제출(S-3). 없으면 카메라·앨범을 여는 순간 앱이 강제 종료된다. -->
+	<key>NSCameraUsageDescription</key>
+	<string>숙제를 사진이나 영상으로 찍어 제출하려면 카메라가 필요합니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>앨범의 사진·영상을 숙제로 제출하려면 사진 보관함 접근이 필요합니다.</string>
+	<!-- 영상 촬영에 소리가 함께 담긴다. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>숙제 영상을 찍을 때 소리를 함께 녹음합니다.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:academy_app/shared/widgets/full_screen_loader.dart';
 import 'package:academy_app/core/api/fake_adapter.dart';
 import 'package:academy_app/core/router/app_router.dart';
 import 'package:academy_app/core/storage/key_value_store.dart';
@@ -237,7 +238,7 @@ void main() {
     expect(hw.sub, '확인 필요');
   });
 
-  testWidgets('시험 칸은 종류 라벨·D-dDay·「10.01 시작」이고 오늘이면 웹처럼 D-0', (tester) async {
+  testWidgets('시험 칸은 종류 라벨·D-dDay·「10.01 시작」이고 오늘이면 「오늘」', (tester) async {
     await pump(
       tester,
       _home(
@@ -251,7 +252,7 @@ void main() {
     );
     final hero = tester.widget<HeroField>(find.byType(HeroField));
     expect(hero.stats.last.label, '중간고사');
-    expect(hero.stats.last.value, 'D-0');
+    expect(hero.stats.last.value, '오늘');
     expect(hero.stats.last.sub, '10.01 시작');
     expect(find.text('MIDTERM'), findsNothing);
   });
@@ -525,6 +526,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('김하늘 학생\n학부모님, 환영합니다'), findsOneWidget);
     expect(find.text('다시 시도'), findsNothing);
+  });
+
+  testWidgets('자녀가 0명이면 로더 대신 안내를 띄우고, 다시 시도로 홈이 뜬다', (tester) async {
+    // 목록이 비면 부를 id 가 없어 컨트롤러가 영영 안 불린다. 예전에는
+    // 「불러오는 중」이 끝나지 않았다.
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
+      ..httpClientAdapter = FakeAdapter(
+        replies: const [
+          FakeReply(statusCode: 200, body: {'success': true, 'data': []}),
+          FakeReply(
+            statusCode: 200,
+            body: {
+              'success': true,
+              'data': [
+                {'studentId': 1, 'name': '김하늘'},
+              ],
+            },
+          ),
+        ],
+      );
+    final sc = SelectedChild(dio: dio, store: InMemoryKeyValueStore());
+    final c = ParentHomeController(repository: _Repo((_) async => _home()));
+    await tester.pumpWidget(_app(c, sc));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('no-children')), findsOneWidget);
+    expect(find.byType(FullScreenLoader), findsNothing);
+
+    await tester.tap(find.text('다시 시도'));
+    await tester.pumpAndSettle();
+    expect(find.text('김하늘 학생\n학부모님, 환영합니다'), findsOneWidget);
+    expect(find.byKey(const Key('no-children')), findsNothing);
   });
 
   testWidgets('자녀 목록 오류가 컨트롤러에 남은 홈보다 먼저다', (tester) async {

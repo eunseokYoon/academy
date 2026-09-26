@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:path_drawing/path_drawing.dart';
+
+import '../../../shared/widgets/play_button.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -176,29 +177,8 @@ class _Thumbnail extends StatelessWidget {
                     ),
                   // 썸네일 위 재생 버튼이 묻히지 않게 살짝 어둡게 깐다.
                   Container(color: AppColors.brand950.withValues(alpha: 0.35)),
-                  Center(
-                    child: Container(
-                      key: const Key('lesson-play-button'),
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withValues(alpha: 0.45),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.4),
-                        ),
-                      ),
-                      child: Center(
-                        // 광학적으로 가운데 오게 살짝 오른쪽으로 민다.
-                        child: Transform.translate(
-                          offset: const Offset(2, 0),
-                          child: const CustomPaint(
-                            size: Size.square(24),
-                            painter: _PlayTrianglePainter(),
-                          ),
-                        ),
-                      ),
-                    ),
+                  const Center(
+                    child: PlayButton(key: Key('lesson-play-button')),
                   ),
                   // 여러 개면 몇 개인지 알려 준다. 상세에서 골라 볼 수 있다는
                   // 신호다. 1개면 배지가 없다 — 재생 버튼 하나로 충분하다.
@@ -233,33 +213,6 @@ class _Thumbnail extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 재생 삼각형. 웹 `LastLessonCard.tsx`의
-/// `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`를 그대로 옮긴다.
-///
-/// `AppIcon`(Task 1)은 선으로 그리는 아이콘이라 채운 삼각형이 없다 — 여기서만
-/// 예외로 private `CustomPainter`를 둔다. `Icons.play_arrow`로 대체하지 마라.
-class _PlayTrianglePainter extends CustomPainter {
-  const _PlayTrianglePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 웹 viewBox가 0 0 24 24다. 그 좌표계로 그린 뒤 요청된 크기로 맞춘다.
-    final s = size.width / 24;
-    canvas.save();
-    canvas.scale(s);
-    canvas.drawPath(
-      parseSvgPathData('M8 5v14l11-7z'),
-      Paint()
-        ..style = PaintingStyle.fill
-        ..color = Colors.white,
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _PlayTrianglePainter oldDelegate) => false;
 }
 
 /// 라벨 + 본문 한 덩어리. 줄바꿈은 선생님이 쓴 그대로 살린다.

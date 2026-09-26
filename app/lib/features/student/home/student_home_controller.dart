@@ -75,6 +75,11 @@ class StudentHomeController extends ChangeNotifier {
   /// 당겨서 새로고침. 60초 규칙을 무시하고 항상 새로 부른다.
   Future<void> refresh() => _fetch();
 
+  /// 다른 화면이 홈의 데이터를 낡게 만들었다(숙제 제출 → 미완료 숙제 수).
+  /// 지금 부르지 않고, 다음 [load](홈이 다시 보일 때)가 60초와 상관없이
+  /// 부르게 한다.
+  void markStale() => _loadedAt = null;
+
   /// 이미 나간 요청이 있으면 새로 부르지 않고 그것을 기다린다 — 같은 응답을
   /// 두 번 받을 이유가 없고, 겹쳐 쏘면 나중에 끝난 쪽이 이겨 더 오래된
   /// 응답으로 상태를 덮어쓸 수 있다.

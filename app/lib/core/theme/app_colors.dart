@@ -52,8 +52,8 @@ class AppColors {
   /// 화면에 `Color(0xFFB91C1C)`처럼 박으면 같은 빨강이 두 곳에 생기고,
   /// 「빨강은 결석·위험 하나만」이 흐려진다.
   ///
-  /// **emerald·sky 를 넣지 마라.** 인증 화면이 쓰지 않는다 —
-  /// 필요해지는 화면에서 같은 방식으로 추가한다.
+  /// **sky 를 넣지 마라.** 쓰는 화면이 없다 — 필요해지는 화면에서 같은
+  /// 방식으로 추가한다(emerald 는 B2 숙제 배지가 그렇게 넣었다).
   static const slate50 = Color(0xFFF8FAFC);
   static const slate100 = Color(0xFFF1F5F9);
   static const slate200 = Color(0xFFE2E8F0);
@@ -68,7 +68,19 @@ class AppColors {
   static const red200 = Color(0xFFFECACA);
   static const red700 = Color(0xFFB91C1C);
 
+  /// 배지 `ok`(웹 `Badge.tsx` 의 `bg-emerald-50 text-emerald-700 ring-emerald-200`).
+  /// ⭕·「제출 완료」 한 가지 뜻이다. B2 숙제 화면이 처음 쓴다 —
+  /// 쓰는 화면 없이 초록 계열을 더 늘리지 마라.
+  static const emerald50 = Color(0xFFECFDF5);
+  static const emerald200 = Color(0xFFA7F3D0);
+  static const emerald700 = Color(0xFF047857);
+
   static const amber50 = Color(0xFFFFFBEB);
+
+  /// 배지 `warn` 의 테두리·글자(웹 `Badge.tsx` 의 `ring-amber-200 text-amber-700`).
+  /// 🔺·「다시 제출 필요」·「늦게 냄」이 이 색이다.
+  static const amber200 = Color(0xFFFDE68A);
+  static const amber700 = Color(0xFFB45309);
   static const amber800 = Color(0xFF92400E);
   static const amber900 = Color(0xFF78350F);
 }

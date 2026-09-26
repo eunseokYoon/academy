@@ -69,7 +69,7 @@ GoRouter _router(StudentHomeController c) => GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.studentHomeworks,
-              builder: (_, _) => const StudentHomeworksStub(),
+              builder: (_, _) => const SizedBox.shrink(),
             ),
           ],
         ),
@@ -187,11 +187,11 @@ void main() {
 
   testWidgets('스텁은 자기 앱바를 그리고 본문이 탭 바에 가리지 않는다', (tester) async {
     await pumpShell(tester);
-    await tester.tap(find.text('숙제').last);
+    await tester.tap(find.text('수업').last);
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byType(StudentHomeworksStub),
+        of: find.byType(StudentLessonsStub),
         matching: find.byType(AppBarBand),
       ),
       findsOneWidget,

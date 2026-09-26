@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/icons/icon_paths.dart';
 
 import 'package:academy_app/shared/lib/home_labels.dart';
+import 'package:academy_app/shared/lib/homework_labels.dart';
 
 import '../../../shared/widgets/app_bar_band.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -299,9 +300,11 @@ class _StudentHomePageState extends State<StudentHomePage>
               for (final homework in homeworks)
                 _HomeworkRow(
                   homework: homework,
-                  // 웹은 `/student/homeworks/{id}` 상세로 가지만 B1 에는
-                  // 상세가 없다 — 목록으로 보낸다(공지 줄과 같은 처리다).
-                  onTap: () => _go(AppRoutes.studentHomeworks),
+                  // 웹과 같이 그 숙제의 상세(S-3·S-4)로 간다. 숙제 탭으로
+                  // 전환되고, 뒤로 가면 목록이다.
+                  onTap: () => _go(
+                    '${AppRoutes.studentHomeworks}/${homework.homeworkId}',
+                  ),
                 ),
             ],
           ),
@@ -376,7 +379,7 @@ class _HomeworkRow extends StatelessWidget {
                     if (dueAt != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        '${_formatDueAt(dueAt)} 마감',
+                        '${formatDueAt(dueAt)} 마감',
                         style: TextStyle(
                           fontSize: 11.5,
                           color: AppColors.accent700.withValues(alpha: 0.75),
@@ -399,7 +402,7 @@ class _HomeworkRow extends StatelessWidget {
                   border: Border.all(color: AppColors.accent200),
                 ),
                 child: Text(
-                  _remainingLabel(homework.remainingMinutes),
+                  remainingLabel(homework.remainingMinutes),
                   style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
@@ -501,7 +504,8 @@ List<HeroStat> _stats(StudentHome home) {
       HeroStat(
         // 라벨이 「시험」이 아니라 시험 종류다(웹과 같다).
         label: examLabel(exam.examType),
-        value: 'D-${exam.dDay}',
+        // 수업·클리닉 칸과 같은 [dDayLabel] — 시험 당일은 「오늘」이다.
+        value: dDayLabel(exam.dDay),
         // 연도를 뺀다. 360px 에서 「2026.10.12 시작」은 잘린다.
         sub: examStartShort(exam.startDate),
       ),
@@ -509,36 +513,4 @@ List<HeroStat> _stats(StudentHome home) {
   }
 
   return stats;
-}
-
-/// 남은 시간. 웹 `shared/homework/types.ts` 의 `remainingLabel` **그대로**다.
-///
-/// **서버가 내려준 분 단위 값으로만 만든다** — 기기 시계로 다시 계산하면
-/// 사람마다 다른 값이 보인다. 경계는 60 과 60*24 이고 `Math.floor` 는
-/// 정수 나눗셈이다.
-String _remainingLabel(int minutes) {
-  if (minutes < 0) {
-    final passed = -minutes;
-    if (passed < 60) return '마감 $passed분 지남';
-    if (passed < 60 * 24) return '마감 ${passed ~/ 60}시간 지남';
-    return '마감 ${passed ~/ (60 * 24)}일 지남';
-  }
-  if (minutes < 60) return '$minutes분 남음';
-  if (minutes < 60 * 24) return '${minutes ~/ 60}시간 남음';
-  return '${minutes ~/ (60 * 24)}일 남음';
-}
-
-/// 「9월 21일 21:00」. 웹 `shared/homework/types.ts` 의 `formatDueAt`.
-///
-/// **한국 시각으로 명시 변환한다 — `.toLocal()` 을 쓰지 마라.**
-/// `DateTime.parse` 는 `+09:00` 을 UTC 로 돌려주고, `.toLocal()` 은 **기기
-/// 시간대**를 따른다 — 해외에 나간 학생·UTC 로 도는 테스트 러너에서 마감이
-/// 9시간 어긋난다. 날짜 칸(`dateLabel` 등)은 서버의 KST 문자열을 자르므로
-/// 여기도 KST 로 맞춰야 한 화면의 시각이 한 기준이 된다. 한국은 서머타임이
-/// 없어서 `+9h` 가 정확하다.
-String _formatDueAt(String iso) {
-  final at = DateTime.parse(iso).toUtc().add(const Duration(hours: 9));
-  final hour = at.hour.toString().padLeft(2, '0');
-  final minute = at.minute.toString().padLeft(2, '0');
-  return '${at.month}월 ${at.day}일 $hour:$minute';
 }
