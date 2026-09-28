@@ -196,7 +196,7 @@ void main() {
     await pump(tester, _home(lessonDate: null, lessonTime: null, dDay: null));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
     expect(hero.stats.any((s) => s.label == '다음 수업'), isFalse);
-    expect(hero.stats.single.label, '미완료 숙제');
+    expect(hero.banner!.label, '미완료 숙제');
   });
 
   testWidgets('수업이 없고 클리닉만 있으면 클리닉이 그 칸의 주인이다', (tester) async {
@@ -207,21 +207,24 @@ void main() {
     final hero = tester.widget<HeroField>(find.byType(HeroField));
     expect(hero.stats.first.label, '다음 클리닉');
     expect(hero.stats.first.value, 'D-1');
-    expect(hero.stats.first.extra, isNull);
-    expect(find.text('09/20 17:00 도착'), findsOneWidget);
+    expect(find.text('09/20 17:00'), findsOneWidget);
   });
 
-  testWidgets('클리닉은 수업 칸의 extra 로 묶인다', (tester) async {
+  testWidgets('윗줄은 수업 · 클리닉 · 시험이 나란히, 숙제는 그 밑 넓은 칸이다', (tester) async {
     await pump(tester, _home(clinic: _clinic, exam: _exam));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    expect(hero.stats.length, 3);
-    expect(hero.stats.first.extra!.label, '다음 클리닉');
+    expect(hero.stats.map((s) => s.label).toList(), [
+      '다음 수업',
+      '다음 클리닉',
+      '중간고사',
+    ]);
+    expect(hero.banner!.label, '미완료 숙제');
   });
 
   testWidgets('미완료 숙제가 0이면 주황을 끄고 「다 냈어요」다', (tester) async {
     await pump(tester, _home(pending: 0));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    final hw = hero.stats.firstWhere((s) => s.label == '미완료 숙제');
+    final hw = hero.banner!;
     expect(hw.value, '0');
     expect(hw.hot, isFalse);
     expect(hw.sub, '다 냈어요');
@@ -231,8 +234,9 @@ void main() {
     // 학생 홈의 「확인하세요」가 아니다(웹 ParentHomePage.tsx).
     await pump(tester, _home(pending: 2));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    expect(hero.stats.where((s) => s.hot).length, 1);
-    final hw = hero.stats.firstWhere((s) => s.hot);
+    expect(hero.stats.where((s) => s.hot), isEmpty);
+    final hw = hero.banner!;
+    expect(hw.hot, isTrue);
     expect(hw.label, '미완료 숙제');
     expect(hw.value, '2');
     expect(hw.sub, '확인 필요');

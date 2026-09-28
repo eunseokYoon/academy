@@ -23,6 +23,8 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.repository.OnlineTestRepository;
 import com.njwenglish.repository.OnlineTestSubmissionRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.lang.reflect.RecordComponent;
 import java.math.BigDecimal;
@@ -39,12 +41,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OnlineTestSubmissionServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private OnlineTestRepository onlineTestRepository;
     @Mock
@@ -66,7 +71,7 @@ class OnlineTestSubmissionServiceTest {
     void setUp() {
         onlineTestSubmissionService = new OnlineTestSubmissionService(onlineTestRepository,
             onlineTestSubmissionRepository, presignedUrlProvider, weeklyTestService,
-            studentAccessGuard);
+            studentAccessGuard, eventPublisher);
         given(studentAccessGuard.requireSelf()).willReturn(me);
     }
 
@@ -174,6 +179,9 @@ class OnlineTestSubmissionServiceTest {
 
         assertThat(onlineTestSubmissionService.submit(55L).answerFileUrl())
             .isEqualTo("https://s3/key.pdf?sig=x");
+        // 푸시 #5 — 학부모에게, 성적 화면으로
+        verify(eventPublisher).publishEvent(
+            PushEvent.of(PushTopic.ONLINE_TEST_SUBMITTED, me.getId(), null));
     }
 
     @Test

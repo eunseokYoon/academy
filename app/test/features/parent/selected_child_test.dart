@@ -301,4 +301,59 @@ void main() {
     expect(sc.loaded, isTrue);
     sc.dispose();
   });
+
+  group('selectIfMine — 알림의 studentId', () {
+    void script() {
+      adapter = FakeAdapter(
+        replies: [
+          FakeReply(
+            statusCode: 200,
+            body: _children([
+              {'studentId': 1, 'name': '김하늘'},
+              {'studentId': 2, 'name': '김바다'},
+            ]),
+          ),
+        ],
+      );
+      dio.httpClientAdapter = adapter;
+    }
+
+    test('목록을 아직 안 받았으면 받고 나서 그 자녀를 고른다', () async {
+      script();
+      final s = build();
+      await s.selectIfMine(2);
+      expect(adapter.received.single.path, '/api/parent/children');
+      expect(s.selectedStudentId, 2);
+      expect(store.map.values, contains('2'));
+    });
+
+    test('내 자녀가 아니면 바꾸지도 저장하지도 않는다', () async {
+      script();
+      final s = build();
+      await s.load();
+      await s.selectIfMine(99);
+      expect(s.selectedStudentId, 1);
+      expect(store.map.values, isNot(contains('99')));
+    });
+
+    test('목록을 못 받으면 조용히 포기한다(화면 게이트가 오류를 띄운다)', () async {
+      adapter = FakeAdapter(
+        replies: const [
+          FakeReply(
+            statusCode: 500,
+            body: {
+              'success': false,
+              'data': null,
+              'error': {'code': 'INTERNAL', 'message': '서버 오류입니다.'},
+            },
+          ),
+        ],
+      );
+      dio.httpClientAdapter = adapter;
+      final s = build();
+      await s.selectIfMine(2);
+      expect(s.selectedStudentId, isNull);
+      expect(s.loadError, '서버 오류입니다.');
+    });
+  });
 }

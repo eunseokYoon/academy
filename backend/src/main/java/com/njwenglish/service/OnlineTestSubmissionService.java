@@ -15,6 +15,8 @@ import com.njwenglish.entity.OnlineTestSubmission;
 import com.njwenglish.entity.Student;
 import com.njwenglish.repository.OnlineTestRepository;
 import com.njwenglish.repository.OnlineTestSubmissionRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,7 @@ public class OnlineTestSubmissionService {
     private final PresignedUrlProvider presignedUrlProvider;
     private final WeeklyTestService weeklyTestService;
     private final StudentAccessGuard studentAccessGuard;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<StudentOnlineTestListItemResponse> myTests() {
@@ -134,6 +138,9 @@ public class OnlineTestSubmissionService {
             test.getCorrectChoices(), submission.getChosenChoices(), test.getPoints());
         submission.submit(now, result.score(), result.correctCount());
         reflectToWeeklyClinic(test, me, submission);
+        // 푸시 #5 — 학부모만, 성적 화면으로. 학부모에게는 온라인 테스트 화면이 없다
+        eventPublisher.publishEvent(
+            PushEvent.of(PushTopic.ONLINE_TEST_SUBMITTED, me.getId(), null));
 
         return toResult(test, submission);
     }

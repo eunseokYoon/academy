@@ -28,10 +28,12 @@ import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.HomeworkRepository;
 import com.njwenglish.repository.LessonRepository;
-import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
+import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -47,12 +49,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class HomeworkGridServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private HomeworkRepository homeworkRepository;
     @Mock
@@ -92,7 +97,7 @@ class HomeworkGridServiceTest {
 
         homeworkService = new HomeworkService(homeworkRepository, submissionRepository,
             submissionPhotoRepository, classRoomRepository, lessonRepository,
-            enrollmentRepository, teacherRepository, templateService, presignedUrlProvider);
+            enrollmentRepository, teacherRepository, templateService, presignedUrlProvider, eventPublisher);
         Fixtures.login(Fixtures.teacher(1L));
     }
 
@@ -669,5 +674,70 @@ class HomeworkGridServiceTest {
                 return photoCount;
             }
         };
+    }
+
+    // ---------- 푸시(#3) ----------
+
+    private Submission gradedCell(HomeworkResult result, Short rate) {
+        Homework column = Fixtures.gridColumn(720L, classRoom, lesson, "독해 5-8", (short) 1);
+        Submission cell = Fixtures.submission(1L, column, goYeonJun);
+        if (result != null) {
+            cell.grade(result, rate);
+        }
+        given(lessonRepository.findById(501L)).willReturn(Optional.of(lesson));
+        given(enrollmentRepository.findActiveStudents(3L, LESSON_DATE))
+            .willReturn(List.of(goYeonJun));
+        given(homeworkRepository.findGridColumns(501L)).willReturn(List.of(column));
+        given(submissionRepository.findByLessonForGrid(501L)).willReturn(List.of(cell));
+        given(submissionPhotoRepository.countBySubmissionIds(List.of(1L))).willReturn(List.of());
+        return cell;
+    }
+
+    private static HomeworkGridSaveRequest saveOne(HomeworkResult result, Short rate) {
+        return new HomeworkGridSaveRequest(501L, List.of(
+            new HomeworkGridSaveRequest.Column(720L, "독해 5-8", (short) 1, List.of(
+                new HomeworkGridSaveRequest.Cell(88L, result, rate)))));
+    }
+
+    @Test
+    @DisplayName("채점이 바뀐 칸의 학생에게 채점 푸시가 나간다")
+    void 바뀐_칸은_채점_푸시() {
+        gradedCell(null, null);
+
+        homeworkService.saveGrid(saveOne(HomeworkResult.DONE, null));
+
+        verify(eventPublisher).publishEvent(
+            PushEvent.of(PushTopic.HOMEWORK_GRADED, List.of(88L), null));
+    }
+
+    @Test
+    @DisplayName("퍼센트만 바뀌어도 채점이 바뀐 것이다")
+    void 퍼센트만_바뀌어도_푸시() {
+        gradedCell(HomeworkResult.PARTIAL, (short) 30);
+
+        homeworkService.saveGrid(saveOne(HomeworkResult.PARTIAL, (short) 60));
+
+        verify(eventPublisher).publishEvent(
+            PushEvent.of(PushTopic.HOMEWORK_GRADED, List.of(88L), null));
+    }
+
+    @Test
+    @DisplayName("그리드는 표 전체를 보낸다 — 값이 그대로인 칸에는 푸시가 없다")
+    void 그대로인_칸은_푸시_없음() {
+        gradedCell(HomeworkResult.PARTIAL, (short) 30);
+
+        homeworkService.saveGrid(saveOne(HomeworkResult.PARTIAL, (short) 30));
+
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("미채점으로 되돌린 칸에는 푸시가 없다")
+    void 미채점으로_되돌리면_푸시_없음() {
+        gradedCell(HomeworkResult.NOT_DONE, null);
+
+        homeworkService.saveGrid(saveOne(null, null));
+
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 }

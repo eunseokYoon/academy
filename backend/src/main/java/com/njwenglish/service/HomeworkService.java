@@ -23,28 +23,34 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.SubmissionPhoto;
 import com.njwenglish.entity.Teacher;
+import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.HomeworkRepository;
 import com.njwenglish.repository.LessonRepository;
-import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
-import com.njwenglish.repository.SubmissionRepository;
+import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository.CountRow;
+import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -80,6 +86,7 @@ public class HomeworkService {
     private final TeacherRepository teacherRepository;
     private final HomeworkTemplateService templateService;
     private final PresignedUrlProvider presignedUrlProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 출제. 대상은 <b>마감일 기준</b> 재원생 전원이다. 오늘 기준이 아니다 —
@@ -320,11 +327,17 @@ public class HomeworkService {
             .stream().collect(Collectors.toMap(Student::getId, student -> student,
                 (first, duplicate) -> first, LinkedHashMap::new));
 
+        Set<Long> graded = new HashSet<>();
         for (HomeworkGridSaveRequest.Column column : request.columns()) {
             Homework homework = column.homeworkId() == null
                 ? createGridColumn(lesson, column, cells, roster)
                 : renameGridColumn(lesson, existing, column);
-            applyCells(homework, column, cells, roster);
+            applyCells(homework, column, cells, roster, graded);
+        }
+        // 푸시 #3. 그리드는 표 전체를 매번 보내므로 <b>값이 바뀐 칸의 학생만</b> 대상이다.
+        // 그날 두 번째 저장부터는 PushPlanner 가 하루 1건으로 묶어 조용하다
+        if (!graded.isEmpty()) {
+            eventPublisher.publishEvent(PushEvent.of(PushTopic.HOMEWORK_GRADED, graded, null));
         }
         return grid(lesson.getId());
     }
@@ -381,7 +394,8 @@ public class HomeworkService {
      * <p>명단에도 없는 studentId는 조용히 건너뛴다. 잘못된 값으로 500을 내는 것보다 낫다.
      */
     private void applyCells(Homework homework, HomeworkGridSaveRequest.Column column,
-                            Map<String, Submission> cells, Map<Long, Student> roster) {
+                            Map<String, Submission> cells, Map<Long, Student> roster,
+                            Set<Long> graded) {
         for (HomeworkGridSaveRequest.Cell requested : column.cells()) {
             Submission cell = cells.get(
                 cellKey(homework.getId(), requested.studentId()));
@@ -393,7 +407,14 @@ public class HomeworkService {
                 cell = submissionRepository.save(Submission.notSubmitted(homework, student));
                 cells.put(cellKey(cell), cell);
             }
+            HomeworkResult before = cell.getResult();
+            Short rateBefore = cell.getCompletionRate();
             cell.grade(requested.result(), requested.completionRate());
+            // 미채점으로 되돌린 칸은 알릴 것이 없다
+            if (cell.getResult() != null && (cell.getResult() != before
+                || !Objects.equals(cell.getCompletionRate(), rateBefore))) {
+                graded.add(cell.getStudent().getId());
+            }
         }
     }
 

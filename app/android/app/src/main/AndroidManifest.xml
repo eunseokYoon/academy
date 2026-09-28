@@ -2,6 +2,9 @@
     <!-- 이 앱은 전부 HTTP다. main 매니페스트에 없으면 릴리스 빌드에서
          네트워크가 통째로 막히고, 디버그 빌드는 멀쩡해서 늦게 발견된다. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ 알림 권한. firebase_messaging 도 넣지만 여기 적어 둔다 — 빠지면
+         권한 창이 안 뜨고 알림이 조용히 안 온다. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="남지원영어LAB"
         android:name="${applicationName}"
@@ -28,6 +31,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- 서버 발송에는 채널이 없다. 앱이 만든 채널(MainActivity)로 받게 한다 —
+             없으면 FCM 이 「기타」 채널을 만들어 설정 화면에 이름 없이 뜬다. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="academy_default" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -12,24 +12,26 @@ import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
+import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.attendance.AttendanceCalendarResponse;
 import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.attendance.AttendanceConfirmResponse;
 import com.njwenglish.dto.attendance.AttendanceExceptionRequest;
 import com.njwenglish.dto.attendance.AttendanceRosterResponse;
-import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.AttendanceStatus;
 import com.njwenglish.entity.enums.LessonAttendanceStatus;
-import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.AttendanceRepository.CalendarRow;
+import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -42,12 +44,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class AttendanceServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private AttendanceRepository attendanceRepository;
     @Mock
@@ -79,7 +84,7 @@ class AttendanceServiceTest {
         lesson = Fixtures.lesson(501L, classRoom, LESSON_DATE);
 
         attendanceService = new AttendanceService(attendanceRepository, lessonRepository,
-            enrollmentRepository, teacherRepository, submissionRepository, studentAccessGuard);
+            enrollmentRepository, teacherRepository, submissionRepository, studentAccessGuard, eventPublisher);
     }
 
     @AfterEach
@@ -160,6 +165,9 @@ class AttendanceServiceTest {
         // attend_date에 lesson_date를 복사하지 않으면 캘린더 조회가 통째로 빈다
         verify(attendanceRepository).upsert(501L, 3L, 88L, LESSON_DATE, "PRESENT", null, 1L);
         verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "무단", 1L);
+        // 푸시 #8 — 결석·병결도 포함한 재원생 전원. 하루 1건 묶기는 PushPlanner 몫이다
+        verify(eventPublisher).publishEvent(PushEvent.of(PushTopic.ATTENDANCE_LESSON,
+            List.of(seo.getId(), kim.getId(), park.getId()), null));
         verify(attendanceRepository).upsert(501L, 3L, 97L, LESSON_DATE, "SICK", "병원 진료", 1L);
     }
 

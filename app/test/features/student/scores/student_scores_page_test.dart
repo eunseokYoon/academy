@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../core/push/fake_push.dart';
+
 import 'package:academy_app/core/api/api_exception.dart';
 import 'package:academy_app/features/student/scores/student_score_data.dart';
 import 'package:academy_app/features/student/scores/student_scores_page.dart';
@@ -45,11 +48,17 @@ Future<int Function()> _pump(WidgetTester tester, _Repo repo) async {
   addTearDown(tester.view.reset);
   final c = StudentScoreController(repository: repo);
   addTearDown(c.dispose);
+  final push = fakePushSetting();
+  addTearDown(push.dispose);
   var logouts = 0;
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: StudentScoresPage(controller: c, onLogout: () async => logouts++),
+        body: StudentScoresPage(
+          controller: c,
+          pushSetting: push,
+          onLogout: () async => logouts++,
+        ),
       ),
     ),
   );

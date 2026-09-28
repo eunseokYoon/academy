@@ -140,6 +140,7 @@ class _StudentHomePageState extends State<StudentHomePage>
                   eyebrow: todayLabel(),
                   title: _greeting(home),
                   stats: _stats(home),
+                  banner: _pending(home),
                 ),
               ),
               // 카드가 지면의 pb 64 안으로 40 더 올라온다(`.hero-lift`). 누적 -80.
@@ -446,61 +447,36 @@ InlineSpan _greeting(StudentHome home) {
   );
 }
 
-/// 지면의 숫자 칸. **값이 없는 항목은 뺀다** — null 을 「미정」으로 채우면
-/// 없는 시험에 D-0 이 들어가 「시험이 오늘」로 읽힌다. 그래서 길이가
-/// 1~3 으로 변한다.
+/// 지면 윗줄의 일정 칸. **값이 없는 항목은 뺀다** — null 을 「미정」으로 채우면
+/// 없는 시험에 D-0 이 들어가 「시험이 오늘」로 읽힌다. 그래서 길이가 0~3 으로 변한다.
 ///
-/// 순서는 웹 `StudentHomePage.tsx` 와 같다 — 수업(+클리닉) · 미완료 숙제 ·
-/// 시험. **`dDay` 는 서버 값이다.** 날짜로 다시 세지 마라.
+/// 순서는 다음 수업 · 다음 클리닉 · 시험이다(2026-09-29, 앱만 — 웹은 수업+클리닉을
+/// 한 칸에 묶는다). 미완료 숙제는 그 밑 넓은 칸이다([_pending]).
+/// **`dDay` 는 서버 값이다.** 날짜로 다시 세지 마라.
 List<HeroStat> _stats(StudentHome home) {
   final stats = <HeroStat>[];
 
   final lesson = home.nextLesson;
-  final clinic = home.nextClinic;
-  final clinicRow = clinic == null
-      ? null
-      : HeroStatExtra(
-          label: '다음 클리닉',
-          value: dDayLabel(clinic.dDay),
-          sub:
-              '${dateLabel(clinic.clinicDate, null)} '
-              '${clinic.arrivalTime} 도착',
-        );
-
   if (lesson != null) {
     stats.add(
       HeroStat(
         label: '다음 수업',
         value: dDayLabel(lesson.dDay),
         sub: dateLabel(lesson.lessonDate, lesson.startTime),
-        // 같은 종류의 일정이라 한 칸에 묶는다. 칸을 넷으로 늘리면
-        // 360px 에서 「D-61」이 줄바꿈된다.
-        extra: clinicRow,
-      ),
-    );
-  } else if (clinicRow != null) {
-    // 수업이 없는데 클리닉만 있으면 **클리닉이 그 칸의 주인이 된다.**
-    // extra 만 있는 칸을 만들면 첫 줄이 비어 칸이 깨진다.
-    stats.add(
-      HeroStat(
-        label: clinicRow.label,
-        value: clinicRow.value,
-        sub: clinicRow.sub,
       ),
     );
   }
 
-  // 미완료 숙제만 항상 있다. 0 도 뜻이 있는 값이다(「다 냈다」).
-  // 대신 0 일 때는 주황을 끈다 — 처리할 게 없는데 주황이면 그 색이 뜻을 잃는다.
-  final pending = home.currentHomeworks.length;
-  stats.add(
-    HeroStat(
-      label: '미완료 숙제',
-      value: '$pending',
-      sub: pending > 0 ? '확인하세요' : '다 냈어요',
-      hot: pending > 0,
-    ),
-  );
+  final clinic = home.nextClinic;
+  if (clinic != null) {
+    stats.add(
+      HeroStat(
+        label: '다음 클리닉',
+        value: dDayLabel(clinic.dDay),
+        sub: '${dateLabel(clinic.clinicDate, null)} ${clinic.arrivalTime}',
+      ),
+    );
+  }
 
   final exam = home.nextExam;
   if (exam != null) {
@@ -517,4 +493,16 @@ List<HeroStat> _stats(StudentHome home) {
   }
 
   return stats;
+}
+
+/// 미완료 숙제. 항상 있다 — 0 도 뜻이 있는 값이다(「다 냈다」).
+/// 대신 0 일 때는 주황을 끈다 — 처리할 게 없는데 주황이면 그 색이 뜻을 잃는다.
+HeroStat _pending(StudentHome home) {
+  final pending = home.currentHomeworks.length;
+  return HeroStat(
+    label: '미완료 숙제',
+    value: '$pending',
+    sub: pending > 0 ? '확인하세요' : '다 냈어요',
+    hot: pending > 0,
+  );
 }

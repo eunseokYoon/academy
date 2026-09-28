@@ -7,15 +7,19 @@ import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.dto.lesson.LessonBulkCreateRequest;
 import com.njwenglish.dto.lesson.LessonBulkCreateResponse;
 import com.njwenglish.dto.lesson.LessonCreateRequest;
-import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.dto.lesson.LessonDetailResponse;
 import com.njwenglish.dto.lesson.LessonListItemResponse;
 import com.njwenglish.dto.lesson.LessonUpdateRequest;
+import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.LessonVideo;
+import com.njwenglish.entity.Student;
 import com.njwenglish.repository.ClassRoomRepository;
+import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -25,6 +29,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +45,8 @@ public class LessonService {
 
     private final LessonRepository lessonRepository;
     private final ClassRoomRepository classRoomRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<LessonListItemResponse> list(Long classRoomId, LocalDate from, LocalDate to,
@@ -137,11 +144,21 @@ public class LessonService {
         return LessonDetailResponse.from(lesson);
     }
 
-    /** 공개하면 학생·학부모 조회에 잡힌다. 이미 공개된 수업을 다시 호출해도 시각은 그대로다. */
+    /**
+     * 공개하면 학생·학부모 조회에 잡힌다. 이미 공개된 수업을 다시 호출해도 시각은 그대로다.
+     *
+     * <p>푸시(#9)는 <b>처음 공개될 때만</b> 간다. 대상은 그 수업일의 재원생이다.
+     */
     @Transactional
     public LessonDetailResponse publish(Long lessonId) {
         Lesson lesson = findLesson(lessonId);
-        lesson.publish(OffsetDateTime.now());
+        if (lesson.publish(OffsetDateTime.now())) {
+            List<Long> studentIds = enrollmentRepository
+                .findActiveStudents(lesson.getClassRoom().getId(), lesson.getLessonDate())
+                .stream().map(Student::getId).toList();
+            eventPublisher.publishEvent(
+                PushEvent.of(PushTopic.LESSON_PUBLISHED, studentIds, lesson.getId()));
+        }
         return LessonDetailResponse.from(lesson);
     }
 

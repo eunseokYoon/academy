@@ -26,6 +26,8 @@ import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.QnaPhotoRepository;
 import com.njwenglish.repository.QnaPostRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -33,6 +35,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -64,6 +67,7 @@ public class QnaService {
     private final StudentAccessGuard studentAccessGuard;
     private final PresignedUrlProvider presignedUrlProvider;
     private final QnaMediaKeys qnaMediaKeys;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ---------- 학생 ----------
 
@@ -189,6 +193,12 @@ public class QnaService {
         QnaPost saved = qnaPostRepository.save(
             QnaPost.answerByTeacher(root, teacher, request.content()));
         attachPhotos(saved, request.s3KeysOrEmpty());
+        // 푸시 #6 — 질문한 학생에게만. 학부모에게 보내지 마라(게시판에 학부모 경로가 없다).
+        // 학생 답글(answerAsStudent)에는 없다 — 선생님은 알림을 받지 않는다
+        if (root.getStudent() != null) {
+            eventPublisher.publishEvent(
+                PushEvent.of(PushTopic.QNA_REPLY, root.getStudent().getId(), root.getId()));
+        }
         return saved.getId();
     }
 

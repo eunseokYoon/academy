@@ -135,10 +135,16 @@ public class Notice extends BaseTimeEntity {
     }
 
     /** 이미 발행된 공지를 다시 발행해도 최초 발행 시각을 유지한다. 목록 정렬 기준이라 흔들리면 안 된다. */
-    public void publish(OffsetDateTime now) {
-        if (publishedAt == null) {
-            this.publishedAt = now;
+    /**
+     * @return 이번 호출로 공개됐으면 true. 이미 공개된 공지면 false 다 —
+     *     푸시는 true 일 때만 나간다(두 번 눌러도 알림은 한 번).
+     */
+    public boolean publish(OffsetDateTime now) {
+        if (publishedAt != null) {
+            return false;
         }
+        this.publishedAt = now;
+        return true;
     }
 
     public boolean isPublished() {

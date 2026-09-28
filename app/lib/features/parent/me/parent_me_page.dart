@@ -8,7 +8,9 @@ import '../../../core/theme/app_theme.dart';
 
 import 'package:academy_app/shared/lib/phone.dart';
 
+import '../../../core/push/push_setting.dart';
 import '../../../shared/widgets/account_footer.dart';
+import '../../../shared/widgets/push_setting_tile.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/form_error.dart';
@@ -31,10 +33,14 @@ class ParentMePage extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onLogout,
+    required this.pushSetting,
   });
 
   final ParentMeController controller;
   final Future<void> Function() onLogout;
+
+  /// 알림 받기 스위치. 본문과 따로 받는다([PushSettingTile]).
+  final PushSettingController pushSetting;
 
   @override
   State<ParentMePage> createState() => _ParentMePageState();
@@ -241,6 +247,8 @@ class _ParentMePageState extends State<ParentMePage>
             ),
           ),
         ],
+        const SizedBox(height: 20),
+        PushSettingTile(controller: widget.pushSetting),
         const SizedBox(height: 20),
         AccountFooter(
           logoutKey: const Key('parent-logout'),

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#17233B</color>
+    <!-- 알림 아이콘 색. AppColors.brand600 과 같다 — 주황(accent)을 새 자리에 쓰지 마라. -->
+    <color name="notification_color">#1E5AA8</color>
 </resources>

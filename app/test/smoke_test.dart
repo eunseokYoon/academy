@@ -5,6 +5,9 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'core/push/fake_push.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:academy_app/core/auth/auth_controller.dart';
 import 'package:academy_app/core/auth/auth_repository.dart';
@@ -17,7 +20,11 @@ import 'package:academy_app/core/storage/key_value_store.dart';
 import 'package:academy_app/core/storage/token_store.dart';
 import 'package:academy_app/core/router/app_router.dart';
 import 'package:academy_app/features/auth/password_change_page.dart';
+import 'package:academy_app/core/push/push_link.dart';
+import 'package:academy_app/core/push/push_messaging.dart';
+import 'package:academy_app/features/auth/login_page.dart';
 import 'package:academy_app/features/auth/privacy_page.dart';
+import 'package:academy_app/features/parent/me/parent_me_page.dart';
 import 'package:academy_app/features/auth/teacher_notice_page.dart';
 import 'package:academy_app/features/auth/terms_page.dart';
 import 'package:academy_app/main.dart';
@@ -40,7 +47,15 @@ class _FakeAuthRepo implements AuthRepository {
   Future<LoginResponse> login({
     required String loginId,
     required String password,
-  }) => throw UnimplementedError('스모크 테스트는 로그인을 거치지 않는다');
+  }) async => LoginResponse(
+    accessToken: 'at-1',
+    user: UserSummary(
+      id: _meResult.id,
+      name: _meResult.name,
+      role: _meResult.role,
+      mustChangePassword: _meResult.mustChangePassword,
+    ),
+  );
 
   @override
   Future<void> changePassword({
@@ -197,6 +212,9 @@ const _parentHomeworks = {
 
 /// 학생 홈(S-1)과 학부모 홈(P-1)이 부르는 API. 눌러 볼 대상(숙제 줄·공지 줄·
 /// 지난 수업)이 있어야 하므로 하나씩 깐다.
+/// 마지막으로 만든 [_fakeDio] 의 어댑터. 받은 요청을 세는 테스트가 쓴다.
+_RoutingAdapter? _lastAdapter;
+
 Dio _fakeDio() {
   const home = {
     'success': true,
@@ -239,7 +257,17 @@ Dio _fakeDio() {
     },
   };
   return Dio(BaseOptions(baseUrl: 'https://example.test'))
-    ..httpClientAdapter = _RoutingAdapter({
+    ..httpClientAdapter = _lastAdapter = _RoutingAdapter({
+      '/api/notices/5': {
+        'success': true,
+        'data': {
+          'noticeId': 5,
+          'title': '추석 휴강 안내',
+          'content': '9/17~9/19 휴강합니다.',
+          'publishedAt': '2026-09-20T10:00:00+09:00',
+          'attachments': [],
+        },
+      },
       '/api/student/home': home,
       '/api/parent/children': {
         'success': true,
@@ -426,6 +454,10 @@ Dio _fakeDio() {
         'success': true,
         'data': {'items': [], 'totalPages': 0},
       },
+      '/api/push/settings': {
+        'success': true,
+        'data': {'enabled': true},
+      },
       '/api/parent/me': {
         'success': true,
         'data': {
@@ -493,6 +525,7 @@ Future<void> _pumpAtRole(
   WidgetTester tester, {
   required UserRole role,
   bool mustChangePassword = false,
+  PushMessaging push = const DisabledPushMessaging(),
 }) async {
   final kv = InMemoryKeyValueStore();
   final tokens = TokenStore(kv);
@@ -513,7 +546,9 @@ Future<void> _pumpAtRole(
   );
 
   await auth.bootstrap();
-  await tester.pumpWidget(AcademyApp(auth: auth, dio: _fakeDio(), store: kv));
+  await tester.pumpWidget(
+    AcademyApp(auth: auth, dio: _fakeDio(), store: kv, push: push),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -866,7 +901,18 @@ void main() {
     router.go(AppRoutes.parentMe);
     await tester.pumpAndSettle();
     expect(find.text('김하늘 학부모 님'), findsOneWidget);
-    // 학부모의 유일한 로그아웃이다(14-7).
+    // 학부모의 유일한 로그아웃이다(14-7). 알림 스위치 아래라 끝까지 내린다.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('parent-logout')),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ParentMePage),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.byKey(const Key('push-setting-switch')), findsOneWidget);
     expect(find.byKey(const Key('parent-logout')), findsOneWidget);
     expect(find.byType(RoleShell), findsOneWidget);
   });
@@ -988,5 +1034,138 @@ void main() {
     expect(find.byKey(const Key('report-letterhead')), findsOneWidget);
     expect(find.text('이 주에 공개된 수업이 없습니다.'), findsOneWidget);
     expect(find.byType(RoleShell), findsOneWidget);
+  });
+
+  group('D2 알림 딥링크', () {
+    String path(WidgetTester tester) =>
+        GoRouter.of(tester.element(find.byType(RoleShell)))
+            .routerDelegate
+            .currentConfiguration
+            .uri
+            .path;
+
+    testWidgets('공지 알림을 누르면 공지 목록 위에 그 공지가 열린다', (tester) async {
+      final push = FakePushMessaging();
+      await _pumpAtRole(tester, role: UserRole.student, push: push);
+
+      push.opened.add(const PushLink(screen: 'notice', id: 5));
+      await tester.pumpAndSettle();
+
+      expect(path(tester), AppRoutes.studentNotices);
+      // 시트의 본문. 목록 줄에는 본문이 없다.
+      expect(find.text('9/17~9/19 휴강합니다.'), findsOneWidget);
+    });
+
+    testWidgets('꺼진 앱을 알림으로 켜면 로그인이 복원된 뒤 그 화면이다', (tester) async {
+      final push = FakePushMessaging(
+        initial: const PushLink(screen: 'homework'),
+      );
+      await _pumpAtRole(tester, role: UserRole.student, push: push);
+
+      expect(path(tester), AppRoutes.studentHomeworks);
+      expect(find.text('단어 3과'), findsWidgets);
+    });
+
+    testWidgets('로그아웃된 채 알림으로 켜면 로그인한 다음 사람을 그 화면으로 보내지 않는다', (tester) async {
+      final kv = InMemoryKeyValueStore();
+      final auth = AuthController(
+        repository: _FakeAuthRepo(
+          const MeResponse(
+            id: 2,
+            name: '김바다',
+            role: UserRole.student,
+            phone: '01099998888',
+            mustChangePassword: false,
+          ),
+        ),
+        tokens: TokenStore(kv),
+        cookies: CookieStore(kv, Uri.parse('https://example.test/api/auth')),
+        jar: CookieJar(),
+      );
+      await auth.bootstrap(); // 토큰이 없다 — loggedOut
+      final push = FakePushMessaging(
+        initial: const PushLink(screen: 'homework'),
+      );
+      await tester.pumpWidget(
+        AcademyApp(auth: auth, dio: _fakeDio(), store: kv, push: push),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginPage), findsOneWidget);
+
+      await auth.login(loginId: '01099998888', password: 'pw');
+      await tester.pumpAndSettle();
+
+      expect(path(tester), AppRoutes.student);
+    });
+
+    testWidgets('학부모 알림은 학부모 화면으로 간다. 내 자녀가 아닌 id 는 무시한다', (tester) async {
+      final push = FakePushMessaging();
+      await _pumpAtRole(tester, role: UserRole.parent, push: push);
+
+      push.opened.add(const PushLink(screen: 'schedule', studentId: 99));
+      await tester.pumpAndSettle();
+
+      expect(path(tester), AppRoutes.parentSchedule);
+      // 남의 id 로 부르지 않았다 — 부르면 대본에 없어서 던진다.
+      expect(
+        _lastAdapter!.received.where((p) => p.contains('/children/99/')),
+        isEmpty,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('학부모에게 학생 목적지가 오면 옮기지 않는다', (tester) async {
+      final push = FakePushMessaging();
+      await _pumpAtRole(tester, role: UserRole.parent, push: push);
+
+      push.opened.add(const PushLink(screen: 'qna', id: 31));
+      await tester.pumpAndSettle();
+
+      expect(path(tester), AppRoutes.parent);
+    });
+
+    testWidgets('앱이 떠 있을 때 온 알림은 스낵바로 뜨고, 보기를 누르면 그 화면이다', (tester) async {
+      final push = FakePushMessaging();
+      await _pumpAtRole(tester, role: UserRole.student, push: push);
+
+      push.foreground.add(
+        const ForegroundPush(
+          title: '숙제가 채점됐어요',
+          link: PushLink(screen: 'homework'),
+        ),
+      );
+      // 스낵바가 다 올라올 때까지. 자동으로 닫히는 4초보다는 짧다.
+      await tester.pumpAndSettle();
+      expect(find.text('숙제가 채점됐어요'), findsOneWidget);
+      // 누르기 전에는 옮기지 않는다.
+      expect(path(tester), AppRoutes.student);
+
+      await tester.tap(find.text('보기'));
+      await tester.pumpAndSettle();
+      expect(path(tester), AppRoutes.studentHomeworks);
+    });
+
+    testWidgets('보고 있는 화면은 알림이 오면 60초 안이어도 다시 받는다', (tester) async {
+      // 숙제 탭을 보는 중에 「채점됐어요」가 왔는데 화면이 그대로면 알림이 거짓말이 된다.
+      final push = FakePushMessaging();
+      await _pumpAtRole(tester, role: UserRole.student, push: push);
+      GoRouter.of(tester.element(find.byType(RoleShell)))
+          .go(AppRoutes.studentHomeworks);
+      await tester.pumpAndSettle();
+      int count() => _lastAdapter!.received
+          .where((p) => p == '/api/student/homeworks')
+          .length;
+      final before = count();
+
+      push.foreground.add(
+        const ForegroundPush(
+          title: '숙제가 채점됐어요',
+          link: PushLink(screen: 'homework'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(count(), before + 1);
+    });
   });
 }

@@ -19,17 +19,19 @@ import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
 import com.njwenglish.dto.clinic.ClinicSlotState;
 import com.njwenglish.entity.Clinic;
+import com.njwenglish.entity.ClinicChangeLog;
 import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.AttendanceStatus;
 import com.njwenglish.entity.enums.ReservationStatus;
-import com.njwenglish.entity.ClinicChangeLog;
 import com.njwenglish.repository.ClinicChangeLogRepository;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -46,12 +48,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ClinicReservationServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private ClinicRepository clinicRepository;
     @Mock
@@ -82,7 +87,7 @@ class ClinicReservationServiceTest {
         clinic = Fixtures.clinic(41L, LocalDate.now().plusDays(7), LocalTime.of(17, 0), (short) 6);
         clinicReservationService = new ClinicReservationService(clinicRepository,
             reservationRepository, changeLogRepository, noticeService, studentRepository,
-            teacherRepository, studentAccessGuard);
+            teacherRepository, studentAccessGuard, eventPublisher);
     }
 
     @AfterEach
@@ -202,6 +207,9 @@ class ClinicReservationServiceTest {
         assertThat(seoReservation.getCheckedBy()).isSameAs(teacher);
         assertThat(response.summary().present()).isEqualTo(1);
         assertThat(response.summary().absent()).isEqualTo(1);
+        // 푸시 #8 — 수업 출석과 kind 가 다르다
+        verify(eventPublisher).publishEvent(PushEvent.of(PushTopic.ATTENDANCE_CLINIC,
+            List.of(seo.getId(), kim.getId()), null));
     }
 
     @Test

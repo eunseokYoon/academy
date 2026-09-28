@@ -9,6 +9,10 @@ import com.njwenglish.dto.attendance.AttendanceSummaryResponse;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
+import com.njwenglish.dto.clinic.ClinicBulkAssignRequest;
+import com.njwenglish.dto.clinic.ClinicBulkAssignResponse;
+import com.njwenglish.dto.clinic.ClinicBulkUnassignRequest;
+import com.njwenglish.dto.clinic.ClinicBulkUnassignResponse;
 import com.njwenglish.dto.clinic.ClinicReservationChangeRequest;
 import com.njwenglish.dto.clinic.ClinicReservationCreateResponse;
 import com.njwenglish.dto.clinic.ClinicReservationListResponse;
@@ -20,12 +24,16 @@ import com.njwenglish.entity.ClinicReservation;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.AttendanceStatus;
+import com.njwenglish.entity.enums.ClinicStatus;
 import com.njwenglish.entity.enums.ReservationStatus;
 import com.njwenglish.repository.ClinicChangeLogRepository;
 import com.njwenglish.repository.ClinicRepository;
 import com.njwenglish.repository.ClinicReservationRepository;
 import com.njwenglish.repository.StudentRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -39,6 +47,7 @@ import java.util.Map;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,6 +83,7 @@ public class ClinicReservationService {
     private final StudentRepository studentRepository;
     private final TeacherRepository teacherRepository;
     private final StudentAccessGuard studentAccessGuard;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 정원 체크 + 삽입. <b>클리닉 행을 FOR UPDATE로 잠근 뒤에 센다.</b>
@@ -249,6 +259,118 @@ public class ClinicReservationService {
         return reservations(clinicId);
     }
 
+    /**
+     * T-13 요일 일괄 배정(2026-09-29). 기간 안의 그 요일에 <b>열려 있는</b> 클리닉마다
+     * {@link #reserveLocked}를 탄다 — 정원 잠금·중복 건너뛰기·슬롯 검증을 다시 짜지 마라.
+     *
+     * <p><b>날짜 하나가 막혀도 나머지는 넣는다</b>({@code ClinicService.bulkCreate}와 같은 규칙).
+     * 막힌 날짜는 이유와 함께 돌려준다. 한 회차 안에서는 여전히 전부 아니면 전무다.
+     *
+     * <p>지난 날짜는 건너뛴다. 지난 회차에 예약이 생기면 출결이 비어 {@code findPendingUntil}이
+     * 그 클리닉을 T-1 미확정으로 계속 뽑는다.
+     *
+     * <p>하루에 클리닉이 여럿이면 그 도착 시각을 품은 첫 시간대에 넣는다(시작 시각 순).
+     * 시리즈를 저장하지 않는다(10-0) — 나중에 연 회차는 선생님이 다시 누른다.
+     */
+    @Transactional
+    public ClinicBulkAssignResponse bulkAssign(ClinicBulkAssignRequest request) {
+        if (request.to().isBefore(request.from())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        List<Student> students = request.studentIds().stream().distinct()
+            .map(studentId -> studentRepository.findById(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)))
+            .toList();
+        Teacher teacher = currentTeacher();
+        DayOfWeek day = DayOfWeek.of(request.dayOfWeek());
+        LocalTime arrival = request.arrivalTime();
+        LocalDate today = LocalDate.now();
+
+        // findInRange가 날짜·시작 시각 순이라 날짜별 목록도 시작 시각 순이다
+        Map<LocalDate, List<Clinic>> openByDate = clinicRepository
+            .findInRange(request.from(), request.to(), ClinicStatus.OPEN).stream()
+            .collect(Collectors.groupingBy(Clinic::getClinicDate));
+
+        int clinics = 0;
+        int reservations = 0;
+        List<ClinicBulkAssignResponse.Skipped> skipped = new ArrayList<>();
+        for (LocalDate date = request.from(); !date.isAfter(request.to());
+             date = date.plusDays(1)) {
+            if (date.getDayOfWeek() != day) {
+                continue;
+            }
+            if (date.isBefore(today)) {
+                skipped.add(skip(date, ClinicBulkAssignResponse.Reason.PAST));
+                continue;
+            }
+            List<Clinic> open = openByDate.getOrDefault(date, List.of());
+            if (open.isEmpty()) {
+                skipped.add(skip(date, ClinicBulkAssignResponse.Reason.NO_CLINIC));
+                continue;
+            }
+            Clinic target = open.stream()
+                .filter(c -> arrival == null || c.hasSlot(arrival))
+                .findFirst()
+                .orElse(null);
+            if (target == null) {
+                skipped.add(skip(date, ClinicBulkAssignResponse.Reason.NO_SLOT));
+                continue;
+            }
+            try {
+                reservations += reserveLocked(target.getId(), students, teacher, arrival, false)
+                    .size();
+                clinics++;
+            } catch (BusinessException e) {
+                // 정원 검사는 저장 전에 한다 — 이 회차에는 아무것도 쓰이지 않았다
+                if (e.getErrorCode() != ErrorCode.CLINIC_CAPACITY_EXCEEDED) {
+                    throw e;
+                }
+                skipped.add(skip(date, ClinicBulkAssignResponse.Reason.FULL));
+            }
+        }
+        return new ClinicBulkAssignResponse(clinics, reservations, skipped);
+    }
+
+    private static ClinicBulkAssignResponse.Skipped skip(LocalDate date,
+                                                         ClinicBulkAssignResponse.Reason reason) {
+        return new ClinicBulkAssignResponse.Skipped(date, reason);
+    }
+
+    /**
+     * T-13 요일 일괄 해제(2026-09-29). 한 회차 해제처럼 CANCELED로 바꾼다.
+     *
+     * <p><b>출결이 이미 기록된 예약은 남긴다.</b> 지우면 그날 출석 기록이 사라진다.
+     * 지난 날짜도 건너뛴다 — 오늘부터다.
+     */
+    @Transactional
+    public ClinicBulkUnassignResponse bulkUnassign(ClinicBulkUnassignRequest request) {
+        if (request.to().isBefore(request.from())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        LocalDate today = LocalDate.now();
+        LocalDate from = request.from().isBefore(today) ? today : request.from();
+        if (request.to().isBefore(from)) {
+            return new ClinicBulkUnassignResponse(0, 0);
+        }
+        DayOfWeek day = DayOfWeek.of(request.dayOfWeek());
+
+        int canceled = 0;
+        int kept = 0;
+        for (ClinicReservation reservation : reservationRepository.findReservedForStudentsInRange(
+            request.studentIds().stream().distinct().toList(), from, request.to())) {
+            if (reservation.getClinic().getClinicDate().getDayOfWeek() != day) {
+                continue;
+            }
+            if (reservation.getAttendStatus() != null) {
+                kept++;
+                continue;
+            }
+            reservation.cancel();
+            canceled++;
+        }
+        return new ClinicBulkUnassignResponse(canceled, kept);
+    }
+
     /** T-13 배정 해제. 취소와 마찬가지로 행을 지우지 않는다. */
     @Transactional
     public void unassign(Long clinicId, Long studentId) {
@@ -308,6 +430,13 @@ public class ClinicReservationService {
             reservation.checkAttendance(status,
                 exception == null ? null : exception.memo(), teacher, now);
             statuses.add(status);
+        }
+
+        // 푸시 #8. 슬롯마다 따로 확정해도 PushPlanner 가 하루 1건으로 묶는다.
+        // 수업 출석과 kind 가 다르다 — 같은 날 둘 다 있는 게 정상이다
+        if (!reservations.isEmpty()) {
+            eventPublisher.publishEvent(PushEvent.of(PushTopic.ATTENDANCE_CLINIC,
+                reservations.stream().map(each -> each.getStudent().getId()).toList(), null));
         }
 
         return new ClinicAttendanceConfirmResponse(clinic.getId(), now,

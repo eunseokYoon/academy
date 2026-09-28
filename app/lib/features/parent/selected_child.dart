@@ -117,6 +117,23 @@ class SelectedChild extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// 알림이 가리키는 자녀를 고른다(푸시의 `studentId`). 목록을 아직 안 받았으면
+  /// 받고 나서 본다. **내 자녀가 아니면 아무것도 바꾸지 않는다** — 알림 data 는
+  /// 기기로 들어온 값이라 [select] 에 그대로 넣으면 남의 id 가 저장된다.
+  /// 목록을 못 받았으면 포기한다(화면의 게이트가 오류를 띄운다).
+  Future<void> selectIfMine(int studentId) async {
+    if (_disposed) return;
+    if (!_loaded) {
+      try {
+        await load();
+      } catch (_) {
+        return;
+      }
+    }
+    if (_disposed) return;
+    if (_children.any((c) => c.studentId == studentId)) await select(studentId);
+  }
+
   @override
   void dispose() {
     _disposed = true;

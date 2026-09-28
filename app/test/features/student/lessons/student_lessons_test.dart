@@ -175,9 +175,8 @@ void main() {
   group('상세', () {
     Future<List<Uri>> pumpDetail(
       WidgetTester tester,
-      StudentLessonDetail d, {
-      bool opens = true,
-    }) async {
+      StudentLessonDetail d,
+    ) async {
       final opened = <Uri>[];
       final c = StudentLessonDetailController(
         repository: _Repo(detailValue: d),
@@ -190,8 +189,10 @@ void main() {
           controller: c,
           openUrl: (u) async {
             opened.add(u);
-            return opens;
+            return true;
           },
+          // 위젯 테스트에는 웹뷰가 없다. 어느 주소를 실었는지만 본다.
+          playerBuilder: (url) => Text('PLAYER $url'),
         ),
       );
       return opened;
@@ -208,7 +209,24 @@ void main() {
       expect(find.text('중점 사항'), findsNothing);
     });
 
-    testWidgets('영상이 하나면 목록 없이 버튼 하나이고, 서버의 embedUrl 을 그대로 연다', (tester) async {
+    testWidgets('머리 카드는 아래 카드들과 같은 폭이다(글자 폭으로 줄지 않는다)', (tester) async {
+      await pumpDetail(
+        tester,
+        _detail(
+          videos: const [
+            LessonVideo(
+              title: null,
+              embedUrl: 'https://www.youtube.com/embed/abc',
+            ),
+          ],
+        ),
+      );
+      final header = tester.getSize(find.byKey(const Key('lesson-header')));
+      final button = tester.getSize(find.byKey(const Key('play-lesson')));
+      expect(header.width, button.width);
+    });
+
+    testWidgets('영상이 하나면 목록 없이 버튼 하나이고, 누르면 그 자리에서 재생한다', (tester) async {
       final opened = await pumpDetail(
         tester,
         _detail(
@@ -224,13 +242,23 @@ void main() {
       expect(find.text('▶ 수업영상 시청하기'), findsOneWidget);
       expect(find.byKey(const ValueKey('video-0')), findsNothing);
       expect(find.text('대체 등원'), findsOneWidget);
+      // 누르기 전에는 플레이어를 만들지 않는다(웹뷰는 무겁다).
+      expect(find.textContaining('PLAYER'), findsNothing);
+
       await tester.tap(find.byKey(const Key('play-lesson')));
       await tester.pumpAndSettle();
-      expect(opened, [Uri.parse('https://www.youtube.com/embed/abc')]);
+
+      expect(
+        find.text('PLAYER https://www.youtube.com/embed/abc'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('play-lesson')), findsNothing);
+      // 앱 밖으로 넘기지 않는다.
+      expect(opened, isEmpty);
     });
 
-    testWidgets('영상이 둘이면 번호 목록이 있고, 이름이 없으면 「영상 N」이다', (tester) async {
-      final opened = await pumpDetail(
+    testWidgets('영상이 둘이면 번호 목록이 있고, 고른 영상으로 바뀐다', (tester) async {
+      await pumpDetail(
         tester,
         _detail(
           videos: const [
@@ -241,22 +269,15 @@ void main() {
       );
       expect(find.text('▶ 수업영상 시청하기 (2개)'), findsOneWidget);
       expect(find.text('영상 2'), findsOneWidget);
+
       await tester.tap(find.byKey(const ValueKey('video-1')));
       await tester.pumpAndSettle();
-      expect(opened, [Uri.parse('https://y/embed/b?list=L')]);
-    });
+      expect(find.text('PLAYER https://y/embed/b?list=L'), findsOneWidget);
 
-    testWidgets('영상을 못 열면 문구가 뜬다', (tester) async {
-      await pumpDetail(
-        tester,
-        _detail(
-          videos: const [LessonVideo(title: null, embedUrl: 'https://y/e')],
-        ),
-        opens: false,
-      );
-      await tester.tap(find.byKey(const Key('play-lesson')));
+      await tester.tap(find.byKey(const ValueKey('video-0')));
       await tester.pumpAndSettle();
-      expect(find.text('영상을 열 수 없습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.text('PLAYER https://y/embed/a'), findsOneWidget);
+      expect(find.text('PLAYER https://y/embed/b?list=L'), findsNothing);
     });
 
     testWidgets('GRID ⭕ 숙제는 status 가 NOT_SUBMITTED 여도 「완료」다 (4-2)', (

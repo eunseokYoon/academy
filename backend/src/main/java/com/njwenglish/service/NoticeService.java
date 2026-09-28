@@ -22,20 +22,25 @@ import com.njwenglish.entity.Notice;
 import com.njwenglish.entity.NoticeAttachment;
 import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
+import com.njwenglish.entity.enums.NoticeAudience;
 import com.njwenglish.entity.enums.NoticeScope;
 import com.njwenglish.entity.enums.UserRole;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.NoticeAttachmentRepository;
 import com.njwenglish.repository.NoticeRepository;
+import com.njwenglish.repository.PushRecipientRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -71,6 +76,8 @@ public class NoticeService {
     /** 공지당 첨부 상한. 50MB × 5 = 250MB가 공지 한 건의 최대 저장 비용이다. */
     private static final int MAX_ATTACHMENTS = 5;
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     private final NoticeRepository noticeRepository;
     private final ClassRoomRepository classRoomRepository;
     private final EnrollmentRepository enrollmentRepository;
@@ -79,6 +86,8 @@ public class NoticeService {
     private final NoticeAttachmentRepository attachmentRepository;
     private final PresignedUrlProvider presignedUrlProvider;
     private final MaterialKeys materialKeys;
+    private final PushRecipientRepository pushRecipientRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ---------- 학생 · 학부모 ----------
 
@@ -164,8 +173,10 @@ public class NoticeService {
     @Transactional
     public Notice publishForStudent(String title, String content, Student student,
                                     Teacher teacher) {
-        return noticeRepository.save(
+        Notice notice = noticeRepository.save(
             Notice.publishedForStudent(title, content, student, teacher, OffsetDateTime.now()));
+        announce(notice);
+        return notice;
     }
 
     // ---------- 선생님 (T-10) ----------
@@ -244,7 +255,9 @@ public class NoticeService {
     @Transactional
     public NoticeResponse publish(Long noticeId) {
         Notice notice = findNotice(noticeId);
-        notice.publish(OffsetDateTime.now());
+        if (notice.publish(OffsetDateTime.now())) {
+            announce(notice);
+        }
         return NoticeResponse.from(notice, attachmentsOf(notice.getId()));
     }
 
@@ -260,6 +273,24 @@ public class NoticeService {
     }
 
     // ---------- 내부 ----------
+
+    /**
+     * 푸시(#1 공지·#7 변경). 대상은 scope, 받는 쪽은 audience 가 정한다 — 목록 조회 조건과 같다.
+     * 보내는 건 커밋 뒤다({@code PushDispatcher}). 공지 한 곳에 붙여서 수업일·클리닉 변경의
+     * 자동 공지도 같이 간다 — 변경 쪽에 알림을 따로 달지 마라.
+     */
+    private void announce(Notice notice) {
+        List<Long> studentIds = switch (notice.getScope()) {
+            case ALL -> pushRecipientRepository.findEnrolledIds();
+            case CLASS -> enrollmentRepository
+                .findActiveStudents(notice.getClassRoom().getId(), LocalDate.now(KST))
+                .stream().map(Student::getId).toList();
+            case STUDENT -> List.of(notice.getStudent().getId());
+        };
+        eventPublisher.publishEvent(PushEvent.notice(notice.getId(), studentIds,
+            notice.getAudience() != NoticeAudience.PARENT_ONLY,
+            notice.getAudience() != NoticeAudience.STUDENT_ONLY));
+    }
 
     /**
      * studentId가 있으면 requireAccessible, 없으면 학생 본인이다.

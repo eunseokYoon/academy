@@ -14,29 +14,36 @@ import 'package:academy_app/shared/lib/homework_labels.dart';
 
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
-import '../../../shared/widgets/form_error.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/home_layout.dart';
 import '../../../shared/widgets/reappear_reload.dart';
 import '../../../shared/widgets/sub_page.dart';
+import '../../../shared/widgets/youtube_player.dart';
 import 'student_lesson_data.dart';
 
 /// S-5 상세. 웹 정본은 `frontend/src/routes/student/StudentLessonDetailPage.tsx`.
 ///
-/// **영상은 앱 밖(YouTube 앱·브라우저)에서 연다.** 웹은 누르면 그 자리에
-/// iframe 을 심는데, 앱에 웹뷰를 들이는 대신 서버가 만든 `embedUrl` 을 그대로
-/// 기기에 넘긴다. 주소를 앱에서 다시 조립하지 마라(`YoutubeUrls.embedUrlOf`).
+/// **영상은 웹처럼 화면 안에서 재생한다(2026-09-29).** 누르면 버튼 자리에 16:9
+/// 플레이어([YoutubePlayer])가 들어서고, 여러 편이면 목록에서 고른 것으로 바뀐다.
+/// 누르기 전에는 플레이어를 만들지 않는다 — 웹이 처음부터 iframe 을 심지 않는 것과
+/// 같다. 주소는 서버의 `embedUrl` 에 재생 인자만 붙인다(`playerUrlOf`).
 class StudentLessonDetailPage extends StatefulWidget {
   const StudentLessonDetailPage({
     super.key,
     required this.lessonId,
     required this.controller,
     required this.openUrl,
+    this.playerBuilder,
   });
 
   final int lessonId;
   final StudentLessonDetailController controller;
+
+  /// 플레이어 안의 링크(YouTube 로고 등)를 기기로 넘길 때.
   final UrlOpener openUrl;
+
+  /// 테스트가 가짜를 넣는다 — 위젯 테스트에는 웹뷰가 없다. 없으면 [YoutubePlayer].
+  final Widget Function(String embedUrl)? playerBuilder;
 
   @override
   State<StudentLessonDetailPage> createState() =>
@@ -45,7 +52,8 @@ class StudentLessonDetailPage extends StatefulWidget {
 
 class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
     with ReappearReload<StudentLessonDetailPage> {
-  String? _videoError;
+  /// 재생 중인 영상의 순번. null 이면 아직 안 눌렀다.
+  int? _playing;
 
   @override
   void initState() {
@@ -63,7 +71,7 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
     }
     if (oldWidget.controller != widget.controller ||
         oldWidget.lessonId != widget.lessonId) {
-      _videoError = null;
+      _playing = null;
       widget.controller.load(widget.lessonId);
     }
   }
@@ -81,20 +89,9 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
   @override
   void onReappear() => widget.controller.load(widget.lessonId);
 
-  Future<void> _play(LessonVideo video) async {
-    final url = video.embedUrl;
-    if (url == null) return;
-    setState(() => _videoError = null);
-    var opened = false;
-    try {
-      opened = await widget.openUrl(Uri.parse(url));
-    } catch (_) {
-      opened = false;
-    }
-    if (!opened && mounted) {
-      setState(() => _videoError = '영상을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
-    }
-  }
+  Widget _player(String embedUrl) =>
+      widget.playerBuilder?.call(embedUrl) ??
+      YoutubePlayer(embedUrl: embedUrl, openUrl: widget.openUrl);
 
   @override
   Widget build(BuildContext context) {
@@ -125,11 +122,13 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
     final homework = d.homework;
     final notes = d.notes;
     final blocks = <Widget>[
+      // 폭을 채운다. homeConstrain 이 Center 라 그냥 두면 글자 폭으로 줄어든다
+      // (웹의 div 는 블록이라 폭을 채운다).
       AppCard(
         key: const Key('lesson-header'),
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Wrap(
               spacing: 8,
@@ -167,8 +166,13 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
         ),
       ),
       // 영상이 없으면 영역을 통째로 숨긴다.
-      if (d.videos.isNotEmpty) _Videos(videos: d.videos, onPlay: _play),
-      if (_videoError != null) FormError(message: _videoError),
+      if (d.videos.isNotEmpty)
+        _Videos(
+          videos: d.videos,
+          playing: _playing,
+          onSelect: (i) => setState(() => _playing = i),
+          player: _player,
+        ),
       if (notes.content != null) _Note(title: '수업 내용', text: notes.content!),
       if (notes.keyPoints != null)
         _Note(title: '중점 사항', text: notes.keyPoints!),
@@ -196,55 +200,82 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
 
 /// 영상 버튼 + (둘 이상이면) 목록. 영상이 하나면 목록을 그리지 않는다 — 고를 게 없다.
 class _Videos extends StatelessWidget {
-  const _Videos({required this.videos, required this.onPlay});
+  const _Videos({
+    required this.videos,
+    required this.playing,
+    required this.onSelect,
+    required this.player,
+  });
 
   final List<LessonVideo> videos;
-  final ValueChanged<LessonVideo> onPlay;
+
+  /// 재생 중인 순번. null 이면 버튼을 그린다.
+  final int? playing;
+  final ValueChanged<int> onSelect;
+  final Widget Function(String embedUrl) player;
 
   @override
   Widget build(BuildContext context) {
+    final playing = this.playing;
+    final playingUrl = playing == null ? null : videos[playing].embedUrl;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          color: AppColors.brand900,
-          borderRadius: BorderRadius.circular(AppRadii.xl),
-          child: InkWell(
-            key: const Key('play-lesson'),
+        if (playingUrl != null)
+          ClipRRect(
             borderRadius: BorderRadius.circular(AppRadii.xl),
-            onTap: () => onPlay(videos.first),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                '▶ 수업영상 시청하기'
-                '${videos.length > 1 ? ' (${videos.length}개)' : ''}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: ColoredBox(
+                color: Colors.black,
+                // 주소가 바뀌면 새 플레이어다 — 옛 웹뷰에 새 영상을 싣지 않는다.
+                child: KeyedSubtree(
+                  key: ValueKey('player-$playing-$playingUrl'),
+                  child: player(playingUrl),
+                ),
+              ),
+            ),
+          )
+        else
+          Material(
+            color: AppColors.brand900,
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            child: InkWell(
+              key: const Key('play-lesson'),
+              borderRadius: BorderRadius.circular(AppRadii.xl),
+              // 첫 영상에 주소가 없으면(링크를 못 읽은 영상) 누를 게 없다.
+              onTap: videos.first.embedUrl == null ? null : () => onSelect(0),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  '▶ 수업영상 시청하기'
+                  '${videos.length > 1 ? ' (${videos.length}개)' : ''}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
         if (videos.length > 1)
           for (var i = 0; i < videos.length; i++) ...[
             const SizedBox(height: 6),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                // 재생 중인 칸은 남색으로 채운다(웹과 같다).
+                color: playing == i ? AppColors.brand900 : Colors.white,
                 borderRadius: BorderRadius.circular(AppRadii.xl),
-                boxShadow: AppShadows.card,
+                boxShadow: playing == i ? null : AppShadows.card,
               ),
               child: Material(
                 type: MaterialType.transparency,
                 child: InkWell(
                   key: ValueKey('video-$i'),
                   borderRadius: BorderRadius.circular(AppRadii.xl),
-                  onTap: videos[i].embedUrl == null
-                      ? null
-                      : () => onPlay(videos[i]),
+                  onTap: videos[i].embedUrl == null ? null : () => onSelect(i),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -254,10 +285,12 @@ class _Videos extends StatelessWidget {
                       children: [
                         Text(
                           '${i + 1}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.brand400,
+                            color: playing == i
+                                ? Colors.white.withValues(alpha: 0.7)
+                                : AppColors.brand400,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -267,9 +300,11 @@ class _Videos extends StatelessWidget {
                             videos[i].title ?? '영상 ${i + 1}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
-                              color: AppColors.brand900,
+                              color: playing == i
+                                  ? Colors.white
+                                  : AppColors.brand900,
                             ),
                           ),
                         ),

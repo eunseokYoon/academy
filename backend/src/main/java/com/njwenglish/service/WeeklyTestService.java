@@ -3,6 +3,7 @@ package com.njwenglish.service;
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.dto.weeklytest.ClinicReflection;
 import com.njwenglish.dto.weeklytest.WeeklyTestGridResponse;
 import com.njwenglish.dto.weeklytest.WeeklyTestSaveRequest;
@@ -16,16 +17,21 @@ import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.WeeklyTestRepository;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +50,7 @@ public class WeeklyTestService {
     private final EnrollmentRepository enrollmentRepository;
     private final ClassRoomRepository classRoomRepository;
     private final StudentAccessGuard studentAccessGuard;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 그리드 한 장. 명단은 <b>재원생 ∪ 그 주차에 성적이 있는 학생</b>이다.
@@ -127,13 +134,20 @@ public class WeeklyTestService {
         ClassRoom classRoom = classRoomRepository.findById(request.classRoomId())
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
+        Set<Long> written = new HashSet<>();
         for (WeeklyTestSaveRequest.TestInput input : request.tests()) {
-            saveColumn(classRoom, request, input);
+            saveColumn(classRoom, request, input, written);
+        }
+        // 푸시 #4. 새로 적었거나 값이 바뀐 칸의 학생만. 지운 칸은 알릴 것이 없다.
+        // 그날 두 번째 저장부터는 PushPlanner 가 하루 1건으로 묶는다
+        if (!written.isEmpty()) {
+            eventPublisher.publishEvent(PushEvent.labeled(PushTopic.WEEKLY_SCORE, written,
+                MonthWeeks.label(request.month(), request.week())));
         }
     }
 
     private void saveColumn(ClassRoom classRoom, WeeklyTestSaveRequest request,
-                            WeeklyTestSaveRequest.TestInput input) {
+                            WeeklyTestSaveRequest.TestInput input, Set<Long> written) {
         Optional<WeeklyTest> found = weeklyTestRepository
             .findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(classRoom.getId(),
                 input.testType(), request.year(), request.month(), request.week());
@@ -160,7 +174,9 @@ public class WeeklyTestService {
                 input.totalCount(), input.internalTotal(), input.externalTotal())));
 
         for (WeeklyTestSaveRequest.CellInput cell : input.cellsOrEmpty()) {
-            saveCell(test, cell, request.loadedAt());
+            if (saveCell(test, cell, request.loadedAt())) {
+                written.add(cell.studentId());
+            }
         }
     }
 
@@ -244,8 +260,9 @@ public class WeeklyTestService {
             && externalTotal.equals(header.getExternalTotal());
     }
 
-    private void saveCell(WeeklyTest test, WeeklyTestSaveRequest.CellInput cell,
-                          OffsetDateTime loadedAt) {
+    /** @return 값이 새로 생겼거나 바뀌었으면 true(푸시 대상). 지웠거나 그대로면 false. */
+    private boolean saveCell(WeeklyTest test, WeeklyTestSaveRequest.CellInput cell,
+                             OffsetDateTime loadedAt) {
         // studentId를 받는 모든 서비스 메서드의 첫 줄은 requireAccessible이다
         Student student = studentAccessGuard.requireAccessible(cell.studentId());
 
@@ -264,19 +281,19 @@ public class WeeklyTestService {
             found.filter(score -> loadedAt == null
                     || !score.getUpdatedAt().isAfter(loadedAt))
                 .ifPresent(weeklyTestScoreRepository::delete);
-            return;
+            return false;
         }
 
         if (found.isPresent()) {
             // 같은 칸을 다시 저장하는 건 오타 수정이라는 정상 흐름이다. 409를 던지지 않는다
-            found.get().rewrite(cell.correctCount(), cell.internalCorrect(),
+            return found.get().rewrite(cell.correctCount(), cell.internalCorrect(),
                 cell.externalCorrect(), cell.result(), cell.retestPassed());
-            return;
         }
 
         weeklyTestScoreRepository.save(WeeklyTestScore.create(test, student,
             cell.correctCount(), cell.internalCorrect(), cell.externalCorrect(),
             cell.result(), cell.retestPassed()));
+        return true;
     }
 
     /** 종류마다 필요한 헤더값이 다르다. ck_weekly_tests_shape가 DB에서도 막지만 400으로 먼저 잡는다. */

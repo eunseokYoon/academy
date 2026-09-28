@@ -40,6 +40,8 @@ import com.njwenglish.entity.enums.SubmissionStatus;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDate;
@@ -56,6 +58,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -64,6 +67,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class SubmissionServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private SubmissionRepository submissionRepository;
     @Mock
@@ -95,7 +100,7 @@ class SubmissionServiceTest {
 
         submissionService = new SubmissionService(submissionRepository, photoRepository,
             homeworkService, studentAccessGuard, presignedUrlProvider,
-            new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"), lessonRepository);
+            new SubmissionMediaKeys("test-secret-value-for-hmac-signing-0123456789"), lessonRepository, eventPublisher);
         Fixtures.login(Fixtures.studentUser(10L));
     }
 
@@ -116,6 +121,9 @@ class SubmissionServiceTest {
         assertThat(response.status()).isEqualTo(SubmissionStatus.SUBMITTED);
         assertThat(response.isLate()).isTrue();
         assertThat(submission.getSubmittedAt()).isNotNull();
+        // 푸시 #2 — 학부모에게 간다(수신자 판정은 PushTopic)
+        verify(eventPublisher).publishEvent(PushEvent.of(PushTopic.HOMEWORK_SUBMITTED,
+            submission.getStudent().getId(), null));
     }
 
     @Test

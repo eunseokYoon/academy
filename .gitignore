@@ -39,3 +39,10 @@ CLAUDE.md
 # 로컬 실행 스크립트 (환경변수·로컬 시크릿이 들어간다)
 backend/run-local.sh
 backend/bin/
+
+# FCM 서비스 계정 키. 절대 커밋하지 마라(서버의 /etc/academy/secrets 에만 둔다)
+*firebase-adminsdk*.json
+firebase-sa.json
+# Firebase 앱 설정 파일. 커밋하지 않기로 했다(2026-09-27) — 기계마다 콘솔에서 받아 둔다
+app/android/app/google-services.json
+app/ios/Runner/GoogleService-Info.plist

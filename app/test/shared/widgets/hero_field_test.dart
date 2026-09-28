@@ -7,6 +7,7 @@ import 'package:academy_app/shared/widgets/hero_field.dart';
 void main() {
   Widget host({
     List<HeroStat> stats = const [],
+    HeroStat? banner,
     Widget? child,
     // 웹은 인사말에서 이름 한 곳만 주황이다 — 그래서 title 이 InlineSpan 이다.
     InlineSpan title = const TextSpan(text: '김하늘 님,'),
@@ -17,6 +18,7 @@ void main() {
           eyebrow: '9월 19일 (토)',
           title: title,
           stats: stats,
+          banner: banner,
           child: child,
         ),
       ),
@@ -114,26 +116,65 @@ void main() {
     expect(nd.borderRadius, BorderRadius.circular(AppRadii.xxl));
   });
 
-  testWidgets('extra 를 주면 같은 칸 안에 둘째 줄이 생긴다', (tester) async {
-    // 칸을 넷으로 늘리는 대신 쓴다. 360px 에서 칸이 넷이면 D-61 이 줄바꿈된다.
+  testWidgets('banner 는 일정 칸 줄 아래에 폭 전체로 그린다', (tester) async {
+    // 미완료 숙제가 여기 온다(2026-09-29). 윗줄은 일정 칸 셋까지다.
     await tester.pumpWidget(
       host(
         stats: const [
-          HeroStat(
-            label: '다음 수업',
-            value: 'D-2',
-            extra: HeroStatExtra(
-              label: '다음 클리닉',
-              value: 'D-1',
-              sub: '09/20 17:00',
-            ),
-          ),
+          HeroStat(label: '다음 수업', value: 'D-2'),
+          HeroStat(label: '다음 클리닉', value: 'D-1'),
+          HeroStat(label: '중간고사', value: 'D-30'),
         ],
+        banner: const HeroStat(
+          label: '미완료 숙제',
+          value: '1',
+          sub: '확인하세요',
+          hot: true,
+        ),
       ),
     );
-    expect(find.byKey(const Key('stat-0')), findsOneWidget);
-    expect(find.text('다음 클리닉'), findsOneWidget);
-    expect(find.text('D-1'), findsOneWidget);
+    final row = tester.getRect(find.byKey(const Key('hero-stats')));
+    final banner = tester.getRect(find.byKey(const Key('stat-banner')));
+    expect(banner.top, greaterThan(row.bottom));
+    expect(banner.width, row.width);
+    // 값은 오른쪽이다 — 라벨보다 오른쪽에 있다.
+    expect(
+      tester.getCenter(find.text('1')).dx,
+      greaterThan(tester.getCenter(find.text('미완료 숙제')).dx),
+    );
+    final d =
+        tester
+                .widget<Container>(find.byKey(const Key('stat-banner')))
+                .decoration!
+            as BoxDecoration;
+    expect(d.color, AppColors.accent400.withValues(alpha: 0.22));
+  });
+
+  testWidgets('일정 칸이 없어도 banner 는 그린다(숙제는 항상 있다)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        banner: const HeroStat(label: '미완료 숙제', value: '0'),
+      ),
+    );
+    expect(find.byKey(const Key('hero-stats')), findsNothing);
+    expect(find.byKey(const Key('stat-banner')), findsOneWidget);
+  });
+
+  testWidgets('360px 에서 일정 칸 셋과 banner 가 넘치지 않는다', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      host(
+        stats: const [
+          HeroStat(label: '다음 수업', value: 'D-61', sub: '10/02 19:00'),
+          HeroStat(label: '다음 클리닉', value: 'D-8', sub: '10/07 17:00'),
+          HeroStat(label: '기말고사', value: 'D-36', sub: '11.04 시작'),
+        ],
+        banner: const HeroStat(label: '미완료 숙제', value: '12', sub: '확인하세요'),
+      ),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('child 를 주면 칸 아래에 그린다', (tester) async {
@@ -283,29 +324,6 @@ void main() {
     final subText = tester.widget<Text>(stat0Texts.at(2));
     final style = subText.style!;
     expect(style.color, AppColors.brand200.withValues(alpha: 0.55));
-  });
-
-  testWidgets('extra 블록 위에 divider 가 있다', (tester) async {
-    await tester.pumpWidget(
-      host(
-        stats: const [
-          HeroStat(
-            label: '다음 수업',
-            value: 'D-2',
-            extra: HeroStatExtra(label: '다음 클리닉', value: 'D-1'),
-          ),
-        ],
-      ),
-    );
-    // stat-0 안의 Divider를 찾기
-    final dividers = find.descendant(
-      of: find.byKey(const Key('stat-0')),
-      matching: find.byType(Divider),
-    );
-    expect(dividers, findsOneWidget);
-    // divider 색 확인
-    final divider = tester.widget<Divider>(dividers);
-    expect(divider.color, AppColors.brand200.withValues(alpha: 0.25));
   });
 
   testWidgets('stat 값의 숫자 폭이 고정된다', (tester) async {

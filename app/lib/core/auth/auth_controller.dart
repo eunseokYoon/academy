@@ -14,12 +14,18 @@ class AuthController extends ChangeNotifier {
     required this._tokens,
     required this._cookies,
     required this._jar,
+    this._beforeLogout,
   });
 
   final AuthRepository _repository;
   final TokenStore _tokens;
   final CookieStore _cookies;
   final CookieJar _jar;
+
+  /// 로그아웃 직전, 아직 인증이 살아 있을 때 할 일. 푸시 기기 토큰 해제
+  /// (`PushRegistrar.unregister`)가 여기 붙는다 — 서버 로그아웃 뒤에는 못 부른다.
+  final Future<void> Function()? _beforeLogout;
+  static const _beforeLogoutTimeout = Duration(seconds: 8);
 
   AuthSnapshot _snapshot = const AuthSnapshot.unknown();
   AuthSnapshot get snapshot => _snapshot;
@@ -90,6 +96,11 @@ class AuthController extends ChangeNotifier {
   /// 서버 호출이 실패해도 로컬은 비운다. 비행기 모드에서 로그아웃을 눌러도
   /// 기기에 토큰이 남으면 안 된다.
   Future<void> logout() async {
+    try {
+      await _beforeLogout?.call().timeout(_beforeLogoutTimeout);
+    } catch (_) {
+      // 알림 해제는 곁다리다. 실패해도 로그아웃은 한다.
+    }
     try {
       await _repository.logout();
     } catch (_) {

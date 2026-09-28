@@ -4,7 +4,11 @@ import com.njwenglish.common.response.ApiResponse;
 import com.njwenglish.dto.clinic.ClinicAssignRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmRequest;
 import com.njwenglish.dto.clinic.ClinicAttendanceConfirmResponse;
+import com.njwenglish.dto.clinic.ClinicBulkAssignRequest;
+import com.njwenglish.dto.clinic.ClinicBulkAssignResponse;
 import com.njwenglish.dto.clinic.ClinicBulkCreateRequest;
+import com.njwenglish.dto.clinic.ClinicBulkUnassignRequest;
+import com.njwenglish.dto.clinic.ClinicBulkUnassignResponse;
 import com.njwenglish.dto.clinic.ClinicBulkCreateResponse;
 import com.njwenglish.dto.clinic.ClinicCreateRequest;
 import com.njwenglish.dto.clinic.ClinicCreateResponse;
@@ -102,6 +106,23 @@ public class TeacherClinicController {
                                       @PathVariable Long studentId) {
         clinicReservationService.unassign(clinicId, studentId);
         return ApiResponse.ok();
+    }
+
+    /**
+     * 요일 일괄 배정. 기간 안의 그 요일에 열린 클리닉 전부에 넣는다. 막힌 날짜는 건너뛰고
+     * 이유를 돌려준다. 경로는 클래스 매핑(/api/teacher)을 보고 썼다(7-4).
+     */
+    @PostMapping("/clinics/bulk-assign")
+    public ApiResponse<ClinicBulkAssignResponse> bulkAssign(
+        @Valid @RequestBody ClinicBulkAssignRequest request) {
+        return ApiResponse.ok(clinicReservationService.bulkAssign(request));
+    }
+
+    /** 요일 일괄 해제. 출결이 기록된 예약은 남긴다. */
+    @PostMapping("/clinics/bulk-unassign")
+    public ApiResponse<ClinicBulkUnassignResponse> bulkUnassign(
+        @Valid @RequestBody ClinicBulkUnassignRequest request) {
+        return ApiResponse.ok(clinicReservationService.bulkUnassign(request));
     }
 
     /** T-5와 같은 방식이다. 안 온 학생만 보낸다. 단, <b>도착 시각 슬롯 하나</b>만 확정한다. */

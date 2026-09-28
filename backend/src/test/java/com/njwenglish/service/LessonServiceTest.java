@@ -3,8 +3,10 @@ package com.njwenglish.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
@@ -12,14 +14,17 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.dto.lesson.LessonBulkCreateRequest;
 import com.njwenglish.dto.lesson.LessonBulkCreateResponse;
 import com.njwenglish.dto.lesson.LessonCreateRequest;
-import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.dto.lesson.LessonDetailResponse;
 import com.njwenglish.dto.lesson.LessonUpdateRequest;
+import com.njwenglish.dto.lesson.LessonVideoRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.enums.LessonAttendanceStatus;
 import com.njwenglish.repository.ClassRoomRepository;
+import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -32,11 +37,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class LessonServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private EnrollmentRepository enrollmentRepository;
     @Mock
     private LessonRepository lessonRepository;
     @Mock
@@ -65,7 +75,7 @@ class LessonServiceTest {
 
     @BeforeEach
     void setUp() {
-        lessonService = new LessonService(lessonRepository, classRoomRepository);
+        lessonService = new LessonService(lessonRepository, classRoomRepository, enrollmentRepository, eventPublisher);
     }
 
     @Test
@@ -321,5 +331,22 @@ class LessonServiceTest {
             .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
 
         verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수업 공개 푸시(#9)는 처음 공개할 때 그 수업일의 재원생에게 한 번만 나간다")
+    void 수업_공개_푸시는_한번만() {
+        Lesson lesson = Lesson.create(thursdayClass(), LocalDate.of(2026, 5, 20),
+            (short) 2026, (short) 5, (short) 4);
+        ReflectionTestUtils.setField(lesson, "id", 501L);
+        given(lessonRepository.findWithClassRoom(501L)).willReturn(Optional.of(lesson));
+        given(enrollmentRepository.findActiveStudents(any(), eq(LocalDate.of(2026, 5, 20))))
+            .willReturn(List.of(Fixtures.student(88L, "서동환")));
+
+        lessonService.publish(501L);
+        lessonService.publish(501L);
+
+        verify(eventPublisher, times(1)).publishEvent(
+            PushEvent.of(PushTopic.LESSON_PUBLISHED, List.of(88L), 501L));
     }
 }

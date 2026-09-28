@@ -58,5 +58,8 @@ app:
     region: ${AWS_REGION:ap-northeast-2}
     presign-expiry-seconds: 300                # 5분 (업로드 PUT)
     read-expiry-seconds: 600                   # 10분 (조회 GET)
+  push:
+    # FCM 서비스 계정 키 파일 경로. 비어 있으면 발송하지 않는다(로컬 기본). 키를 커밋하지 마라.
+    firebase-credentials: ${FIREBASE_CREDENTIALS:}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173}

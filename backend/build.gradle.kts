@@ -25,6 +25,8 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
     // presigned URL에 쓰는 S3Presigner는 이 아티팩트에 포함되어 있다. 별도 의존성이 없다.
     implementation("software.amazon.awssdk:s3:2.29.9")
+    // 푸시 알림(FCM HTTP v1). 서비스 계정 키는 FIREBASE_CREDENTIALS 경로로 받는다
+    implementation("com.google.firebase:firebase-admin:9.11.0")
     runtimeOnly("org.postgresql:postgresql")
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")

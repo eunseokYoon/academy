@@ -15,6 +15,10 @@ import 'package:flutter/widgets.dart';
 /// 2. **앱이 포그라운드로 돌아올 때**(`AppLifecycleListener.onResume`). 단
 ///    지금 보이는 경우에만 — 안 보이면 돌아올 때 1 이 부른다.
 ///
+/// 3. **알림이 왔을 때**([PushArrivals]). 지금 보이는 경우에만. 세션이 컨트롤러를
+///    먼저 낡게 표시하므로(`markStale`) 보고 있던 화면이 60초와 상관없이 다시 받는다 —
+///    숙제 탭에서 「채점됐어요」를 받았는데 화면이 그대로면 알림이 거짓말이 된다.
+///
 /// **60초 판단을 여기서 하지 마라.** [onReappear] 는 컨트롤러의 `load()` 를
 /// 부르기만 하고, 60초 안이면 컨트롤러가 무시한다.
 mixin ReappearReload<T extends StatefulWidget> on State<T> {
@@ -32,6 +36,11 @@ mixin ReappearReload<T extends StatefulWidget> on State<T> {
         if (_active ?? true) onReappear();
       },
     );
+    PushArrivals.instance.addListener(_onPush);
+  }
+
+  void _onPush() {
+    if (_active ?? true) onReappear();
   }
 
   @override
@@ -46,7 +55,22 @@ mixin ReappearReload<T extends StatefulWidget> on State<T> {
 
   @override
   void dispose() {
+    PushArrivals.instance.removeListener(_onPush);
     _lifecycle.dispose();
     super.dispose();
   }
+}
+
+/// 알림이 도착했다는 신호. 앱이 떠 있을 때 받았거나, 알림을 눌러 들어왔을 때 울린다.
+///
+/// 앱 수명 하나뿐이다 — 사람에게 딸린 상태가 없고(데이터는 세션의 컨트롤러에 있다),
+/// 화면마다 넘기면 [ReappearReload] 를 쓰는 스무 화면의 생성자가 전부 바뀐다.
+/// **울리기 전에 세션의 컨트롤러를 `markStale` 해라** — 안 하면 60초 안에서는
+/// [ReappearReload.onReappear] 가 불려도 컨트롤러가 무시한다.
+class PushArrivals extends ChangeNotifier {
+  PushArrivals._();
+
+  static final instance = PushArrivals._();
+
+  void arrived() => notifyListeners();
 }

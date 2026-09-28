@@ -24,6 +24,8 @@ import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.WeeklyTestRepository;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -36,11 +38,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class WeeklyTestServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private WeeklyTestRepository weeklyTestRepository;
     @Mock
@@ -61,7 +66,7 @@ class WeeklyTestServiceTest {
     @BeforeEach
     void setUp() {
         weeklyTestService = new WeeklyTestService(weeklyTestRepository, weeklyTestScoreRepository,
-            enrollmentRepository, classRoomRepository, studentAccessGuard);
+            enrollmentRepository, classRoomRepository, studentAccessGuard, eventPublisher);
     }
 
     private WeeklyTest wordTest(Long id) {
@@ -445,5 +450,61 @@ class WeeklyTestServiceTest {
                     88L, null, null, null, null, false))))));
 
         verify(weeklyTestScoreRepository).delete(old);
+    }
+
+    // ---------- 푸시(#4) ----------
+
+    private void givenWordColumn(WeeklyTest test, WeeklyTestScore existing) {
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.WORD, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(test));
+        given(weeklyTestScoreRepository.findByWeeklyTestIdAndStudentId(10L, 88L))
+            .willReturn(Optional.ofNullable(existing));
+    }
+
+    private WeeklyTestSaveRequest wordCell(Short correct, TestResult result) {
+        return saveRequest(new WeeklyTestSaveRequest.TestInput(
+            WeeklyTestType.WORD, (short) 25, null, null,
+            List.of(new WeeklyTestSaveRequest.CellInput(88L, correct, null, null, result,
+                false))));
+    }
+
+    @Test
+    @DisplayName("새로 적은 칸의 학생에게 주차 라벨이 붙은 성적 푸시가 나간다")
+    void 새_칸은_성적_푸시() {
+        givenWordColumn(wordTest(10L), null);
+
+        weeklyTestService.save(wordCell((short) 23, TestResult.PASS));
+
+        verify(eventPublisher).publishEvent(
+            PushEvent.labeled(PushTopic.WEEKLY_SCORE, List.of(88L), "5월 3주"));
+    }
+
+    @Test
+    @DisplayName("값이 바뀐 칸은 푸시, 그대로 다시 저장한 칸은 푸시가 없다")
+    void 그대로면_푸시_없음() {
+        WeeklyTest test = wordTest(10L);
+        givenWordColumn(test, WeeklyTestScore.create(test, hanul, (short) 23, null, null,
+            TestResult.PASS, false));
+
+        weeklyTestService.save(wordCell((short) 23, TestResult.PASS));
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+
+        weeklyTestService.save(wordCell((short) 24, TestResult.PASS));
+        verify(eventPublisher).publishEvent(
+            PushEvent.labeled(PushTopic.WEEKLY_SCORE, List.of(88L), "5월 3주"));
+    }
+
+    @Test
+    @DisplayName("칸을 지운 저장에는 푸시가 없다")
+    void 지운_칸은_푸시_없음() {
+        WeeklyTest test = wordTest(10L);
+        givenWordColumn(test, WeeklyTestScore.create(test, hanul, (short) 23, null, null,
+            TestResult.PASS, false));
+
+        weeklyTestService.save(wordCell(null, null));
+
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 }

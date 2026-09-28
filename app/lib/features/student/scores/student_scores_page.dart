@@ -6,7 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/score/exam_dday_list.dart';
 import '../../../shared/score/score_section_list.dart';
+import '../../../core/push/push_setting.dart';
 import '../../../shared/widgets/account_footer.dart';
+import '../../../shared/widgets/push_setting_tile.dart';
 import '../../../shared/widgets/full_screen_loader.dart';
 import '../../../shared/widgets/home_layout.dart';
 import '../../../shared/widgets/reappear_reload.dart';
@@ -26,10 +28,14 @@ class StudentScoresPage extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onLogout,
+    required this.pushSetting,
   });
 
   final StudentScoreController controller;
   final Future<void> Function() onLogout;
+
+  /// 알림 받기 스위치. 본문과 따로 받는다([PushSettingTile]).
+  final PushSettingController pushSetting;
 
   @override
   State<StudentScoresPage> createState() => _StudentScoresPageState();
@@ -89,6 +95,8 @@ class _StudentScoresPageState extends State<StudentScoresPage>
           const SizedBox(height: 20),
           ScoreSectionList(data: data.scores),
         ],
+        const SizedBox(height: 20),
+        PushSettingTile(controller: widget.pushSetting),
         const SizedBox(height: 20),
         AccountFooter(
           logoutKey: const Key('student-logout'),

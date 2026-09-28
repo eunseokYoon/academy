@@ -2,9 +2,9 @@ package com.njwenglish.service;
 
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
-import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.common.security.CurrentUser;
 import com.njwenglish.common.security.StudentAccessGuard;
+import com.njwenglish.common.util.MonthWeeks;
 import com.njwenglish.dto.attendance.AttendanceCalendarResponse;
 import com.njwenglish.dto.attendance.AttendanceConfirmRequest;
 import com.njwenglish.dto.attendance.AttendanceConfirmResponse;
@@ -23,13 +23,15 @@ import com.njwenglish.entity.Student;
 import com.njwenglish.entity.Teacher;
 import com.njwenglish.entity.enums.AttendanceStatus;
 import com.njwenglish.entity.enums.LessonAttendanceStatus;
-import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.AttendanceRepository.CalendarRow;
+import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
-import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.SubmissionRepository.HomeworkRateRow;
+import com.njwenglish.repository.SubmissionRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
@@ -40,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +63,7 @@ public class AttendanceService {
     private final TeacherRepository teacherRepository;
     private final SubmissionRepository submissionRepository;
     private final StudentAccessGuard studentAccessGuard;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 출석 입력 화면. 확정 전이면 전원 PRESENT로 초기화하고, 확정 후면 저장된 값을 보여준다.
@@ -129,6 +133,9 @@ public class AttendanceService {
 
         OffsetDateTime now = OffsetDateTime.now();
         lesson.confirmAttendance(teacher, now);
+        // 푸시 #8. 재확정·정정으로 다시 불려도 PushPlanner 가 하루 1건으로 묶는다
+        eventPublisher.publishEvent(PushEvent.of(PushTopic.ATTENDANCE_LESSON,
+            students.stream().map(Student::getId).toList(), null));
 
         return new AttendanceConfirmResponse(lesson.getId(), LessonAttendanceStatus.CONFIRMED,
             now, AttendanceSummaryResponse.of(statuses));

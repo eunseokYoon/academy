@@ -38,8 +38,8 @@ void main() {
   testWidgets('연락처를 Pending 으로 남긴다', (tester) async {
     // 문의처의 담당자·연락처를 그럴듯하게 채우면 그것이 그대로 고지가 된다.
     await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    final section7 = find.text('7. 문의처');
-    expect(section7, findsOneWidget);
+    final section8 = find.text('8. 문의처');
+    expect(section8, findsOneWidget);
     expect(find.text('[담당자·연락처 확정 예정]'), findsOneWidget);
   });
 
@@ -67,9 +67,27 @@ void main() {
     expect(find.text('2. 수집·이용 목적'), findsOneWidget);
     expect(find.text('3. 보관 기간'), findsOneWidget);
     expect(find.text('4. 제3자 제공과 처리 위탁'), findsOneWidget);
-    expect(find.text('5. 이용자의 권리'), findsOneWidget);
-    expect(find.text('6. 안전성 확보 조치'), findsOneWidget);
-    expect(find.text('7. 문의처'), findsOneWidget);
+    expect(find.text('5. 개인정보의 국외 이전'), findsOneWidget);
+    expect(find.text('6. 이용자의 권리'), findsOneWidget);
+    expect(find.text('7. 안전성 확보 조치'), findsOneWidget);
+    expect(find.text('8. 문의처'), findsOneWidget);
+  });
+
+  testWidgets('푸시 알림의 국외 이전 — Google 문의처와 4주는 Pending 이다', (tester) async {
+    // 기억으로 적은 값이다. 그럴듯하게 채우면 그것이 그대로 고지가 된다.
+    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    expect(find.text('[Google 문의처 확정 예정]'), findsOneWidget);
+    expect(find.text('[확인 필요]'), findsOneWidget);
+  });
+
+  testWidgets('국외 이전의 거부 방법이 가리키는 스위치가 앱에 있다', (tester) async {
+    // 문구가 「내 정보에서 알림을 끄면」이다. 스위치를 지우면 고지가 거짓이 된다 —
+    // 스위치는 PushSettingTile(학생 S-7·학부모 P-5)이고 smoke_test 가 화면에서 잡는다.
+    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    expect(
+      find.textContaining('「내 정보」에서 알림을 끄면', findRichText: true),
+      findsOneWidget,
+    );
   });
 
   testWidgets('로그인으로 돌아가기 링크가 있다', (tester) async {
