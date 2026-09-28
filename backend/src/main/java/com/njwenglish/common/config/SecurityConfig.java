@@ -56,6 +56,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/teacher/**").hasRole("TEACHER")
                 .requestMatchers("/api/student/**").hasRole("STUDENT")
                 .requestMatchers("/api/parent/**").hasRole("PARENT")
+                // 선생님은 알림을 받지 않는다 — 기기 토큰도 알림 설정도 없다
+                .requestMatchers("/api/push/**").hasAnyRole("STUDENT", "PARENT")
                 .anyRequest().authenticated())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(passwordChangeRequiredFilter, JwtAuthenticationFilter.class)

@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -75,13 +76,20 @@ public class WeeklyTestScore extends BaseTimeEntity {
     }
 
     /** 같은 칸을 다시 저장하는 건 오타 수정이라는 정상 흐름이다. 409를 던지지 마라. */
-    public void rewrite(Short correctCount, Short internalCorrect, Short externalCorrect,
-                        TestResult result, boolean retestPassed) {
+    /** @return 값이 하나라도 바뀌었으면 true. 같은 값을 다시 저장한 칸에는 알림이 가지 않는다. */
+    public boolean rewrite(Short correctCount, Short internalCorrect, Short externalCorrect,
+                           TestResult result, boolean retestPassed) {
+        boolean changed = !Objects.equals(this.correctCount, correctCount)
+            || !Objects.equals(this.internalCorrect, internalCorrect)
+            || !Objects.equals(this.externalCorrect, externalCorrect)
+            || this.result != result
+            || this.retestPassed != retestPassed;
         this.correctCount = correctCount;
         this.internalCorrect = internalCorrect;
         this.externalCorrect = externalCorrect;
         this.result = result;
         this.retestPassed = retestPassed;
+        return changed;
     }
 
     /** 값이 전부 비었으면 행을 지운다. ck_wts_not_empty가 DB에서도 막는다. */

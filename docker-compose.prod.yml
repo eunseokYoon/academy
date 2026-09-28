@@ -24,6 +24,11 @@ services:
     container_name: academy-backend
     restart: always
     env_file: /etc/academy/env
+    # FCM 서비스 계정 키(푸시). 파일 하나가 아니라 디렉터리를 마운트한다 — 파일을 직접
+    # 마운트하면 호스트에 없을 때 Docker 가 같은 이름의 빈 디렉터리를 만들어 부팅이 멈춘다.
+    # 키를 넣은 뒤 env 에 FIREBASE_CREDENTIALS=/run/secrets/academy/firebase-sa.json 을 적는다.
+    volumes:
+      - /etc/academy/secrets:/run/secrets/academy:ro
     # ports가 아니라 expose다. 호스트 8080으로 노출하면 보안그룹을 우회해 직접 접근된다.
     expose:
       - "8080"

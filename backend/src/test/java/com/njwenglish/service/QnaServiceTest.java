@@ -24,6 +24,8 @@ import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.QnaPhotoRepository;
 import com.njwenglish.repository.QnaPostRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import com.njwenglish.support.Fixtures;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +39,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -56,6 +59,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class QnaServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock private QnaPostRepository qnaPostRepository;
     @Mock private QnaPhotoRepository qnaPhotoRepository;
     @Mock private ClassRoomRepository classRoomRepository;
@@ -76,7 +81,7 @@ class QnaServiceTest {
     void setUp() {
         qnaService = new QnaService(qnaPostRepository, qnaPhotoRepository, classRoomRepository,
             teacherRepository, enrollmentRepository, studentAccessGuard, presignedUrlProvider,
-            qnaMediaKeys);
+            qnaMediaKeys, eventPublisher);
 
         myClass = Fixtures.openClassRoom(1L, "A고 2학년 목요일반", "HK7F2Q");
         otherClass = Fixtures.openClassRoom(2L, "B고 3학년 월요일반", "QQ11ZZ");
@@ -320,5 +325,37 @@ class QnaServiceTest {
         QnaPost post = QnaPost.question(classRoom, author, title, "본문", isPublic);
         ReflectionTestUtils.setField(post, "id", id);
         return post;
+    }
+
+    // ---------- 푸시(#6) ----------
+
+    @Test
+    @DisplayName("선생님 답글은 질문한 학생에게 푸시가 간다")
+    void 선생님_답글은_질문자에게_푸시() {
+        Fixtures.login(Fixtures.teacher(1L));
+        given(teacherRepository.findByUserId(1L))
+            .willReturn(Optional.of(Fixtures.teacherEntity(1L)));
+        QnaPost root = question(12L, myClass, classmate, "관계대명사", false);
+        given(qnaPostRepository.findWithAuthorById(12L)).willReturn(Optional.of(root));
+        given(qnaPostRepository.save(any(QnaPost.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        qnaService.answerAsTeacher(12L, new QnaAnswerRequest("답입니다", List.of()));
+
+        verify(eventPublisher).publishEvent(
+            PushEvent.of(PushTopic.QNA_REPLY, classmate.getId(), 12L));
+    }
+
+    @Test
+    @DisplayName("학생 답글에는 푸시가 없다 — 선생님은 알림을 받지 않는다")
+    void 학생_답글은_푸시_없음() {
+        QnaPost root = question(13L, myClass, me, "질문", true);
+        given(qnaPostRepository.findWithAuthorById(13L)).willReturn(Optional.of(root));
+        given(qnaPostRepository.save(any(QnaPost.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        qnaService.answerAsStudent(13L, new QnaAnswerRequest("추가 질문", List.of()));
+
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 }

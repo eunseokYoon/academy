@@ -170,9 +170,15 @@ public class Lesson extends BaseTimeEntity {
         return attendanceStatus == LessonAttendanceStatus.CONFIRMED;
     }
 
-    public void publish(OffsetDateTime now) {
-        if (publishedAt == null) {
-            this.publishedAt = now;
+    /**
+     * @return 이번 호출로 공개됐으면 true. 이미 공개된 수업이면 false 다 —
+     *     푸시는 true 일 때만 나간다(두 번 눌러도 알림은 한 번).
+     */
+    public boolean publish(OffsetDateTime now) {
+        if (publishedAt != null) {
+            return false;
         }
+        this.publishedAt = now;
+        return true;
     }
 }

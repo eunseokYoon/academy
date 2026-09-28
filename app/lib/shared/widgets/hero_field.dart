@@ -10,7 +10,6 @@ class HeroStat {
     required this.label,
     required this.value,
     this.sub,
-    this.extra,
     this.hot = false,
   });
 
@@ -20,21 +19,8 @@ class HeroStat {
   /// 값 아래 한 줄.
   final String? sub;
 
-  /// 같은 칸 안의 둘째 줄. **칸을 넷으로 늘리는 대신 쓴다** — 360px 에서
-  /// 칸이 넷이면 「D-61」이 줄바꿈된다. 다음 수업과 다음 클리닉처럼
-  /// **같은 종류의 일정**일 때만 묶어라.
-  final HeroStatExtra? extra;
-
   /// 주황 칸. **한 화면에 하나만.** 「학생이 아직 처리 안 한 것」에만 붙인다.
   final bool hot;
-}
-
-class HeroStatExtra {
-  const HeroStatExtra({required this.label, required this.value, this.sub});
-
-  final String label;
-  final String value;
-  final String? sub;
 }
 
 /// 홈 위쪽의 남색 지면. 앱바 띠가 그대로 아래로 이어져 하나로 읽힌다.
@@ -48,14 +34,18 @@ class HeroStatExtra {
 /// 옮기고 레이아웃은 안 옮기므로, 뒤따르는 형제 전부가 같은 누적 오프셋을
 /// 받고 맨 끝 `SizedBox` 가 흡수한다.
 ///
-/// **칸은 최대 셋.** 값이 없는 항목은 빼라 — null 을 「미정」으로 채우면
-/// 없는 시험에 D-0 이 들어가 「시험이 오늘」로 읽힌다.
+/// **윗줄은 일정 칸(D-day) 최대 셋, 아랫줄은 폭 전체의 [banner] 하나다(2026-09-29,
+/// 앱만).** 다음 수업·다음 클리닉·시험이 나란히, 미완료 숙제가 그 밑이다. 웹은 아직
+/// 한 줄 셋(수업+클리닉 묶음 · 숙제 · 시험)이다. **윗줄을 넷으로 늘리지 마라** —
+/// 360px 에서 「D-61」이 줄바꿈된다. 값이 없는 항목은 빼라 — null 을 「미정」으로
+/// 채우면 없는 시험에 D-0 이 들어가 「시험이 오늘」로 읽힌다.
 class HeroField extends StatelessWidget {
   const HeroField({
     super.key,
     this.eyebrow,
     required this.title,
     this.stats = const [],
+    this.banner,
     this.child,
   });
 
@@ -75,6 +65,9 @@ class HeroField extends StatelessWidget {
   final InlineSpan title;
   final List<HeroStat> stats;
 
+  /// 일정 칸 밑의 넓은 칸. 미완료 숙제다.
+  final HeroStat? banner;
+
   /// 칸 아래. 학부모 홈의 자녀 선택이 여기 들어간다. **위 여백은 자식 몫이다.**
   final Widget? child;
 
@@ -82,6 +75,7 @@ class HeroField extends StatelessWidget {
   Widget build(BuildContext context) {
     final eyebrow = this.eyebrow;
     final child = this.child;
+    final banner = this.banner;
     return Container(
       key: const Key('hero-field'),
       width: double.infinity,
@@ -131,6 +125,10 @@ class HeroField extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (banner != null) ...[
+                  SizedBox(height: stats.isEmpty ? 16 : 10),
+                  _Banner(stat: banner),
+                ],
                 // **사이 여백을 여기서 주지 마라.** 웹 `HeroField.tsx` 는
                 // `{children}` 을 칸 줄 바로 뒤에 그대로 두고, 여백은 자식이
                 // 자기 `mt-4` 로 갖는다(학부모 홈의 자녀 선택). 여기서 12 를
@@ -152,50 +150,85 @@ class _Stat extends StatelessWidget {
   final HeroStat stat;
 
   @override
+  Widget build(BuildContext context) => Container(
+    key: Key('stat-$index'),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: _cellDecoration(stat.hot),
+    child: _Line(
+      label: stat.label,
+      value: stat.value,
+      sub: stat.sub,
+      hot: stat.hot,
+    ),
+  );
+}
+
+/// 폭 전체 칸. 라벨·설명이 왼쪽, 값이 오른쪽이다 — 세로로 쌓으면 넓은 칸이 키만
+/// 커지고 윗줄 일정 칸보다 무거워 보인다.
+class _Banner extends StatelessWidget {
+  const _Banner({required this.stat});
+
+  final HeroStat stat;
+
+  @override
   Widget build(BuildContext context) {
     final sub = stat.sub;
-    final extra = stat.extra;
+    final hot = stat.hot;
     return Container(
-      key: Key('stat-$index'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadii.xxl),
-        // 남색 위라 흰 카드를 얹지 않고 반투명 면을 판다 — 얹으면 지면이 사라진다.
-        border: Border.all(
-          color: stat.hot
-              ? AppColors.accent300.withValues(alpha: 0.5)
-              : Colors.white.withValues(alpha: 0.10),
-        ),
-        color: stat.hot
-            ? AppColors.accent400.withValues(alpha: 0.22)
-            : Colors.white.withValues(alpha: 0.07),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      key: const Key('stat-banner'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: _cellDecoration(hot),
+      child: Row(
         children: [
-          _Line(label: stat.label, value: stat.value, sub: sub, hot: stat.hot),
-          if (extra != null) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Divider(
-                color: AppColors.brand200.withValues(alpha: 0.25),
-                height: 2,
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(stat.label, style: _labelStyle(hot)),
+                if (sub != null) Text(sub, style: _subStyle),
+              ],
             ),
-            const SizedBox(height: 2),
-            _Line(
-              label: extra.label,
-              value: extra.value,
-              sub: extra.sub,
-              hot: false,
-            ),
-          ],
+          ),
+          const SizedBox(width: 12),
+          Text(stat.value, style: _valueStyle(hot)),
         ],
       ),
     );
   }
 }
+
+// 남색 위라 흰 카드를 얹지 않고 반투명 면을 판다 — 얹으면 지면이 사라진다.
+BoxDecoration _cellDecoration(bool hot) => BoxDecoration(
+  borderRadius: BorderRadius.circular(AppRadii.xxl),
+  border: Border.all(
+    color: hot
+        ? AppColors.accent300.withValues(alpha: 0.5)
+        : Colors.white.withValues(alpha: 0.10),
+  ),
+  color: hot
+      ? AppColors.accent400.withValues(alpha: 0.22)
+      : Colors.white.withValues(alpha: 0.07),
+);
+
+TextStyle _labelStyle(bool hot) => TextStyle(
+  fontSize: 10.5,
+  fontWeight: FontWeight.w600,
+  color: hot ? AppColors.accent200 : AppColors.brand200.withValues(alpha: 0.75),
+);
+
+TextStyle _valueStyle(bool hot) => TextStyle(
+  fontSize: 21,
+  fontWeight: FontWeight.w800,
+  color: hot ? AppColors.accent100 : Colors.white,
+  fontFeatures: kTabularFigures,
+);
+
+final _subStyle = TextStyle(
+  fontSize: 10.5,
+  color: AppColors.brand200.withValues(alpha: 0.55),
+  fontFeatures: kTabularFigures,
+);
 
 class _Line extends StatelessWidget {
   const _Line({
@@ -217,34 +250,9 @@ class _Line extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
-            color: hot
-                ? AppColors.accent200
-                : AppColors.brand200.withValues(alpha: 0.75),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 21,
-            fontWeight: FontWeight.w800,
-            color: hot ? AppColors.accent100 : Colors.white,
-            fontFeatures: kTabularFigures,
-          ),
-        ),
-        if (sub != null)
-          Text(
-            sub,
-            style: TextStyle(
-              fontSize: 10.5,
-              color: AppColors.brand200.withValues(alpha: 0.55),
-              fontFeatures: kTabularFigures,
-            ),
-          ),
+        Text(label, style: _labelStyle(hot)),
+        Text(value, style: _valueStyle(hot)),
+        if (sub != null) Text(sub, style: _subStyle),
       ],
     );
   }

@@ -4,6 +4,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// google-services.json 은 저장소에 없다(커밋하지 않기로 했다 — 기계마다 Firebase 콘솔에서
+// 받는다). 없는 기계에서도 빌드는 되고, 앱은 알림 없이 뜬다(FirebasePushMessaging.create).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn("google-services.json 이 없다 — 알림 없는 빌드다")
+}
+
 android {
     namespace = "com.njwenglish.academy_app"
     compileSdk = flutter.compileSdkVersion

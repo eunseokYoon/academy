@@ -241,4 +241,119 @@ void main() {
     await sc.load();
     expect(adapter.received, isEmpty);
   });
+
+  test('실패하면 loadError 에 서버 문구가 남고, 다시 부르면 지워진다', () async {
+    adapter = FakeAdapter(
+      replies: [
+        const FakeReply(
+          statusCode: 500,
+          body: {
+            'success': false,
+            'data': null,
+            'error': {'code': 'INTERNAL', 'message': '서버 오류입니다.'},
+          },
+        ),
+        FakeReply(
+          statusCode: 200,
+          body: _children([
+            {'studentId': 1, 'name': '김하늘'},
+          ]),
+        ),
+      ],
+    );
+    dio.httpClientAdapter = adapter;
+    final sc = SelectedChild(dio: dio, store: store);
+    sc.ensureLoaded();
+    await pumpEventQueue();
+    expect(sc.loadError, '서버 오류입니다.');
+    expect(sc.loaded, isFalse);
+
+    await sc.load();
+    expect(sc.loadError, isNull);
+    expect(sc.selectedStudentId, 1);
+    sc.dispose();
+  });
+
+  test('ensureLoaded 는 받았거나 받는 중이면 다시 부르지 않는다', () async {
+    final gate = _GateAdapter();
+    dio.httpClientAdapter = gate;
+    final sc = SelectedChild(dio: dio, store: store);
+    var requests = 0;
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (o, h) {
+          requests++;
+          h.next(o);
+        },
+      ),
+    );
+    sc.ensureLoaded();
+    sc.ensureLoaded();
+    gate.release(
+      _children([
+        {'studentId': 1, 'name': '김하늘'},
+      ]),
+    );
+    await pumpEventQueue();
+    sc.ensureLoaded();
+    await pumpEventQueue();
+    expect(requests, 1);
+    expect(sc.loaded, isTrue);
+    sc.dispose();
+  });
+
+  group('selectIfMine — 알림의 studentId', () {
+    void script() {
+      adapter = FakeAdapter(
+        replies: [
+          FakeReply(
+            statusCode: 200,
+            body: _children([
+              {'studentId': 1, 'name': '김하늘'},
+              {'studentId': 2, 'name': '김바다'},
+            ]),
+          ),
+        ],
+      );
+      dio.httpClientAdapter = adapter;
+    }
+
+    test('목록을 아직 안 받았으면 받고 나서 그 자녀를 고른다', () async {
+      script();
+      final s = build();
+      await s.selectIfMine(2);
+      expect(adapter.received.single.path, '/api/parent/children');
+      expect(s.selectedStudentId, 2);
+      expect(store.map.values, contains('2'));
+    });
+
+    test('내 자녀가 아니면 바꾸지도 저장하지도 않는다', () async {
+      script();
+      final s = build();
+      await s.load();
+      await s.selectIfMine(99);
+      expect(s.selectedStudentId, 1);
+      expect(store.map.values, isNot(contains('99')));
+    });
+
+    test('목록을 못 받으면 조용히 포기한다(화면 게이트가 오류를 띄운다)', () async {
+      adapter = FakeAdapter(
+        replies: const [
+          FakeReply(
+            statusCode: 500,
+            body: {
+              'success': false,
+              'data': null,
+              'error': {'code': 'INTERNAL', 'message': '서버 오류입니다.'},
+            },
+          ),
+        ],
+      );
+      dio.httpClientAdapter = adapter;
+      final s = build();
+      await s.selectIfMine(2);
+      expect(s.selectedStudentId, isNull);
+      expect(s.loadError, '서버 오류입니다.');
+    });
+  });
 }

@@ -97,7 +97,7 @@ class LessonDayFilter<T> extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _Select<int>(
+                child: SelectBox<int>(
                   key: const Key('filter-year'),
                   value: year,
                   items: [
@@ -108,7 +108,7 @@ class LessonDayFilter<T> extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _Select<int?>(
+                child: SelectBox<int?>(
                   key: const Key('filter-month'),
                   value: month,
                   items: [
@@ -153,8 +153,11 @@ class LessonDayFilter<T> extends StatelessWidget {
 }
 
 /// 웹 `<select className="rounded-lg border border-slate-300 px-2 py-2">`.
-class _Select<V> extends StatelessWidget {
-  const _Select({
+///
+/// 숙제 목록의 달 필터, 수업 목록(S-5), 주간 레포트(P-6)의 주차 선택이 같이 쓴다 —
+/// 화면마다 고르는 법이 다르면 안 된다(웹 `ParentReportPage` 주석).
+class SelectBox<V> extends StatelessWidget {
+  const SelectBox({
     super.key,
     required this.value,
     required this.items,

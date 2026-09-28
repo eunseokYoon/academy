@@ -34,9 +34,11 @@ import com.njwenglish.entity.Submission;
 import com.njwenglish.entity.SubmissionPhoto;
 import com.njwenglish.entity.enums.HomeworkResult;
 import com.njwenglish.repository.LessonRepository;
-import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionPhotoRepository.PhotoCountRow;
+import com.njwenglish.repository.SubmissionPhotoRepository;
 import com.njwenglish.repository.SubmissionRepository;
+import com.njwenglish.service.push.PushEvent;
+import com.njwenglish.service.push.PushTopic;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -47,6 +49,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -82,6 +85,7 @@ public class SubmissionService {
     private final PresignedUrlProvider presignedUrlProvider;
     private final SubmissionMediaKeys mediaKeys;
     private final LessonRepository lessonRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ---------- 학생 (S-2 · S-3 · S-4) ----------
 
@@ -259,6 +263,9 @@ public class SubmissionService {
         if (submission.getHomework().isGrid()) {
             submission.resolveByResubmission();
         }
+        // 푸시 #2 — 학부모만. 선생님은 받지 않는다(T-1·그리드에서 본다)
+        eventPublisher.publishEvent(PushEvent.of(PushTopic.HOMEWORK_SUBMITTED,
+            submission.getStudent().getId(), null));
 
         return new SubmitResponse(submission.getId(), submission.getStatus(),
             submission.getSubmittedAt(), submission.isLate(), photoCount);

@@ -9,11 +9,15 @@ import { SubmitButton } from "../../../shared/components/SubmitButton";
 import { TextField } from "../../../shared/components/TextField";
 import {
   assignClinicStudents,
+  bulkAssignClinicStudents,
+  bulkUnassignClinicStudents,
   confirmClinicAttendance,
   bulkCreateClinics,
   createClinic,
   decideLessonChangeRequest,
   deleteClinic,
+  listClassRoomStudents,
+  listClassRooms,
   listClinicReservations,
   listClinics,
   listLessonChangeRequests,
@@ -22,7 +26,14 @@ import {
   updateClinic,
 } from "../api";
 import { formatLessonSlot } from "../../../shared/lessonchange/types";
-import type { AttendanceException, Clinic, ClinicReservationRow, ClinicSlotState } from "../api";
+import type {
+  AttendanceException,
+  BulkAssignSkipReason,
+  Clinic,
+  ClinicBulkAssignResult,
+  ClinicReservationRow,
+  ClinicSlotState,
+} from "../api";
 import { dayLabel } from "../../../shared/date";
 import { today } from "../format";
 import { RosterEditor } from "../attendance/RosterEditor";
@@ -47,6 +58,7 @@ export default function ClinicPage() {
   const [month, setMonth] = useState(NOW.getMonth() + 1);
   const [week, setWeek] = useState(currentWeekOfMonth(NOW));
   const [creating, setCreating] = useState(false);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
   const [detailOf, setDetailOf] = useState<Clinic | null>(null);
 
   const clinics = useQuery({
@@ -58,13 +70,23 @@ export default function ClinicPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-900">스케줄 관리</h2>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-        >
-          시간대 개설
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setBulkAssigning(true)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium
+                       text-slate-800"
+          >
+            요일 일괄 배정
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+          >
+            시간대 개설
+          </button>
+        </div>
       </div>
 
       <LessonChangeRequestList />
@@ -164,6 +186,7 @@ export default function ClinicPage() {
       )}
 
       {creating && <CreateClinicModal onClose={() => setCreating(false)} />}
+      {bulkAssigning && <BulkAssignModal onClose={() => setBulkAssigning(false)} />}
       {detailOf && <ClinicDetailModal clinic={detailOf} onClose={() => setDetailOf(null)} />}
     </div>
   );
@@ -340,10 +363,9 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setDayOfWeek(Number(e.target.value))}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               >
-                {[["1","월"],["2","화"],["3","수"],["4","목"],["5","금"],["6","토"],["7","일"]]
-                  .map(([value, label]) => (
-                    <option key={value} value={value}>{label}요일</option>
-                  ))}
+                {DAY_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>{label}요일</option>
+                ))}
               </select>
             </label>
           </>
@@ -392,6 +414,261 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
         <SubmitButton pending={mutation.isPending}>개설</SubmitButton>
       </form>
     </Modal>
+  );
+}
+
+/** 1=월 … 7=일. 서버의 dayOfWeek 표기(class_room_schedules 와 같다). */
+const DAY_OPTIONS = [
+  ["1", "월"], ["2", "화"], ["3", "수"], ["4", "목"], ["5", "금"], ["6", "토"], ["7", "일"],
+] as const;
+
+const SKIP_LABEL: Record<BulkAssignSkipReason, string> = {
+  PAST: "지난 날짜",
+  NO_CLINIC: "열린 클리닉 없음",
+  NO_SLOT: "도착 시각이 시간대 밖",
+  FULL: "정원 초과",
+};
+
+/**
+ * 요일 일괄 배정·해제(2026-09-29). 매주 같은 요일에 오는 학생을 회차마다 하나씩 넣지 않게 한다.
+ *
+ * <p><b>이미 열린 클리닉에만 넣는다.</b> 시리즈를 저장하지 않아서(CLAUDE.md 10-0) 나중에 연
+ * 회차에는 자동으로 안 들어간다 — 새 회차를 열면 한 번 더 누른다. 이미 배정된 학생은 서버가
+ * 건너뛰어서 여러 번 눌러도 안전하다.
+ *
+ * <p>반을 고르면 그 반 재원생이 <b>전부 체크된 채</b> 나온다. 빼고 싶은 학생만 끈다.
+ * 날짜 하나가 막혀도 나머지는 들어가고, 막힌 날짜는 이유와 함께 보여 준다.
+ */
+function BulkAssignModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<"assign" | "unassign">("assign");
+  const [dayOfWeek, setDayOfWeek] = useState(2);
+  const [from, setFrom] = useState(today());
+  const [to, setTo] = useState(today());
+  const [arrivalTime, setArrivalTime] = useState("17:00");
+  const [classRoomId, setClassRoomId] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [assignResult, setAssignResult] = useState<ClinicBulkAssignResult | null>(null);
+  const [unassignResult, setUnassignResult] = useState<{ canceled: number; kept: number } | null>(
+    null,
+  );
+
+  const classRooms = useQuery({
+    queryKey: ["teacher", "class-rooms", "ACTIVE"],
+    queryFn: () => listClassRooms("ACTIVE"),
+  });
+
+  // 기간 시작일 기준 재원생이다 — 퇴원생이 명단에 섞이지 않는다
+  const roster = useQuery({
+    queryKey: ["teacher", "class-room-students", classRoomId, from],
+    queryFn: () => listClassRoomStudents(classRoomId!, from),
+    enabled: classRoomId !== null,
+  });
+
+  function pickClassRoom(id: number | null) {
+    setClassRoomId(id);
+    setSelected([]);
+  }
+
+  // 반 명단이 오면 전원을 체크한다. 반을 바꿀 때마다 새로 체크된다
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
+  const rosterKey = roster.data ? `${classRoomId}:${from}` : null;
+  if (rosterKey !== null && rosterKey !== checkedFor) {
+    setCheckedFor(rosterKey);
+    setSelected(roster.data!.students.map((st) => st.studentId));
+  }
+
+  function clearResults() {
+    setAssignResult(null);
+    setUnassignResult(null);
+    setError(null);
+  }
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (mode === "assign") {
+        return {
+          assign: await bulkAssignClinicStudents({
+            dayOfWeek, from, to, arrivalTime: arrivalTime || null, studentIds: selected,
+          }),
+        };
+      }
+      return {
+        unassign: await bulkUnassignClinicStudents({
+          dayOfWeek, from, to, studentIds: selected,
+        }),
+      };
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "clinics"] });
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "clinic-reservations"] });
+      setAssignResult(data.assign ?? null);
+      setUnassignResult(data.unassign ?? null);
+    },
+    onError: (e) =>
+      setError(errorMessage(e, mode === "assign" ? "배정하지 못했습니다." : "해제하지 못했습니다.")),
+  });
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    clearResults();
+    mutation.mutate();
+  }
+
+  const students = roster.data?.students ?? [];
+
+  return (
+    <Modal title="요일 일괄 배정" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+          {(["assign", "unassign"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => { setMode(m); clearResults(); }}
+              className={`rounded-md py-1.5 ${
+                mode === m ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-500"
+              }`}
+            >
+              {m === "assign" ? "배정" : "해제"}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500">
+          {mode === "assign"
+            ? "기간 안의 그 요일에 이미 열려 있는 클리닉에 넣습니다. 나중에 연 회차는 다시 누르세요 — 이미 배정된 학생은 건너뜁니다."
+            : "기간 안의 그 요일 배정을 오늘부터 뺍니다. 출결이 기록된 회차는 남깁니다."}
+        </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label="시작일" type="date" value={from}
+            onChange={(e) => { setFrom(e.target.value); clearResults(); }} required />
+          <TextField label="종료일" type="date" value={to}
+            onChange={(e) => { setTo(e.target.value); clearResults(); }} required />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-600">요일</span>
+            <select
+              value={dayOfWeek}
+              onChange={(e) => { setDayOfWeek(Number(e.target.value)); clearResults(); }}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            >
+              {DAY_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>{label}요일</option>
+              ))}
+            </select>
+          </label>
+          {mode === "assign" && (
+            <TextField
+              label="도착 시각"
+              type="time"
+              step={3600}
+              value={arrivalTime}
+              hint="비우면 그날 클리닉 시작 시각"
+              onChange={(e) => { setArrivalTime(e.target.value); clearResults(); }}
+            />
+          )}
+        </div>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-600">반</span>
+          <select
+            value={classRoomId ?? ""}
+            onChange={(e) => { pickClassRoom(e.target.value ? Number(e.target.value) : null); clearResults(); }}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          >
+            <option value="">반 선택</option>
+            {(classRooms.data ?? []).map((room) => (
+              <option key={room.classRoomId} value={room.classRoomId}>{room.name}</option>
+            ))}
+          </select>
+        </label>
+
+        {classRoomId !== null && (
+          roster.isPending ? (
+            <p className="text-sm text-slate-400">불러오는 중…</p>
+          ) : students.length === 0 ? (
+            <p className="text-sm text-slate-500">이 반에 재원생이 없습니다.</p>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>{selected.length}/{students.length}명 선택</span>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() =>
+                    setSelected(
+                      selected.length === students.length
+                        ? []
+                        : students.map((st) => st.studentId),
+                    )
+                  }
+                >
+                  {selected.length === students.length ? "전체 해제" : "전체 선택"}
+                </button>
+              </div>
+              <ul className="mt-1 max-h-56 space-y-1 overflow-y-auto">
+                {students.map((student) => (
+                  <li key={student.studentId}>
+                    <label className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(student.studentId)}
+                        onChange={(e) => {
+                          clearResults();
+                          setSelected((prev) =>
+                            e.target.checked
+                              ? [...prev, student.studentId]
+                              : prev.filter((id) => id !== student.studentId),
+                          );
+                        }}
+                      />
+                      <span className="text-slate-900">{student.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        )}
+
+        <FormError message={error} />
+        {assignResult && <BulkAssignResultView result={assignResult} />}
+        {unassignResult && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {unassignResult.canceled}건 해제
+            {unassignResult.kept > 0 && ` · 출결이 기록된 ${unassignResult.kept}건은 남김`}
+          </p>
+        )}
+        <SubmitButton pending={mutation.isPending} disabled={selected.length === 0}>
+          {selected.length}명 {mode === "assign" ? "배정" : "해제"}
+        </SubmitButton>
+      </form>
+    </Modal>
+  );
+}
+
+/** 막힌 날짜는 이유별로 묶는다. 날짜를 한 줄씩 늘어놓으면 무엇이 문제인지 안 읽힌다 */
+function BulkAssignResultView({ result }: { result: ClinicBulkAssignResult }) {
+  const byReason = new Map<BulkAssignSkipReason, string[]>();
+  for (const s of result.skipped) {
+    byReason.set(s.reason, [...(byReason.get(s.reason) ?? []), s.date.slice(5).replace("-", "/")]);
+  }
+  return (
+    <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+      <p>
+        {result.clinics}회 처리 · 새 배정 {result.reservations}건
+      </p>
+      {[...byReason.entries()].map(([reason, dates]) => (
+        <p key={reason} className="text-xs text-slate-500">
+          {SKIP_LABEL[reason]} {dates.length}회
+          {reason !== "PAST" && ` (${dates.join(", ")})`}
+        </p>
+      ))}
+    </div>
   );
 }
 

@@ -507,6 +507,38 @@ export const assignClinicStudents = (
 export const unassignClinicStudent = (clinicId: number, studentId: number) =>
   del<void>(`/teacher/clinics/${clinicId}/students/${studentId}`);
 
+/** 요일 일괄 배정에서 건너뛴 이유. 서버 ClinicBulkAssignResponse.Reason 과 같다. */
+export type BulkAssignSkipReason = "PAST" | "NO_CLINIC" | "NO_SLOT" | "FULL";
+
+export interface ClinicBulkAssignResult {
+  /** 처리한 회차 수(이미 전원 배정돼 있던 회차도 센다) */
+  clinics: number;
+  /** 새로 생긴 예약 수 */
+  reservations: number;
+  skipped: { date: string; reason: BulkAssignSkipReason }[];
+}
+
+/**
+ * 기간 안의 그 요일에 <b>이미 열려 있는</b> 클리닉 전부에 배정한다. 나중에 연 회차에는
+ * 자동으로 안 들어간다 — 다시 누르면 된다(이미 배정된 학생은 건너뛴다).
+ * arrivalTime 이 null 이면 그날 클리닉의 시작 시각이다. dayOfWeek 는 1=월 … 7=일.
+ */
+export const bulkAssignClinicStudents = (body: {
+  dayOfWeek: number;
+  from: string;
+  to: string;
+  arrivalTime: string | null;
+  studentIds: number[];
+}) => post<ClinicBulkAssignResult>("/teacher/clinics/bulk-assign", body);
+
+/** 요일 일괄 해제. 오늘부터이고, 출결이 기록된 예약은 남긴다(kept). */
+export const bulkUnassignClinicStudents = (body: {
+  dayOfWeek: number;
+  from: string;
+  to: string;
+  studentIds: number[];
+}) => post<{ canceled: number; kept: number }>("/teacher/clinics/bulk-unassign", body);
+
 /** arrivalTime은 필수다 — 그 시각 예약만 확정된다. 다시 보내면 덮어쓴다(그게 수정이다). */
 export const confirmClinicAttendance = (
   clinicId: number,

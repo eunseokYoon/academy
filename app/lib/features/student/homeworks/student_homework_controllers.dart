@@ -41,15 +41,16 @@ class StudentHomeworksController
 
   @override
   Future<StudentHomeworks> fetch(MonthFilter param) async {
-    // Future.wait 로 함께 기다린다. 하나씩 await 하면 앞의 것을 기다리는 동안
-    // 뒤의 것이 실패했을 때 그 오류를 아무도 안 받아 「처리 안 된 오류」가 된다.
-    final (all, notes, filtered) = await (
+    // 함께 기다린다. 하나씩 await 하면 앞의 것을 기다리는 동안 뒤의 것이
+    // 실패했을 때 그 오류를 아무도 안 받아 「처리 안 된 오류」가 된다.
+    // 레코드 `.wait` 는 서버 문구를 잃는다([all3] 주석).
+    final (all, notes, filtered) = await all3(
       _repository.list(),
       _repository.notes(),
       param == MonthFilter.all
           ? Future<List<StudentHomeworkItem>?>.value()
           : _repository.list(year: param.year, month: param.month),
-    ).wait;
+    );
     return StudentHomeworks(
       todo: all.where((h) => h.isTodo).toList(),
       notes: notes,

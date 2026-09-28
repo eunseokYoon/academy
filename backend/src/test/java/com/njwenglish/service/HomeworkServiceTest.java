@@ -14,6 +14,7 @@ import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.s3.PresignedUrlProvider;
 import com.njwenglish.dto.homework.HomeworkCreateRequest;
 import com.njwenglish.dto.homework.HomeworkCreateResponse;
+import com.njwenglish.dto.homework.ResubmitOpenRequest;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
@@ -44,13 +45,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
-import com.njwenglish.dto.homework.ResubmitOpenRequest;
 
 @ExtendWith(MockitoExtension.class)
 class HomeworkServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private HomeworkRepository homeworkRepository;
     @Mock
@@ -85,7 +88,7 @@ class HomeworkServiceTest {
 
         homeworkService = new HomeworkService(homeworkRepository, submissionRepository,
             submissionPhotoRepository, classRoomRepository, lessonRepository,
-            enrollmentRepository, teacherRepository, templateService, presignedUrlProvider);
+            enrollmentRepository, teacherRepository, templateService, presignedUrlProvider, eventPublisher);
         Fixtures.login(Fixtures.teacher(1L));
     }
 

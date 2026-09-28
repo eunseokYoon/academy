@@ -213,9 +213,10 @@ void main() {
     final hero = tester.widget<HeroField>(find.byType(HeroField));
     expect(hero.stats.last.label, '중간고사');
     expect(find.text('10.01 시작'), findsOneWidget);
-    // 클리닉 extra: 자기 dDay 와 「도착」 시각.
-    expect(hero.stats.first.extra!.value, 'D-1');
-    expect(find.text('09/20 17:00 도착'), findsOneWidget);
+    // 클리닉 칸: 자기 dDay 와 「도착」 시각.
+    expect(hero.stats[1].label, '다음 클리닉');
+    expect(hero.stats[1].value, 'D-1');
+    expect(find.text('09/20 17:00'), findsOneWidget);
     expect(find.text('09/21 19:00'), findsOneWidget);
     // 시험 구획 첫 줄: 종류 + 연도를 남긴 「2026.10.01 시작」.
     final title = tester.widget<Text>(find.byKey(const Key('exam-title')));
@@ -234,30 +235,30 @@ void main() {
     // nextExam 이 null 인데 D-0 을 채우면 시험이 오늘로 읽힌다.
     await pump(tester, _home());
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    // 숙제 칸은 항상 있다(0 도 뜻이 있다). 수업·시험이 없으니 하나뿐이다.
-    expect(hero.stats.length, 1);
-    expect(hero.stats.single.label, '미완료 숙제');
+    // 숙제 칸은 항상 있다(0 도 뜻이 있다). 수업·클리닉·시험이 없으니 윗줄이 빈다.
+    expect(hero.stats, isEmpty);
+    expect(hero.banner!.label, '미완료 숙제');
     expect(find.text('D-0'), findsNothing);
   });
 
-  testWidgets('클리닉은 수업 칸의 extra 로 묶인다', (tester) async {
-    // 같은 종류의 일정이라 한 칸이다. 칸을 넷으로 늘리면 360px 에서 깨진다.
+  testWidgets('윗줄은 수업 · 클리닉 · 시험이 나란히, 숙제는 그 밑 넓은 칸이다', (tester) async {
+    // 2026-09-29 사용자 결정(앱만). 윗줄을 넷으로 늘리면 360px 에서 깨진다.
     await pump(tester, _home(lesson: _lesson, clinic: _clinic, exam: _exam));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    expect(hero.stats.length, 3); // 수업(+클리닉) · 숙제 · 시험
-    expect(hero.stats.first.extra, isNotNull);
-    expect(hero.stats.first.extra!.label, '다음 클리닉');
+    expect(hero.stats.map((s) => s.label).toList(), [
+      '다음 수업',
+      '다음 클리닉',
+      '중간고사',
+    ]);
+    expect(hero.banner!.label, '미완료 숙제');
   });
 
   testWidgets('수업이 없고 클리닉만 있으면 클리닉이 그 칸의 주인이다', (tester) async {
-    // 웹 StudentHomePage.tsx 의 `else if (clinicRow)` 다. extra 만 있는 칸을
-    // 만들면 첫 줄이 비어 칸이 깨진다.
     await pump(tester, _home(clinic: _clinic));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    expect(hero.stats.length, 2);
+    expect(hero.stats.length, 1);
     expect(hero.stats.first.label, '다음 클리닉');
     expect(hero.stats.first.value, 'D-1');
-    expect(hero.stats.first.extra, isNull);
   });
 
   testWidgets('칸은 절대 넷을 넘지 않는다', (tester) async {
@@ -273,7 +274,7 @@ void main() {
     // 처리할 게 없는데 주황이면 그 색이 뜻을 잃는다.
     await pump(tester, _home(lesson: _lesson));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    final hw = hero.stats.firstWhere((s) => s.label == '미완료 숙제');
+    final hw = hero.banner!;
     expect(hw.value, '0');
     expect(hw.hot, isFalse);
     expect(hw.sub, '다 냈어요');
@@ -282,7 +283,7 @@ void main() {
   testWidgets('미완료 숙제가 있으면 주황이고 구획에 목록이 나온다', (tester) async {
     await pump(tester, _home(lesson: _lesson, homeworks: [_hw]));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    final hw = hero.stats.firstWhere((s) => s.label == '미완료 숙제');
+    final hw = hero.banner!;
     expect(hw.value, '1');
     expect(hw.hot, isTrue);
     expect(hw.sub, '확인하세요');
@@ -293,7 +294,8 @@ void main() {
   testWidgets('주황은 화면에 하나뿐이다', (tester) async {
     await pump(tester, _home(lesson: _lesson, homeworks: [_hw]));
     final hero = tester.widget<HeroField>(find.byType(HeroField));
-    expect(hero.stats.where((s) => s.hot).length, 1);
+    expect(hero.stats.where((s) => s.hot), isEmpty);
+    expect(hero.banner!.hot, isTrue);
     final rail = tester.widget<QuickRail>(find.byType(QuickRail));
     expect(rail.items.where((i) => i.primary).length, 1);
   });

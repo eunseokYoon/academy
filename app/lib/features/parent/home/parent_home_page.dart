@@ -211,6 +211,7 @@ class _ParentHomePageState extends State<ParentHomePage>
                   eyebrow: todayLabel(),
                   title: _greeting(home),
                   stats: _stats(home),
+                  banner: _pending(home),
                   child: sc == null
                       ? null
                       : ChildSelector(
@@ -486,21 +487,10 @@ InlineSpan _greeting(ParentHome home) => TextSpan(
   ],
 );
 
-/// 지면의 숫자 칸 1~3개. **값이 없는 항목은 뺀다.** 순서는 웹과 같다 —
-/// 수업(+클리닉) · 미완료 숙제 · 시험. **dDay 는 서버 값이다.**
+/// 지면 윗줄의 일정 칸 0~3개. **값이 없는 항목은 뺀다.** 순서는 다음 수업 ·
+/// 다음 클리닉 · 시험이다(학생 홈과 같다, 앱만). **dDay 는 서버 값이다.**
 List<HeroStat> _stats(ParentHome home) {
   final stats = <HeroStat>[];
-
-  final clinic = home.nextClinic;
-  final clinicRow = clinic == null
-      ? null
-      : HeroStatExtra(
-          label: '다음 클리닉',
-          value: dDayLabel(clinic.dDay),
-          sub:
-              '${dateLabel(clinic.clinicDate, null)} '
-              '${clinic.arrivalTime} 도착',
-        );
 
   final lessonDate = home.nextLessonDate;
   final lessonDDay = home.nextLessonDDay;
@@ -512,31 +502,20 @@ List<HeroStat> _stats(ParentHome home) {
         // **nextLessonTime 은 null 일 수 있다**(반의 요일 슬롯이 없으면).
         // 그때는 날짜만이다 — 시각을 지어내지 마라.
         sub: dateLabel(lessonDate, home.nextLessonTime),
-        extra: clinicRow,
-      ),
-    );
-  } else if (clinicRow != null) {
-    // 수업이 없고 클리닉만 있으면 클리닉이 그 칸의 주인이 된다.
-    stats.add(
-      HeroStat(
-        label: clinicRow.label,
-        value: clinicRow.value,
-        sub: clinicRow.sub,
       ),
     );
   }
 
-  // 항상 있다. 0 도 뜻이 있는 값이다. 0 이면 주황을 끈다.
-  // sub 가 학생 홈의 「확인하세요」가 아니라 「확인 필요」다(웹과 같다).
-  final pending = home.pendingHomeworkCount;
-  stats.add(
-    HeroStat(
-      label: '미완료 숙제',
-      value: '$pending',
-      sub: pending > 0 ? '확인 필요' : '다 냈어요',
-      hot: pending > 0,
-    ),
-  );
+  final clinic = home.nextClinic;
+  if (clinic != null) {
+    stats.add(
+      HeroStat(
+        label: '다음 클리닉',
+        value: dDayLabel(clinic.dDay),
+        sub: '${dateLabel(clinic.clinicDate, null)} ${clinic.arrivalTime}',
+      ),
+    );
+  }
 
   final exam = home.nextExam;
   if (exam != null) {
@@ -551,6 +530,18 @@ List<HeroStat> _stats(ParentHome home) {
   }
 
   return stats;
+}
+
+/// 미완료 숙제. 항상 있다. 0 도 뜻이 있는 값이다. 0 이면 주황을 끈다.
+/// sub 가 학생 홈의 「확인하세요」가 아니라 「확인 필요」다(웹과 같다).
+HeroStat _pending(ParentHome home) {
+  final pending = home.pendingHomeworkCount;
+  return HeroStat(
+    label: '미완료 숙제',
+    value: '$pending',
+    sub: pending > 0 ? '확인 필요' : '다 냈어요',
+    hot: pending > 0,
+  );
 }
 
 /// 연결된 자녀가 없을 때. 가입 경로상 학부모 계정은 자녀와 함께 생기므로

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.njwenglish.common.error.BusinessException;
@@ -28,7 +29,9 @@ import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.NoticeAttachmentRepository;
 import com.njwenglish.repository.NoticeRepository;
+import com.njwenglish.repository.PushRecipientRepository;
 import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.service.push.PushEvent;
 import com.njwenglish.support.Fixtures;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +44,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -56,6 +60,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class NoticeServiceTest {
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private PushRecipientRepository pushRecipientRepository;
     @Mock
     private NoticeRepository noticeRepository;
     @Mock
@@ -82,7 +90,7 @@ class NoticeServiceTest {
     void setUp() {
         noticeService = new NoticeService(noticeRepository, classRoomRepository,
             enrollmentRepository, teacherRepository, studentAccessGuard, attachmentRepository,
-            presignedUrlProvider, materialKeys);
+            presignedUrlProvider, materialKeys, pushRecipientRepository, eventPublisher);
         given(teacherRepository.findByUserId(any()))
             .willReturn(Optional.of(Fixtures.teacherEntity(1L)));
         Fixtures.login(Fixtures.teacher(1L));
@@ -464,5 +472,49 @@ class NoticeServiceTest {
     private NoticeAttachment attachment(String s3Key) {
         return NoticeAttachment.of(notice(5L, NoticeScope.CLASS, classRoom),
             s3Key, "교재.pdf", 1024L, (short) 0);
+    }
+
+    // ---------- 푸시(#1·#7) ----------
+
+    @Test
+    @DisplayName("푸시는 처음 발행할 때만 나간다 — 다시 눌러도 한 번")
+    void 재발행은_푸시를_다시_내지_않는다() {
+        given(noticeRepository.findWithClassRoom(15L))
+            .willReturn(Optional.of(notice(15L, NoticeScope.ALL, null)));
+        given(pushRecipientRepository.findEnrolledIds()).willReturn(List.of(88L, 89L));
+
+        noticeService.publish(15L);
+        noticeService.publish(15L);
+
+        verify(eventPublisher).publishEvent(
+            PushEvent.notice(15L, List.of(88L, 89L), true, true));
+        verify(eventPublisher, times(1)).publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("반 공지는 그 반 재원생에게, 학부모 전용이면 학생은 받지 않는다")
+    void 반_공지의_대상과_audience() {
+        given(noticeRepository.findWithClassRoom(15L)).willReturn(Optional.of(
+            notice(15L, NoticeScope.CLASS, classRoom, NoticeAudience.PARENT_ONLY)));
+        given(enrollmentRepository.findActiveStudents(eq(3L), any()))
+            .willReturn(List.of(child));
+
+        noticeService.publish(15L);
+
+        verify(eventPublisher).publishEvent(PushEvent.notice(15L, List.of(88L), false, true));
+    }
+
+    @Test
+    @DisplayName("수업일·클리닉 변경의 개인 공지도 같은 경로로 푸시가 나간다(#7)")
+    void 개인_공지도_푸시가_나간다() {
+        given(noticeRepository.save(any(Notice.class))).willAnswer(invocation -> {
+            Notice saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 31L);
+            return saved;
+        });
+
+        noticeService.publishForStudent("클리닉 변경", "사유", child, Fixtures.teacherEntity(1L));
+
+        verify(eventPublisher).publishEvent(PushEvent.notice(31L, List.of(88L), true, true));
     }
 }

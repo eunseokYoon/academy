@@ -57,6 +57,13 @@ public class User extends BaseTimeEntity {
     private boolean mustChangePassword;
 
     /**
+     * 푸시 알림 전체 끄기. 종류별 토글은 없다. 기본값이 true 다(V25) —
+     * false 로 깔면 앱을 깐 전원이 알림을 못 받고 아무도 원인을 모른다.
+     */
+    @Column(name = "push_enabled", nullable = false)
+    private boolean pushEnabled = true;
+
+    /**
      * 가입 시 서버가 넣는 초기 비밀번호. 전원이 아는 값이라 mustChangePassword와 짝으로만 쓴다.
      * 둘 중 하나만 있으면 반 친구가 남의 번호로 로그인해 성적을 본다.
      */
@@ -96,6 +103,10 @@ public class User extends BaseTimeEntity {
     public void resetPassword(String passwordHash) {
         this.passwordHash = passwordHash;
         this.mustChangePassword = true;
+    }
+
+    public void changePushEnabled(boolean enabled) {
+        this.pushEnabled = enabled;
     }
 
     public void rename(String name) {
