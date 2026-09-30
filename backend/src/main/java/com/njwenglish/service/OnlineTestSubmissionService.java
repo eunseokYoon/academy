@@ -15,6 +15,7 @@ import com.njwenglish.entity.OnlineTestSubmission;
 import com.njwenglish.entity.Student;
 import com.njwenglish.repository.OnlineTestRepository;
 import com.njwenglish.repository.OnlineTestSubmissionRepository;
+import com.njwenglish.repository.WeeklyTestScoreRepository;
 import com.njwenglish.service.push.PushEvent;
 import com.njwenglish.service.push.PushTopic;
 import java.time.OffsetDateTime;
@@ -50,6 +51,7 @@ public class OnlineTestSubmissionService {
     private final WeeklyTestService weeklyTestService;
     private final StudentAccessGuard studentAccessGuard;
     private final ApplicationEventPublisher eventPublisher;
+    private final WeeklyTestScoreRepository weeklyTestScoreRepository;
 
     @Transactional(readOnly = true)
     public List<StudentOnlineTestListItemResponse> myTests() {
@@ -66,6 +68,16 @@ public class OnlineTestSubmissionService {
             .collect(Collectors.toMap(s -> s.getOnlineTest().getId(), Function.identity()));
 
         return tests.stream()
+            // 오프라인으로 이미 본 테스트는 목록에서 뺀다(2026-09-29). 온라인 테스트는 종이
+            // 시험의 대체본이라, 선생님이 그 주차 클리닉 칸을 채웠으면 볼 이유가 없다 —
+            // 빼지 않으면 매주 본 학생에게 「응시 전」이 계속 쌓인다. 온라인으로 낸 것은
+            // 결과를 봐야 하므로 남긴다. T-14의 OFFLINE 판정과 같은 조건이다.
+            .filter(test -> {
+                OnlineTestSubmission submission = submissions.get(test.getId());
+                boolean submitted = submission != null && submission.isSubmitted();
+                return submitted || !weeklyTestScoreRepository.hasClinicScore(me.getId(),
+                    test.getClassRoom().getId(), test.getYear(), test.getMonth(), test.getWeek());
+            })
             .map(test -> {
                 OnlineTestSubmission submission = submissions.get(test.getId());
                 return new StudentOnlineTestListItemResponse(
@@ -210,12 +222,14 @@ public class OnlineTestSubmissionService {
             ? null : OnlineTestService.countCorrect(correct, chosen, internalCount,
                 correct.length);
 
+        List<String> urls = test.getAnswerS3Keys().stream()
+            .map(presignedUrlProvider::readUrl).toList();
         return new OnlineTestResultResponse(
             test.getId(), test.getTitle(), submission.getScore(), submission.getCorrectCount(),
             test.getQuestionCount(), internalCount, internalCorrect, externalCorrect,
             submission.getSubmittedAt(),
-            test.getAnswerS3Key() == null
-                ? null : presignedUrlProvider.readUrl(test.getAnswerS3Key()),
+            urls.isEmpty() ? null : urls.get(0),
+            urls,
             results);
     }
 

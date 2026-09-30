@@ -1,7 +1,12 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { fetchTeacherQnaList, fetchTeacherReviews, listClassRooms } from "../api";
+import {
+  fetchTeacherQnaList,
+  fetchTeacherReviews,
+  listClassRooms,
+  markTeacherQnaSeen,
+} from "../api";
 import { PageTitle } from "../../../shared/components/Section";
 import { StarRating } from "../../../shared/review/StarRating";
 
@@ -21,6 +26,27 @@ type Tab = "QUESTION" | "REVIEW";
 export default function QnaListPage() {
   const [classRoomId, setClassRoomId] = useState<number | undefined>(undefined);
   const [tab, setTab] = useState<Tab>("QUESTION");
+  const queryClient = useQueryClient();
+  /** 이 화면에 들어오기 전 마지막으로 연 시각. 그 뒤의 질문에 「새 글」을 붙인다 */
+  const [seenBefore, setSeenBefore] = useState<string | null>(null);
+
+  // 들어오면 한 번 「봤다」고 알린다. 대시보드의 새 질문 수가 0이 된다.
+  // 목록 GET 에 붙이지 않은 이유는 반을 바꿀 때마다 다시 불려서다
+  // 한 번만 부른다 — 두 번 부르면 두 번째 응답의 「앞 시각」이 방금 첫 호출이 찍은 시각이라
+  // 새 글 표시가 전부 사라진다(개발 모드의 StrictMode 가 effect 를 두 번 돌린다)
+  const marked = useRef(false);
+  useEffect(() => {
+    if (marked.current) return;
+    marked.current = true;
+    markTeacherQnaSeen()
+      .then((res) => {
+        setSeenBefore(res.previousSeenAt);
+        return queryClient.invalidateQueries({ queryKey: ["teacher", "dashboard"] });
+      })
+      .catch(() => {
+        // 실패해도 목록은 보인다. 새 글 표시와 대시보드 숫자만 그대로다
+      });
+  }, [queryClient]);
 
   const { data: classRooms } = useQuery({
     queryKey: ["teacher", "class-rooms"],
@@ -107,6 +133,14 @@ export default function QnaListPage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="min-w-0 flex-1 truncate font-medium text-brand-900">
+                      {/* 문자열로 비교하지 마라 — 시간대 표기(+09:00·Z)나 소수 초가 다르면 틀린다 */}
+                      {seenBefore !== null
+                        && new Date(item.createdAt).getTime() > new Date(seenBefore).getTime() && (
+                        <span className="mr-1.5 rounded-full bg-brand-900 px-1.5 py-0.5 text-[11px]
+                                         font-semibold text-white">
+                          새 글
+                        </span>
+                      )}
                       {!item.isPublic && <span aria-label="비공개">🔒 </span>}
                       {item.title}
                     </span>

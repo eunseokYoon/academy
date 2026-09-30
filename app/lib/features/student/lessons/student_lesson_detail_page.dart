@@ -91,7 +91,17 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
 
   Widget _player(String embedUrl) =>
       widget.playerBuilder?.call(embedUrl) ??
-      YoutubePlayer(embedUrl: embedUrl, openUrl: widget.openUrl);
+      YoutubePlayer(
+        embedUrl: embedUrl,
+        openUrl: widget.openUrl,
+        // 시청 기록(2026-09-29). 결석인 학생이 80% 이상 보면 서버가 출결을 온라인으로 바꾼다
+        onWatch: (duration, buckets) => widget.controller.reportWatch(
+          widget.lessonId,
+          embedUrl,
+          duration,
+          buckets,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {

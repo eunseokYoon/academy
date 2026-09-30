@@ -39,6 +39,7 @@ class ScoreItem {
     this.result,
     this.retestPassed = false,
     this.retestScheduled = false,
+    this.absent = false,
   });
 
   final int year;
@@ -58,6 +59,10 @@ class ScoreItem {
   final String? result;
   final bool retestPassed;
   final bool retestScheduled;
+
+  /// 미응시(2026-09-29). 반이 그 주에 그 시험을 봤는데 이 학생 칸만 비었다. 값 칸은
+  /// 전부 null 이다 — 0점이 아니다. 판정은 서버다(`StudentScoreQueryService`).
+  final bool absent;
 
   /// 주차 하나를 크기 비교가 되는 정수로 편다. 2026년 8월 2주 → 20260802.
   int get key => weekKey(year, month, week);
@@ -79,6 +84,8 @@ class ScoreItem {
       // 자바 boolean 이라 기본값이 허용된다(14-3).
       retestPassed: json['retestPassed'] as bool? ?? false,
       retestScheduled: json['retestScheduled'] as bool? ?? false,
+      // 자바 boolean 이다. 옛 서버에는 없어서 false 다.
+      absent: json['absent'] as bool? ?? false,
     );
   }
 }

@@ -8,7 +8,8 @@ import { SUBMISSION_LABELS, formatDueAt } from "../../shared/homework/types";
 import { uploadPhoto, uploadVideo } from "../../shared/homework/upload";
 import { deletePhoto, deleteVideo, getMyHomework, submitHomework } from "./api";
 
-const MAX_PHOTOS = 10;
+/** 서버 SubmissionService.MAX_PHOTOS 와 같다(2026-09-29 20장). */
+const MAX_PHOTOS = 20;
 
 /** 한 장씩 상태를 들고 있어야 실패한 것만 다시 올릴 수 있다. */
 interface Uploading {

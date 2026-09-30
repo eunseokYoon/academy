@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -7,7 +7,8 @@ import { Badge } from "../../shared/components/Badge";
 import { BackLink } from "../../shared/components/Section";
 import { gradeLabel, gradeTone } from "../../shared/homework/grade";
 import { SUBMISSION_LABELS, formatDueAt } from "../../shared/homework/types";
-import { getMyLesson } from "./api";
+import { getMyLesson, reportLessonWatch } from "./api";
+import { useYoutubeWatch, watchParams } from "../../shared/lesson/youtubeWatch";
 
 /** S-5 상세. 학생 전용 화면이다. */
 export default function StudentLessonDetailPage() {
@@ -16,11 +17,17 @@ export default function StudentLessonDetailPage() {
   const id = Number(lessonId);
   /** 재생 중인 영상의 인덱스. null이면 아직 안 눌렀다 — 처음부터 iframe을 심지 않는다 */
   const [playing, setPlaying] = useState<number | null>(null);
+  const playerRef = useRef<HTMLIFrameElement>(null);
 
   const { data, isPending, isError } = useQuery({
     queryKey: ["student", "lesson", id],
     queryFn: () => getMyLesson(id),
   });
+
+  // 시청 기록(2026-09-29). 결석인 학생이 80% 이상 보면 서버가 출결을 온라인으로 바꾼다.
+  // 훅은 조기 반환보다 위에 있어야 한다 — 재생 중인 영상이 없으면 아무것도 안 한다
+  const playingUrl = playing === null ? null : data?.videos[playing]?.embedUrl ?? null;
+  useYoutubeWatch(playerRef, playingUrl, (report) => reportLessonWatch(id, report));
 
   if (isPending) return <p className="text-sm text-slate-400">불러오는 중…</p>;
   if (isError || !data) {
@@ -76,9 +83,12 @@ export default function StudentLessonDetailPage() {
           ) : (
             <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
               <iframe
+                // 영상을 바꾸면 새 플레이어다 — 시청 기록이 영상마다 따로 붙는다
+                key={playing}
+                ref={playerRef}
                 src={`${data.videos[playing].embedUrl}${
                   data.videos[playing].embedUrl?.includes("?") ? "&" : "?"
-                }rel=0&modestbranding=1&autoplay=1`}
+                }rel=0&modestbranding=1&autoplay=1&${watchParams()}`}
                 title={data.videos[playing].title ?? `수업 영상 ${playing + 1}`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media;
                        picture-in-picture"

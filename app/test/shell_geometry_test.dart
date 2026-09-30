@@ -209,8 +209,22 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.drag(find.byType(SubPageScroll), const Offset(0, -5000));
-    await tester.pumpAndSettle();
+    // 끝까지 굴린다. ListView 는 자식을 늦게 그려서 끝으로 한 번 보내면 그 뒤에 끝이 더
+    // 늘어난다 — 늘지 않을 때까지 되풀이한다.
+    final pos = tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(SubPageScroll),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+    for (var i = 0; i < 10 && pos.pixels < pos.maxScrollExtent; i++) {
+      pos.jumpTo(pos.maxScrollExtent);
+      await tester.pumpAndSettle();
+    }
     final last = tester.getRect(find.byKey(const Key('sub-last')));
     final barTop = tabBarTop(tester);
     expect(last.bottom, lessThanOrEqualTo(barTop));

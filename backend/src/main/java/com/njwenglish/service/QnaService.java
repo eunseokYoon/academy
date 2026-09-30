@@ -13,6 +13,7 @@ import com.njwenglish.dto.qna.QnaDetailResponse;
 import com.njwenglish.dto.qna.QnaPhotoResponse;
 import com.njwenglish.dto.qna.QnaQuestionCreateRequest;
 import com.njwenglish.dto.qna.QnaQuestionUpdateRequest;
+import com.njwenglish.dto.qna.QnaSeenResponse;
 import com.njwenglish.dto.qna.QnaSummaryResponse;
 import com.njwenglish.dto.qna.QnaUploadUrlRequest;
 import com.njwenglish.dto.qna.QnaUploadUrlResponse;
@@ -29,6 +30,7 @@ import com.njwenglish.repository.TeacherRepository;
 import com.njwenglish.service.push.PushEvent;
 import com.njwenglish.service.push.PushTopic;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -332,6 +334,17 @@ public class QnaService {
             .sorted(Comparator.comparing(QnaPhoto::getSortOrder))
             .map(p -> new QnaPhotoResponse(p.getId(), presignedUrlProvider.readUrl(p.getS3Key())))
             .toList();
+    }
+
+    /**
+     * 선생님이 게시판을 열었다(T-1 「새 질문」을 0으로 만든다). 앞서 연 시각을 돌려준다 —
+     * 화면이 그 뒤에 올라온 질문에 「새 글」을 붙인다. 글마다 읽음 상태를 두지 않는다.
+     */
+    @Transactional
+    public QnaSeenResponse markSeenByTeacher() {
+        Teacher teacher = teacherRepository.findByUserId(CurrentUser.get().userId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        return new QnaSeenResponse(teacher.markQnaSeen(OffsetDateTime.now()));
     }
 
     private Long currentTeacherId() {

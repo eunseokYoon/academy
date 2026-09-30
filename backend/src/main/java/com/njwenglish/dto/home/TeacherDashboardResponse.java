@@ -50,7 +50,12 @@ public record TeacherDashboardResponse(Today today, Todo todo, Stats stats) {
         long unsignedStudentCount,
         long unlinkedParentCount,
         long recentSignupCount,
-        long openJoinCodeCount
+        long openJoinCodeCount,
+        /**
+         * 선생님이 게시판을 마지막으로 연 뒤에 올라온 질문 수(2026-09-29). 화면 상단에 띄운다.
+         * 게시판을 열면 0이 된다 — 글마다 미답변 상태를 두지 않는다(CLAUDE.md 11번 근처).
+         */
+        long newQuestionCount
     ) {
     }
 

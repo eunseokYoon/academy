@@ -12,7 +12,11 @@ import com.njwenglish.entity.WeeklyTestScore;
 import com.njwenglish.entity.enums.ScoreChartKind;
 import com.njwenglish.entity.enums.TestResult;
 import com.njwenglish.entity.enums.WeeklyTestType;
+import com.njwenglish.entity.Enrollment;
+import com.njwenglish.repository.EnrollmentRepository;
+import com.njwenglish.repository.WeeklyTestRepository;
 import com.njwenglish.repository.WeeklyTestScoreRepository;
+import java.time.LocalDate;
 import com.njwenglish.support.Fixtures;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +35,10 @@ class StudentScoreQueryServiceTest {
     private WeeklyTestScoreRepository weeklyTestScoreRepository;
     @Mock
     private StudentAccessGuard studentAccessGuard;
+    @Mock
+    private WeeklyTestRepository weeklyTestRepository;
+    @Mock
+    private EnrollmentRepository enrollmentRepository;
 
     private StudentScoreQueryService studentScoreQueryService;
 
@@ -40,7 +48,7 @@ class StudentScoreQueryServiceTest {
     @BeforeEach
     void setUp() {
         studentScoreQueryService = new StudentScoreQueryService(weeklyTestScoreRepository,
-            studentAccessGuard);
+            weeklyTestRepository, enrollmentRepository, studentAccessGuard);
     }
 
     private WeeklyTestScore wordCell(short week, short correct, TestResult result,
@@ -219,5 +227,68 @@ class StudentScoreQueryServiceTest {
         assertThat(kinds).containsEntry(WeeklyTestType.REVIEW, ScoreChartKind.NONE);
         assertThat(kinds).containsEntry(WeeklyTestType.PRACTICE, ScoreChartKind.BAR);
         assertThat(kinds).containsEntry(WeeklyTestType.CLINIC, ScoreChartKind.SPLIT_BAR);
+    }
+
+    private WeeklyTest wordHeader(short year, short month, short week) {
+        return WeeklyTest.create(classRoom, WeeklyTestType.WORD, year, month, week,
+            (short) 25, null, null);
+    }
+
+    @Test
+    @DisplayName("반이 본 시험의 칸이 비면 그 주에 미응시 줄이 순서대로 끼어든다")
+    void 미응시_줄이_끼어든다() {
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(hanul);
+        given(weeklyTestScoreRepository.findByStudentOrderedByWeek(88L)).willReturn(List.of(
+            wordCell((short) 1, (short) 20, TestResult.PASS, false),
+            wordCell((short) 3, (short) 22, TestResult.PASS, false)));
+        given(enrollmentRepository.findByStudentId(88L)).willReturn(List.of(
+            Enrollment.create(hanul, classRoom, LocalDate.of(2026, 3, 2))));
+        given(weeklyTestRepository.findTakenByOthersOnly(List.of(3L), 88L))
+            .willReturn(List.of(wordHeader((short) 2026, (short) 5, (short) 2)));
+
+        StudentScoreResponse.Section word = studentScoreQueryService.forStudent(88L)
+            .sections().get(0);
+
+        assertThat(word.items()).extracting(StudentScoreResponse.Item::week)
+            .containsExactly((short) 1, (short) 2, (short) 3);
+        StudentScoreResponse.Item absent = word.items().get(1);
+        assertThat(absent.absent()).isTrue();
+        // 0점이 아니다 — 값 칸은 비어 있다
+        assertThat(absent.correctCount()).isNull();
+        assertThat(absent.result()).isNull();
+        assertThat(word.items().get(0).absent()).isFalse();
+    }
+
+    @Test
+    @DisplayName("기록이 하나도 없는 종류도 미응시만 있으면 섹션이 생긴다")
+    void 미응시만_있어도_섹션이_생긴다() {
+        given(studentAccessGuard.requireSelf()).willReturn(hanul);
+        given(weeklyTestScoreRepository.findByStudentOrderedByWeek(88L)).willReturn(List.of());
+        given(enrollmentRepository.findByStudentId(88L)).willReturn(List.of(
+            Enrollment.create(hanul, classRoom, LocalDate.of(2026, 3, 2))));
+        given(weeklyTestRepository.findTakenByOthersOnly(List.of(3L), 88L))
+            .willReturn(List.of(wordHeader((short) 2026, (short) 5, (short) 2)));
+
+        StudentScoreResponse response = studentScoreQueryService.forMe();
+
+        assertThat(response.sections()).hasSize(1);
+        assertThat(response.sections().get(0).items().get(0).absent()).isTrue();
+    }
+
+    @Test
+    @DisplayName("이번 주·입반 전 주는 미응시가 아니다 — 선생님이 아직 적는 중일 수 있다")
+    void 이번주와_입반전은_미응시가_아니다() {
+        LocalDate today = LocalDate.now();
+        short thisWeek = com.njwenglish.common.util.MonthWeeks.of(today);
+        given(studentAccessGuard.requireAccessible(88L)).willReturn(hanul);
+        given(weeklyTestScoreRepository.findByStudentOrderedByWeek(88L)).willReturn(List.of());
+        // 5월 1주는 입반(5월 20일) 전이다
+        given(enrollmentRepository.findByStudentId(88L)).willReturn(List.of(
+            Enrollment.create(hanul, classRoom, LocalDate.of(2026, 5, 20))));
+        given(weeklyTestRepository.findTakenByOthersOnly(List.of(3L), 88L)).willReturn(List.of(
+            wordHeader((short) today.getYear(), (short) today.getMonthValue(), thisWeek),
+            wordHeader((short) 2026, (short) 5, (short) 1)));
+
+        assertThat(studentScoreQueryService.forStudent(88L).sections()).isEmpty();
     }
 }

@@ -18,6 +18,12 @@ import com.njwenglish.support.Fixtures;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import com.njwenglish.entity.Teacher;
+import com.njwenglish.repository.QnaPostRepository;
+import com.njwenglish.repository.TeacherRepository;
+import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +50,10 @@ class DashboardServiceTest {
     private ClassRoomRepository classRoomRepository;
     @Mock
     private EnrollmentRepository enrollmentRepository;
+    @Mock
+    private TeacherRepository teacherRepository;
+    @Mock
+    private QnaPostRepository qnaPostRepository;
 
     private final ClassRoom classRoom = Fixtures.openClassRoom(3L, "고2 심화반", "HK7F2Q");
 
@@ -52,8 +62,38 @@ class DashboardServiceTest {
     @BeforeEach
     void setUp() {
         dashboardService = new DashboardService(lessonRepository, studentRepository,
-            classRoomRepository, enrollmentRepository);
+            classRoomRepository, enrollmentRepository, teacherRepository, qnaPostRepository);
         given(lessonRepository.findByDateWithClassRoom(any())).willReturn(List.of());
+        Fixtures.login(Fixtures.teacher(1L));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("새 질문은 선생님이 게시판을 마지막으로 연 뒤의 질문 수다")
+    void 새_질문은_마지막으로_본_뒤를_센다() {
+        Teacher teacher = Fixtures.teacherEntity(1L);
+        OffsetDateTime seenAt = OffsetDateTime.parse("2026-09-28T10:00:00+09:00");
+        teacher.markQnaSeen(seenAt);
+        given(teacherRepository.findByUserId(1L)).willReturn(Optional.of(teacher));
+        given(qnaPostRepository.countRootsCreatedAfter(seenAt)).willReturn(3L);
+
+        assertThat(dashboardService.dashboard().todo().newQuestionCount()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("게시판을 열면 시각이 바뀌고, 앞의 시각을 돌려준다")
+    void 게시판을_열면_시각이_바뀐다() {
+        Teacher teacher = Fixtures.teacherEntity(1L);
+        OffsetDateTime before = OffsetDateTime.parse("2026-09-28T10:00:00+09:00");
+        teacher.markQnaSeen(before);
+        OffsetDateTime now = OffsetDateTime.parse("2026-09-29T09:00:00+09:00");
+
+        assertThat(teacher.markQnaSeen(now)).isEqualTo(before);
+        assertThat(teacher.getQnaSeenAt()).isEqualTo(now);
     }
 
     @Test

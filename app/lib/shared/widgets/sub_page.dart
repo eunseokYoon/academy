@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/router/auth_redirect.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'app_bar_band.dart';
@@ -16,6 +19,11 @@ import 'home_layout.dart';
 ///
 /// [onRefresh] 가 있으면 당겨서 새로고침이 붙는다. 목록이 짧아도 당겨지도록
 /// 항상 스크롤 가능하게 둔다.
+///
+/// **모든 하위 화면 맨 위에 뒤로가기가 있다(2026-09-30 사용자 결정).** 탭 화면(숙제·수업·성적·
+/// 질문 / 일정·레포트·성적·내 정보)과 홈의 하위 화면(스케줄·테스트·출석·공지 등)은 「← 뒤로가기」이고 홈으로 간다.
+/// 상세 화면은 자기 목록으로 돌아가는 [PageBackLink] 를 첫 자식으로 직접 넣고, 그러면 여기서
+/// 「← 뒤로가기」를 더하지 않는다 — 한 화면에 뒤로가기가 둘이면 어디로 가는지 헷갈린다.
 class SubPageScroll extends StatelessWidget {
   const SubPageScroll({
     super.key,
@@ -31,6 +39,7 @@ class SubPageScroll extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasOwnBack = children.isNotEmpty && children.first is PageBackLink;
     final list = ListView(
       padding: EdgeInsets.zero,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -38,6 +47,16 @@ class SubPageScroll extends StatelessWidget {
         AppBarBand(role: role),
         // 웹 `main` 의 `p-4` 윗변.
         const SizedBox(height: 16),
+        if (!hasOwnBack)
+          homeConstrain(
+            PageBackLink(
+              // 가는 곳은 홈이지만 글자는 「뒤로가기」다(2026-09-30 사용자 결정).
+              label: '뒤로가기',
+              onTap: () => context.go(
+                role == '학부모' ? AppRoutes.parent : AppRoutes.student,
+              ),
+            ),
+          ),
         for (final child in children) homeConstrain(child),
         SizedBox(height: MediaQuery.paddingOf(context).bottom + kHomeTailGap),
       ],

@@ -1,7 +1,10 @@
 package com.njwenglish.entity;
 
 import com.njwenglish.common.entity.BaseTimeEntity;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -11,6 +14,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.ArrayList;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -65,9 +70,13 @@ public class OnlineTest extends BaseTimeEntity {
     @Column(name = "points")
     private Short[] points;
 
-    /** 해설·정답지. 채점 후에만 내려준다. */
-    @Column(name = "answer_s3_key", length = 500)
-    private String answerS3Key;
+    /**
+     * 해설·정답지 여러 장(V27, 2026-09-29). 채점 후에만 내려준다. 전량 교체라
+     * orphanRemoval 이 켜져 있다({@link #replaceAnswerFiles}).
+     */
+    @OneToMany(mappedBy = "onlineTest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
+    private List<OnlineTestAnswerFile> answerFiles = new ArrayList<>();
 
     /**
      * <b>앞 N문항이 내부지문</b>, 나머지가 외부지문이다. null이면 집계하지 않는다.
@@ -99,7 +108,8 @@ public class OnlineTest extends BaseTimeEntity {
 
     public static OnlineTest create(ClassRoom classRoom, Teacher teacher, String title,
                                     short questionCount, short choiceCount,
-                                    Short[] correctChoices, Short[] points, String answerS3Key,
+                                    Short[] correctChoices, Short[] points,
+                                    List<String> answerS3Keys,
                                     Short internalQuestionCount,
                                     short year, short month, short week,
                                     OffsetDateTime opensAt, OffsetDateTime closesAt) {
@@ -111,7 +121,7 @@ public class OnlineTest extends BaseTimeEntity {
         test.choiceCount = choiceCount;
         test.correctChoices = correctChoices;
         test.points = points;
-        test.answerS3Key = answerS3Key;
+        test.replaceAnswerFiles(answerS3Keys);
         test.internalQuestionCount = internalQuestionCount;
         test.year = year;
         test.month = month;
@@ -126,7 +136,7 @@ public class OnlineTest extends BaseTimeEntity {
      * 공개 후 정답을 고치면 이미 응시한 학생의 점수가 소급 변경된다.
      */
     public void edit(String title, short questionCount, short choiceCount,
-                     Short[] correctChoices, Short[] points, String answerS3Key,
+                     Short[] correctChoices, Short[] points, List<String> answerS3Keys,
                      Short internalQuestionCount,
                      short year, short month, short week,
                      OffsetDateTime opensAt, OffsetDateTime closesAt) {
@@ -135,7 +145,7 @@ public class OnlineTest extends BaseTimeEntity {
         this.choiceCount = choiceCount;
         this.correctChoices = correctChoices;
         this.points = points;
-        this.answerS3Key = answerS3Key;
+        replaceAnswerFiles(answerS3Keys);
         this.internalQuestionCount = internalQuestionCount;
         this.year = year;
         this.month = month;
@@ -145,12 +155,32 @@ public class OnlineTest extends BaseTimeEntity {
     }
 
     /** 공개 후에도 바꿀 수 있는 값. 정답과 문항 수는 여기 넣지 마라. */
-    public void editSchedule(String title, String answerS3Key,
+    public void editSchedule(String title, List<String> answerS3Keys,
                              OffsetDateTime opensAt, OffsetDateTime closesAt) {
         this.title = title;
-        this.answerS3Key = answerS3Key;
+        replaceAnswerFiles(answerS3Keys);
         this.opensAt = opensAt;
         this.closesAt = closesAt;
+    }
+
+    /** 해설지 s3Key 목록. 올린 순서다. */
+    public List<String> getAnswerS3Keys() {
+        return answerFiles.stream().map(OnlineTestAnswerFile::getS3Key).toList();
+    }
+
+    /**
+     * 해설지를 통째로 바꾼다. 목록이 지금과 같으면 아무것도 안 한다 — 수정할 때마다
+     * 행을 지웠다 다시 넣지 않는다. 개수·키 검증은 서비스가 먼저 한다.
+     */
+    public void replaceAnswerFiles(List<String> s3Keys) {
+        List<String> next = s3Keys == null ? List.of() : s3Keys;
+        if (next.equals(getAnswerS3Keys())) {
+            return;
+        }
+        answerFiles.clear();
+        for (int i = 0; i < next.size(); i++) {
+            answerFiles.add(OnlineTestAnswerFile.of(this, next.get(i), (short) i));
+        }
     }
 
     public void publish(OffsetDateTime now) {

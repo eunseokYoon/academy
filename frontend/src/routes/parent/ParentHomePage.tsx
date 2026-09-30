@@ -8,6 +8,7 @@ import { QuickRail } from "../../shared/components/QuickRail";
 import { EXAM_TYPE_LABELS } from "../../shared/score/types";
 import { todayLabel } from "../../shared/date";
 import { getChildHome } from "./api";
+import { attendedCount } from "../../shared/attendance/types";
 
 /**
  * P-1 포털 홈. <b>호출은 하나</b>다 — 자녀를 바꾸면 이 쿼리만 다시 돈다.
@@ -200,7 +201,7 @@ export default function ParentHomePage() {
                 포함하지 않아서, present만 쓰면 대체 등원한 날이 세 칸 어디에도 안 잡힌다 */}
             <AttendanceCell
               label="출석"
-              value={thisMonthAttendance.present + thisMonthAttendance.makeup}
+              value={attendedCount(thisMonthAttendance)}
             />
             <AttendanceCell label="지각" value={thisMonthAttendance.late} />
             <AttendanceCell label="결석" value={thisMonthAttendance.absent} />

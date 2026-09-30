@@ -44,7 +44,7 @@ const _split = OnlineTestResult(
   internalQuestionCount: 2,
   internalCorrect: 1,
   externalCorrect: 1,
-  answerFileUrl: 'https://s3.test/answer.pdf',
+  answerFileUrls: ['https://s3.test/answer.pdf'],
   results: [
     QuestionResult(questionNo: 1, chosen: 2, correct: 2, isCorrect: true),
     QuestionResult(questionNo: 2, chosen: null, correct: 3, isCorrect: false),
@@ -176,6 +176,38 @@ Future<void> _confirmSubmit(WidgetTester tester) async {
 }
 
 void main() {
+  group('해설지 여러 장(2026-09-29)', () {
+    Map<String, dynamic> j(Map<String, dynamic> extra) => {
+      'title': 't',
+      'correctCount': 1,
+      'questionCount': 2,
+      'results': [],
+      ...extra,
+    };
+
+    test('answerFileUrls 를 전부 읽는다', () {
+      final r = OnlineTestResult.fromJson(
+        j({
+          'answerFileUrl': 'https://a',
+          'answerFileUrls': ['https://a', 'https://b'],
+        }),
+      );
+      expect(r.answerFileUrls, ['https://a', 'https://b']);
+    });
+
+    test('옛 서버(answerFileUrls 없음)는 한 장으로 받는다(7-3)', () {
+      expect(
+        OnlineTestResult.fromJson(j({'answerFileUrl': 'https://a'}))
+            .answerFileUrls,
+        ['https://a'],
+      );
+      expect(
+        OnlineTestResult.fromJson(j({'answerFileUrl': null})).answerFileUrls,
+        isEmpty,
+      );
+    });
+  });
+
   group('데이터', () {
     test('남은 분은 마감과의 차를 반올림한다(웹 Math.round)', () {
       const closes = '2026-09-27T21:00:00+09:00';
@@ -379,7 +411,7 @@ void main() {
         internalQuestionCount: null,
         internalCorrect: null,
         externalCorrect: null,
-        answerFileUrl: null,
+        answerFileUrls: [],
         results: [],
       );
       final h = await _pumpTake(

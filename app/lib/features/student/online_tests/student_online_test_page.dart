@@ -461,7 +461,7 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
       color: AppColors.brand900,
       fontFeatures: kTabularFigures,
     );
-    final url = r.answerFileUrl;
+    final urls = r.answerFileUrls;
     return [
       AppCard(
         key: const Key('result-header'),
@@ -492,11 +492,12 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
           ],
         ),
       ),
-      if (url != null) ...[
-        const SizedBox(height: 16),
+      // 해설지는 여러 장일 수 있다(2026-09-29). 한 장이면 예전 문구 그대로다.
+      for (var i = 0; i < urls.length; i++) ...[
+        SizedBox(height: i == 0 ? 16 : 8),
         OutlinedButton(
-          key: const Key('answer-file'),
-          onPressed: () => widget.openUrl(Uri.parse(url)),
+          key: Key(i == 0 ? 'answer-file' : 'answer-file-$i'),
+          onPressed: () => widget.openUrl(Uri.parse(urls[i])),
           style: OutlinedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: AppColors.brand900,
@@ -510,7 +511,7 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
               fontWeight: FontWeight.w500,
             ),
           ),
-          child: const Text('해설지 보기'),
+          child: Text(urls.length > 1 ? '해설지 ${i + 1} 보기' : '해설지 보기'),
         ),
       ],
       const SizedBox(height: 16),

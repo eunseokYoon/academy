@@ -13,6 +13,12 @@ import type { ParentLessonDetail } from "../api";
  * 없는 칸은 통째로 숨긴다 — 빈 제목만 남으면 선생님이 안 쓴 것인지
  * 화면이 깨진 것인지 구분되지 않는다.
  */
+const WATCH_LABEL = {
+  WATCHED: "시청 완료",
+  PARTIAL: "일부 시청",
+  NOT_WATCHED: "미시청",
+} as const;
+
 export function ReportLessonCard({ lesson }: { lesson: ParentLessonDetail }) {
   const status = lesson.attendanceStatus ?? "PENDING";
 
@@ -36,6 +42,15 @@ export function ReportLessonCard({ lesson }: { lesson: ParentLessonDetail }) {
           {lesson.attendanceStatus ? DAY_STATUS_STYLE[status].label : "출석 미확인"}
         </span>
       </div>
+
+      {/* 영상 시청 현황(2026-09-29). 영상은 학부모에게 안 보이고, 봤는지만 보인다 */}
+      {lesson.videoWatch && (
+        <p className="mt-2 text-xs text-slate-500">
+          수업 영상 · <span className="font-medium text-slate-700">
+            {WATCH_LABEL[lesson.videoWatch]}
+          </span>
+        </p>
+      )}
 
       {(lesson.content || lesson.keyPoints || lesson.homeworkNote || lesson.clinicNote) && (
         <div

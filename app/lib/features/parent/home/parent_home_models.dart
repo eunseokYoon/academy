@@ -66,6 +66,7 @@ class AttendanceSummary {
     required this.sick,
     required this.excused,
     required this.makeup,
+    this.online = 0,
   });
 
   final int present;
@@ -75,9 +76,12 @@ class AttendanceSummary {
   final int excused;
   final int makeup;
 
-  /// **`MAKEUP`(대체 등원)은 출석이다.** 원래 요일에 못 와서 다른 날 수업에
-  /// 들어온 경우다 — 결석 쪽으로 세지 마라(CLAUDE.md 5-1).
-  int get attended => present + makeup;
+  /// 온라인(2026-09-29). 출석으로 친다.
+  final int online;
+
+  /// **`MAKEUP`(대체 등원)·`ONLINE`(온라인)은 출석이다.** 결석 쪽으로 세지 마라
+  /// (CLAUDE.md 5-1). 웹 `attendedCount` 와 같은 규칙이다.
+  int get attended => present + makeup + online;
 
   factory AttendanceSummary.fromJson(Map<String, dynamic> json) =>
       AttendanceSummary(
@@ -87,5 +91,6 @@ class AttendanceSummary {
         sick: (json['sick'] as num?)?.toInt() ?? 0,
         excused: (json['excused'] as num?)?.toInt() ?? 0,
         makeup: (json['makeup'] as num?)?.toInt() ?? 0,
+        online: (json['online'] as num?)?.toInt() ?? 0,
       );
 }

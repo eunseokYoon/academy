@@ -8,5 +8,11 @@ package com.njwenglish.entity.enums;
  * 선생님이 고를 수 있는 화면은 수업 출석(T-5)뿐이다. 클리닉은 「이동」이 같은 일을 한다.
  */
 public enum AttendanceStatus {
-    PRESENT, LATE, ABSENT, SICK, EXCUSED, MAKEUP
+    PRESENT, LATE, ABSENT, SICK, EXCUSED, MAKEUP,
+    /**
+     * 온라인(2026-09-29). 수업에 못 오고 영상으로 들었다. <b>출석으로 친다</b>(MAKEUP 과 같은 쪽).
+     * 결석인 학생이 영상을 80% 이상 보면 자동으로 이 값이 된다(VideoWatchService). 수업에만 있다 —
+     * 클리닉에는 영상이 없다. CHECK 제약 두 곳(V28)을 같이 고쳐라.
+     */
+    ONLINE
 }

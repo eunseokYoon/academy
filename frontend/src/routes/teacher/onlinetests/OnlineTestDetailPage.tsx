@@ -16,7 +16,9 @@ import {
   publishOnlineTest,
   updateOnlineTest,
 } from "../api";
-import type { ClinicReflection } from "../api";
+import type { ClinicReflection, OnlineTestDetail } from "../api";
+import { AnswerFilesField } from "./AnswerFilesField";
+import type { AnswerFileDraft } from "./AnswerFilesField";
 
 /**
  * 자동 반영 안내. <b>안 될 때 이유를 반드시 보여준다</b> — 조용히 넘어가면
@@ -163,16 +165,7 @@ export default function OnlineTestDetailPage() {
           )}
         </div>
 
-        {detail.answerFileUrl && (
-          <a
-            href={detail.answerFileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-block text-sm text-slate-900 underline"
-          >
-            해설지 확인
-          </a>
-        )}
+        <AnswerFilesEditor testId={detail.testId} detail={detail} />
 
         <div className="flex gap-2 pt-2">
           {!published && (
@@ -438,5 +431,47 @@ function DeadlineModal({
         <SubmitButton pending={pending}>저장</SubmitButton>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * 해설지 목록과 고치기(2026-09-29). 공개 뒤에도 고칠 수 있다 — 채점에 영향이 없다.
+ * 올리거나 뺀 것은 「해설지 저장」을 눌러야 반영된다. 뺀 파일은 저장 뒤 서버가 S3 에서 지운다.
+ */
+function AnswerFilesEditor({ testId, detail }: { testId: number; detail: OnlineTestDetail }) {
+  const queryClient = useQueryClient();
+  const saved: AnswerFileDraft[] = (
+    detail.answerFiles
+    ?? (detail.answerS3Key ? [{ s3Key: detail.answerS3Key, url: detail.answerFileUrl ?? "" }] : [])
+  ).map((f) => ({ s3Key: f.s3Key, name: null, url: f.url }));
+  const [draft, setDraft] = useState<AnswerFileDraft[] | null>(null);
+  const files = draft ?? saved;
+  const dirty = draft !== null
+    && draft.map((f) => f.s3Key).join("|") !== saved.map((f) => f.s3Key).join("|");
+
+  const save = useMutation({
+    mutationFn: () => updateOnlineTest(testId, { answerS3Keys: files.map((f) => f.s3Key) }),
+    onSuccess: async () => {
+      setDraft(null);
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "online-test", testId] });
+    },
+  });
+
+  return (
+    <div className="space-y-2">
+      <AnswerFilesField files={files} onChange={setDraft} disabled={save.isPending} />
+      {dirty && (
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white
+                     disabled:opacity-50"
+        >
+          해설지 저장
+        </button>
+      )}
+      {save.isError && <FormError message={errorMessage(save.error)} />}
+    </div>
   );
 }

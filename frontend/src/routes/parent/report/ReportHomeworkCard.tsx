@@ -31,8 +31,9 @@ const TONE: Record<"ok" | "warn" | "danger" | "neutral", string> = {
 export function ReportHomeworkCard({ items }: { items: WeekHomework[] }) {
   return (
     <div className="card divide-y divide-slate-100">
-      {items.map(({ lessonId, lessonDate, homework }) => (
-        <div key={lessonId} className="flex items-start justify-between gap-3 p-4">
+      {items.map(({ lessonDate, homework }) => (
+        // 키는 숙제 id 다. 수업 하나에 숙제가 여럿이라 lessonId 는 겹친다
+        <div key={homework.homeworkId} className="flex items-start justify-between gap-3 p-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-brand-900">{homework.title}</p>
             <p className="tnum mt-0.5 text-[11px] text-slate-400">

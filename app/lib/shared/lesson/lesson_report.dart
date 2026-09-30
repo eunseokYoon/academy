@@ -109,18 +109,26 @@ class ParentLessonDetail {
     required this.lessonDate,
     required this.title,
     required this.notes,
-    required this.homework,
+    required this.homeworks,
     required this.attendance,
+    this.videoWatch,
   });
 
   final int lessonId;
   final String lessonDate;
   final String? title;
   final LessonNotes notes;
-  final LessonHomework? homework;
+
+  /// 수업의 숙제 전부. 한 수업에 그리드 열이 여럿이면 여럿이다(2026-09-29) —
+  /// 첫 숙제(`homework`)만 읽던 때 주간 레포트가 숙제를 하나만 보였다.
+  final List<LessonHomework> homeworks;
 
   /// null 이면 아직 확정 전이다. 결석이 아니다.
   final DayStatus? attendance;
+
+  /// 수업 영상 시청 현황(2026-09-29). 영상이 없는 수업·옛 서버면 null — 줄을 그리지 않는다.
+  /// **비율은 오지 않는다**(학부모에게는 현황만).
+  final VideoWatchState? videoWatch;
 
   factory ParentLessonDetail.fromJson(Map<String, dynamic> json) =>
       ParentLessonDetail(
@@ -128,11 +136,36 @@ class ParentLessonDetail {
         lessonDate: json['lessonDate'] as String,
         title: json['title'] as String?,
         notes: LessonNotes.fromJson(json),
-        homework: json['homework'] == null
-            ? null
-            : LessonHomework.fromJson(json['homework'] as Map<String, dynamic>),
+        // 옛 서버에는 homeworks 가 없다. 그때는 첫 숙제 하나로 받는다(7-3).
+        homeworks: switch (json['homeworks']) {
+          final List<dynamic> list => [
+            for (final e in list)
+              LessonHomework.fromJson(e as Map<String, dynamic>),
+          ],
+          _ => [
+            if (json['homework'] case final Map<String, dynamic> h)
+              LessonHomework.fromJson(h),
+          ],
+        },
         attendance: json['attendanceStatus'] == null
             ? null
             : DayStatus.parse(json['attendanceStatus'] as String),
+        videoWatch: VideoWatchState.parse(json['videoWatch'] as String?),
       );
+}
+
+/// 학부모의 수업 영상 시청 현황. 서버 `VideoWatchState`.
+enum VideoWatchState {
+  watched('WATCHED', '시청 완료'),
+  partial('PARTIAL', '일부 시청'),
+  notWatched('NOT_WATCHED', '미시청');
+
+  const VideoWatchState(this.wire, this.label);
+
+  final String wire;
+  final String label;
+
+  /// 없거나 모르는 값은 null — 줄을 안 그린다(없는 값을 지어내지 않는다, 14-3).
+  static VideoWatchState? parse(String? wire) =>
+      values.where((v) => v.wire == wire).firstOrNull;
 }

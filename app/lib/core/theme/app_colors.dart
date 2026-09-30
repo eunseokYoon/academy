@@ -101,6 +101,12 @@ class AppColors {
   static const teal200 = Color(0xFF99F6E4);
   static const teal800 = Color(0xFF115E59);
 
+  /// 캘린더 칩 「온라인」(2026-09-29). 웹 `bg-violet-100 text-violet-800 ring-violet-200`.
+  /// 하늘색은 병결이 쓴다. 칩 말고 다른 자리에 쓰지 마라.
+  static const violet100 = Color(0xFFEDE9FE);
+  static const violet200 = Color(0xFFDDD6FE);
+  static const violet800 = Color(0xFF5B21B6);
+
   /// 성적 배지 「재시험 통과」 **하나만**이다(웹 `ScoreValue.tsx` 의
   /// `bg-blue-100 text-blue-700`). 위 brand 주석의 「tailwind blue 를 쓰지 않는다」는
   /// 브랜드·링크 이야기고, 이것은 웹이 그 배지에 실제로 쓰는 값이다. 넓히지 마라.

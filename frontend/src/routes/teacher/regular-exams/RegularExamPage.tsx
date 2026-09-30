@@ -204,7 +204,11 @@ export default function RegularExamPage() {
                                 <input
                                   data-cell={`${slot}-${field.key}-${index}`}
                                   type="number"
-                                  inputMode="numeric"
+                                  // 점수는 소수 둘째 자리까지다(raw_score NUMERIC(5,2)).
+                                  // numeric 이면 폰 키패드에 소수점이 없고, step 이 없으면 1 이라
+                                  // 95.5 가 브라우저에서 잘못된 값으로 표시된다
+                                  inputMode={field.key === "score" ? "decimal" : "numeric"}
+                                  step={field.key === "score" ? "0.01" : "1"}
                                   min={field.key === "score" ? 0 : 1}
                                   max={field.max}
                                   value={cell[field.key]}
@@ -217,7 +221,9 @@ export default function RegularExamPage() {
                                       focusNext(slot, field.key, index);
                                     }
                                   }}
-                                  className="w-14 rounded-lg border border-slate-300 px-2 py-1"
+                                  // 95.25 가 잘리지 않게 점수 칸만 넓다(2026-09-29)
+                                  className={`${field.key === "score" ? "w-24" : "w-16"}
+                                              rounded-lg border border-slate-300 px-2 py-1`}
                                 />
                               </label>
                             );

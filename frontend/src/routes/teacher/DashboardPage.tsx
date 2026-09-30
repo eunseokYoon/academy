@@ -54,6 +54,22 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/*
+        새 질문(2026-09-29). 선생님이 게시판을 마지막으로 연 뒤에 올라온 질문 수다.
+        글마다 미답변 상태를 두지 않는다 — 게시판을 열면 0이 된다. 선생님은 푸시를 받지 않아서
+        (15-4) 이 줄이 유일한 알림이다. 주황이 아니라 남색이다(주황은 자리가 정해져 있다).
+      */}
+      {(todo.newQuestionCount ?? 0) > 0 && (
+        <Link
+          to="/teacher/qna"
+          className="flex items-center justify-between gap-2 rounded-xl bg-brand-900 px-4 py-3
+                     text-sm font-medium text-white shadow-sm"
+        >
+          <span>새 질문 {todo.newQuestionCount}개가 올라왔어요</span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
+
       <section>
         <h3 className="text-sm font-semibold text-slate-700">오늘 수업</h3>
         {today.lessons.length === 0 ? (

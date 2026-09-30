@@ -7,6 +7,7 @@ import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.common.util.YoutubeUrls;
 import com.njwenglish.dto.lesson.LessonReportListItemResponse;
 import com.njwenglish.dto.lesson.LessonReportResponse;
+import com.njwenglish.dto.lesson.VideoWatchState;
 import com.njwenglish.dto.lesson.LessonVideoResponse;
 import com.njwenglish.entity.Homework;
 import com.njwenglish.entity.Lesson;
@@ -58,6 +59,7 @@ public class LessonReportService {
     private final AttendanceRepository attendanceRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final StudentAccessGuard studentAccessGuard;
+    private final VideoWatchService videoWatchService;
 
     @Transactional(readOnly = true)
     public PageResponse<LessonReportListItemResponse> myLessons(Short year, Short month,
@@ -88,7 +90,7 @@ public class LessonReportService {
         Student me = studentAccessGuard.requireSelf();
         Lesson lesson = findAccessible(lessonId, me.getId());
 
-        Homework homework = firstHomeworkByLesson(List.of(lesson.getId())).get(lesson.getId());
+        List<Homework> homeworks = homeworksOf(lesson.getId());
 
         return LessonReportResponse.forStudent(
             lesson.getId(),
@@ -100,7 +102,7 @@ public class LessonReportService {
             lesson.getKeyPoints(),
             lesson.getHomeworkNote(),
             lesson.getClinicNote(),
-            homework == null ? null : toHomework(homework, me.getId()),
+            homeworks.stream().map(h -> toHomework(h, me.getId())).toList(),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), me.getId())
                 .map(a -> a.getStatus())
                 .orElse(null));
@@ -148,7 +150,7 @@ public class LessonReportService {
     public LessonReportResponse childLesson(Long studentId, Long lessonId) {
         Student child = studentAccessGuard.requireAccessible(studentId);
         Lesson lesson = findAccessible(lessonId, child.getId());
-        Homework homework = firstHomeworkByLesson(List.of(lesson.getId())).get(lesson.getId());
+        List<Homework> homeworks = homeworksOf(lesson.getId());
 
         return LessonReportResponse.forParent(
             lesson.getId(),
@@ -159,14 +161,21 @@ public class LessonReportService {
             lesson.getKeyPoints(),
             lesson.getHomeworkNote(),
             lesson.getClinicNote(),
-            homework == null ? null : toParentHomework(homework, child.getId()),
+            homeworks.stream().map(h -> toParentHomework(h, child.getId())).toList(),
             attendanceRepository.findByLessonIdAndStudentId(lesson.getId(), child.getId())
                 .map(a -> a.getStatus())
-                .orElse(null));
+                .orElse(null),
+            watchStateOf(lesson, child.getId()));
     }
 
 
     // ---------- 내부 ----------
+
+    /** 학부모용 시청 현황. 영상이 없는 수업이면 null. 비율은 여기서 끝난다 — 응답에 싣지 않는다. */
+    private VideoWatchState watchStateOf(Lesson lesson, Long studentId) {
+        Integer percent = videoWatchService.lessonPercent(lesson, studentId);
+        return percent == null ? null : VideoWatchState.of(percent);
+    }
 
     /** 조회 조건을 통과하지 못하면 404다. 남의 반 수업인지 미공개인지 구분해 알려주지 않는다. */
     private Lesson findAccessible(Long lessonId, Long studentId) {
@@ -174,7 +183,15 @@ public class LessonReportService {
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
-    /** 한 수업에 숙제가 둘 이상일 수 있다. 마감이 이른 것 하나만 붙인다. */
+    /**
+     * 한 수업의 숙제 전부. 마감이 이른 순이다(findByLessonIds). 상세는 전부를 내려준다 —
+     * 하나만 붙이던 때 학부모 주간 레포트가 숙제를 하나만 보여 줬다(2026-09-29).
+     */
+    private List<Homework> homeworksOf(Long lessonId) {
+        return homeworkRepository.findByLessonIds(List.of(lessonId));
+    }
+
+    /** 목록 줄의 숙제 제목 하나. 한 수업에 숙제가 둘 이상이면 마감이 이른 것이다. */
     private Map<Long, Homework> firstHomeworkByLesson(List<Long> lessonIds) {
         if (lessonIds.isEmpty()) {
             return Map.of();

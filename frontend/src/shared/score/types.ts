@@ -160,6 +160,11 @@ export interface StudentScoreItem {
   result: TestResult | null;
   retestPassed: boolean;
   retestScheduled: boolean;
+  /**
+   * 미응시(2026-09-29). 반이 그 주에 그 시험을 봤는데 이 학생 칸만 비었다. 값 칸은 전부
+   * null이다 — 0점이 아니다. 판정은 서버다. 옛 서버에는 없어서 선택 필드다.
+   */
+  absent?: boolean;
 }
 
 export interface StudentScoreSection {

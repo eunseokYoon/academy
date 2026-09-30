@@ -165,7 +165,7 @@ class OnlineTestResult {
     required this.internalQuestionCount,
     required this.internalCorrect,
     required this.externalCorrect,
-    required this.answerFileUrl,
+    required this.answerFileUrls,
     required this.results,
   });
 
@@ -179,7 +179,9 @@ class OnlineTestResult {
   /// [internalQuestionCount] 가 null 이면 null 이다. **0 으로 채우지 마라**(14-3).
   final int? internalCorrect;
   final int? externalCorrect;
-  final String? answerFileUrl;
+
+  /// 해설지 전부(2026-09-29, 여러 장). 없으면 빈 목록이다.
+  final List<String> answerFileUrls;
   final List<QuestionResult> results;
 
   /// 내부·외부로 나눠 보여줄 수 있나. 셋 중 하나라도 없으면 맞힌 개수 하나다.
@@ -196,7 +198,11 @@ class OnlineTestResult {
         internalQuestionCount: (json['internalQuestionCount'] as num?)?.toInt(),
         internalCorrect: (json['internalCorrect'] as num?)?.toInt(),
         externalCorrect: (json['externalCorrect'] as num?)?.toInt(),
-        answerFileUrl: json['answerFileUrl'] as String?,
+        // 옛 서버에는 answerFileUrls 가 없다. 그때는 한 장(answerFileUrl)으로 받는다(7-3).
+        answerFileUrls: switch (json['answerFileUrls']) {
+          final List<dynamic> list => list.cast<String>(),
+          _ => [if (json['answerFileUrl'] case final String url) url],
+        },
         results: [
           for (final e in (json['results'] as List<dynamic>?) ?? const [])
             QuestionResult.fromJson(e as Map<String, dynamic>),

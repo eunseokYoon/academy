@@ -1168,4 +1168,72 @@ void main() {
       expect(count(), before + 1);
     });
   });
+
+  group('뒤로가기(2026-09-30)', () {
+    String path(WidgetTester tester) =>
+        GoRouter.of(tester.element(find.byType(RoleShell)))
+            .routerDelegate
+            .currentConfiguration
+            .uri
+            .path;
+
+    Future<void> expectBackToHome(
+      WidgetTester tester,
+      String location,
+      String home,
+    ) async {
+      GoRouter.of(tester.element(find.byType(RoleShell))).go(location);
+      await tester.pumpAndSettle();
+      // 한 화면에 뒤로가기는 하나다
+      expect(
+        find.byKey(const Key('page-back')),
+        findsOneWidget,
+        reason: location,
+      );
+      expect(find.text('← 뒤로가기'), findsOneWidget, reason: location);
+      await tester.tap(find.byKey(const Key('page-back')));
+      await tester.pumpAndSettle();
+      expect(path(tester), home, reason: location);
+    }
+
+    testWidgets('학생의 탭·하위 화면은 전부 「← 뒤로가기」이 있고 누르면 홈이다', (tester) async {
+      await _pumpAtRole(tester, role: UserRole.student);
+      for (final location in [
+        AppRoutes.studentHomeworks,
+        AppRoutes.studentLessons,
+        AppRoutes.studentScores,
+        AppRoutes.studentQna,
+        AppRoutes.studentClinics,
+        AppRoutes.studentOnlineTests,
+        AppRoutes.studentAttendances,
+        AppRoutes.studentNotices,
+      ]) {
+        await expectBackToHome(tester, location, AppRoutes.student);
+      }
+    });
+
+    testWidgets('학부모의 탭·하위 화면도 전부 「← 뒤로가기」이다', (tester) async {
+      await _pumpAtRole(tester, role: UserRole.parent);
+      for (final location in [
+        AppRoutes.parentSchedule,
+        AppRoutes.parentLessons,
+        AppRoutes.parentScores,
+        AppRoutes.parentMe,
+        AppRoutes.parentHomeworks,
+        AppRoutes.parentNotices,
+      ]) {
+        await expectBackToHome(tester, location, AppRoutes.parent);
+      }
+    });
+
+    testWidgets('상세 화면은 자기 목록으로 가는 뒤로가기 하나뿐이다', (tester) async {
+      await _pumpAtRole(tester, role: UserRole.student);
+      GoRouter.of(tester.element(find.byType(RoleShell)))
+          .go('${AppRoutes.studentLessons}/3');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('page-back')), findsOneWidget);
+      expect(find.text('← 수업 목록'), findsOneWidget);
+      expect(find.text('← 뒤로가기'), findsNothing);
+    });
+  });
 }

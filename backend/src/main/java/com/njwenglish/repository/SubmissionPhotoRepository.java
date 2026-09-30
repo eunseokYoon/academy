@@ -15,7 +15,7 @@ public interface SubmissionPhotoRepository extends JpaRepository<SubmissionPhoto
 
     /**
      * T-7 썸네일용. 20명 각각 조회하면 21쿼리가 나간다. 한 번에 가져와 매핑한다.
-     * 반 전체라도 최대 30명 × 10장이라 300행이 넘지 않는다.
+     * 반 전체라도 최대 30명 × 20장이라 600행이 넘지 않는다.
      */
     @Query("""
         SELECT p FROM SubmissionPhoto p

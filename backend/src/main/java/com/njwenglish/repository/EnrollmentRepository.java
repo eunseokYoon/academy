@@ -74,6 +74,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     List<Enrollment> findByStudentIdAndLeftAtIsNull(Long studentId);
 
+    /** 퇴원한 반까지 전부. 미응시 판정이 그 주에 다녔는지를 본다. */
+    List<Enrollment> findByStudentId(Long studentId);
+
     /**
      * D-day·시험 일정의 대상 반. 퇴원한 반이 섞이면 지난 학기 시험이 D-day로 뜬다.
      * 학생이 여러 반에 속할 수 있어 목록이다.

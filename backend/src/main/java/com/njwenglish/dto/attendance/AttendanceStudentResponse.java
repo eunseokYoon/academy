@@ -8,10 +8,17 @@ import com.njwenglish.entity.enums.AttendanceStatus;
 public record AttendanceStudentResponse(Long studentId,
                                         String name,
                                         AttendanceStatus status,
-                                        String memo) {
+                                        String memo,
+                                        /**
+                                         * 그 수업 영상 시청률(0~100, 2026-09-29). 영상이 없는 수업이면 null.
+                                         * 선생님 화면에만 있다 — 학부모에게는 비율을 보내지 않는다.
+                                         */
+                                        Integer watchPercent) {
 
     /** 확정 전 기본값은 전원 출석이다. 선생님은 안 온 학생만 지정한다. */
-    public static AttendanceStudentResponse present(Long studentId, String name) {
-        return new AttendanceStudentResponse(studentId, name, AttendanceStatus.PRESENT, null);
+    public static AttendanceStudentResponse present(Long studentId, String name,
+                                                    Integer watchPercent) {
+        return new AttendanceStudentResponse(studentId, name, AttendanceStatus.PRESENT, null,
+            watchPercent);
     }
 }

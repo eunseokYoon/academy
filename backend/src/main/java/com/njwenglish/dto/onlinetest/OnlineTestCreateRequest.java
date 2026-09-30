@@ -1,5 +1,7 @@
 package com.njwenglish.dto.onlinetest;
 
+import java.util.List;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -23,7 +25,10 @@ public record OnlineTestCreateRequest(
     @NotNull Short choiceCount,
     @NotEmpty Short[] correctChoices,
     Short[] points,
+    /** 옛 화면의 해설지 한 장. answerS3Keys 가 있으면 무시한다. 새 화면은 쓰지 마라. */
     String answerS3Key,
+    /** 해설지 여러 장(2026-09-29, 최대 5). 올린 순서다. */
+    List<String> answerS3Keys,
     /** 앞 N문항이 내부지문. null이면 내부·외부 집계를 하지 않는다. */
     @Min(0) Short internalQuestionCount,
     @NotNull Short year,

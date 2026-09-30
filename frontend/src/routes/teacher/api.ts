@@ -302,6 +302,8 @@ export interface AttendanceRosterRow {
   name: string;
   status: AttendanceStatus;
   memo: string | null;
+  /** 그 수업 영상 시청률(0~100, 2026-09-29). 영상이 없는 수업이면 null. 선생님만 본다. */
+  watchPercent?: number | null;
 }
 
 export interface AttendanceRoster {
@@ -877,8 +879,11 @@ export interface OnlineTestDetail extends Omit<OnlineTestListItem, "published"> 
   choiceCount: number;
   correctChoices: number[];
   points: number[] | null;
+  /** 첫 해설지(옛 필드). 새 화면은 answerFiles 를 읽어라. */
   answerS3Key: string | null;
   answerFileUrl: string | null;
+  /** 해설지 전부(2026-09-29). 옛 서버에는 없어서 `?? []` 로 받는다. */
+  answerFiles?: { s3Key: string; url: string }[];
   publishedAt: string | null;
 }
 
@@ -950,7 +955,10 @@ export const createOnlineTest = (body: {
   choiceCount: number;
   correctChoices: number[];
   points: number[] | null;
+  /** 옛 필드. 새 화면은 null 을 보내고 answerS3Keys 를 쓴다. */
   answerS3Key: string | null;
+  /** 해설지 여러 장(최대 5). 올린 순서다. */
+  answerS3Keys: string[];
   /** 앞 N문항이 내부지문. null이면 내부·외부 집계를 하지 않는다. */
   internalQuestionCount: number | null;
   year: number;
@@ -973,6 +981,8 @@ export const updateOnlineTest = (
     correctChoices: number[];
     points: number[] | null;
     answerS3Key: string | null;
+    /** 빼면 그대로, 빈 배열이면 전부 지운다(서버가 S3 에서도 지운다). */
+    answerS3Keys: string[];
     internalQuestionCount: number | null;
     year: number;
     month: number;
@@ -1026,6 +1036,11 @@ export interface TeacherDashboard {
     unlinkedParentCount: number;
     recentSignupCount: number;
     openJoinCodeCount: number;
+    /**
+     * 게시판을 마지막으로 연 뒤에 올라온 질문 수(2026-09-29). 게시판을 열면 0이 된다.
+     * 옛 서버에는 없어서 선택 필드다.
+     */
+    newQuestionCount?: number;
   };
   stats: { totalStudents: number; activeClassRooms: number };
 }
@@ -1108,6 +1123,13 @@ export const deleteNotice = (noticeId: number) => del<void>(`/teacher/notices/${
 
 export const fetchTeacherQnaList = (params: { classRoomId?: number; page?: number }) =>
   get<PageResponse<QnaSummary>>("/teacher/qna", params);
+
+/**
+ * 게시판을 열었다. 대시보드의 「새 질문」이 0이 된다. 앞서 연 시각을 돌려준다 —
+ * 그 뒤에 올라온 질문에 「새 글」을 붙인다. 글마다 읽음·답변 상태는 없다(확정).
+ */
+export const markTeacherQnaSeen = () =>
+  post<{ previousSeenAt: string | null }>("/teacher/qna/seen");
 
 export const fetchTeacherQnaDetail = (postId: number) =>
   get<QnaDetail>(`/teacher/qna/${postId}`);

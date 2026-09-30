@@ -44,7 +44,7 @@ class PickedVideo {
 const int kMaxVideoBytes = 100 * 1024 * 1024;
 
 /// 사진 장수 상한. 서버 `SubmissionService.MAX_PHOTOS` 와 같다.
-const int kMaxPhotos = 10;
+const int kMaxPhotos = 20;
 
 /// 확장자 → 형식. `video/quicktime` 을 빼지 마라 — 아이폰 제출이 통째로
 /// 막힌다(6번). 기기가 알려주는 MIME 은 자주 비어 있어서 확장자로 본다.

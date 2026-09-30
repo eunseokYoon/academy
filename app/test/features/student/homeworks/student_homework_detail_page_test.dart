@@ -203,8 +203,9 @@ void main() {
 
     await _choose(tester, const Key('add-photo'), const Key('source-gallery'));
 
-    // 남은 칸만큼만 고르게 한다(10 - 1).
-    expect(h.picker.photoCalls.single, (MediaFrom.gallery, 9));
+    // 남은 칸만큼만 고르게 한다(상한 20 - 이미 1장 = 19).
+    expect(kMaxPhotos, 20);
+    expect(h.picker.photoCalls.single, (MediaFrom.gallery, kMaxPhotos - 1));
     // 이미 있는 1장 뒤에 이어 붙인다.
     expect(h.uploader.photoSortOrders, [2, 3]);
     expect(h.changed, 1);

@@ -41,8 +41,22 @@ public record LessonReportResponse(
     String homeworkNote,
     /** 이번 주 클리닉 안내. 학생·학부모 둘 다 본다. */
     String clinicNote,
+    /**
+     * 첫 숙제. {@link #homeworks}의 첫 원소와 같다. <b>지우지 마라</b> — 배포가 backend → web
+     * 순서라 옛 화면이 이 필드를 읽는다(7-3). 새 화면은 homeworks를 읽는다.
+     */
     Homework homework,
-    AttendanceStatus attendanceStatus
+    /**
+     * 수업에 걸린 숙제 전부(2026-09-29). 한 수업에 그리드 열이 여럿이면 여럿이다 —
+     * 하나만 붙이던 때 학부모 주간 레포트가 숙제를 하나만 보여 줬다. 없으면 빈 배열이다.
+     */
+    List<Homework> homeworks,
+    AttendanceStatus attendanceStatus,
+    /**
+     * 학부모에게 보이는 영상 시청 현황(2026-09-29). 영상이 없는 수업·학생 응답이면 null.
+     * <b>비율은 보내지 않는다</b>({@link VideoWatchState}).
+     */
+    VideoWatchState videoWatch
 ) {
     /**
      * 수업에 딸린 숙제가 없으면 null이다. 사진·피드백은 어느 쪽에도 오지 않는다.
@@ -106,10 +120,11 @@ public record LessonReportResponse(
                                                   List<LessonVideoResponse> videos,
                                                   String content, String keyPoints,
                                                   String homeworkNote, String clinicNote,
-                                                  Homework homework,
+                                                  List<Homework> homeworks,
                                                   AttendanceStatus attendanceStatus) {
         return new LessonReportResponse(lessonId, lessonDate, title, classRoomName,
-            videos, content, keyPoints, homeworkNote, clinicNote, homework, attendanceStatus);
+            videos, content, keyPoints, homeworkNote, clinicNote, first(homeworks),
+            List.copyOf(homeworks), attendanceStatus, null);
     }
 
     /**
@@ -120,9 +135,15 @@ public record LessonReportResponse(
                                                  String title, String classRoomName,
                                                  String content, String keyPoints,
                                                  String homeworkNote, String clinicNote,
-                                                 Homework homework,
-                                                 AttendanceStatus attendanceStatus) {
+                                                 List<Homework> homeworks,
+                                                 AttendanceStatus attendanceStatus,
+                                                 VideoWatchState videoWatch) {
         return new LessonReportResponse(lessonId, lessonDate, title, classRoomName,
-            List.of(), content, keyPoints, homeworkNote, clinicNote, homework, attendanceStatus);
+            List.of(), content, keyPoints, homeworkNote, clinicNote, first(homeworks),
+            List.copyOf(homeworks), attendanceStatus, videoWatch);
+    }
+
+    private static Homework first(List<Homework> homeworks) {
+        return homeworks.isEmpty() ? null : homeworks.get(0);
     }
 }

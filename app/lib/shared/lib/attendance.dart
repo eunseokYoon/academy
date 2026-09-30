@@ -17,6 +17,10 @@ enum DayStatus {
   /// 대체 등원. **출석으로 친다**(5-1) — 요약의 「출석」 칸이 `present + makeup`
   /// 이고, 어느 날이 대체 등원이었는지는 칩의 글씨가 보여준다.
   makeup('MAKEUP', '대체 등원'),
+
+  /// 온라인(2026-09-29). 수업에 못 오고 영상으로 들었다. **출석으로 친다.**
+  /// 결석인 학생이 영상을 80% 이상 보면 서버가 이 값으로 바꾼다.
+  online('ONLINE', '온라인'),
   pending('PENDING', '미확인');
 
   const DayStatus(this.wire, this.label);
@@ -81,6 +85,11 @@ DayStatusStyle dayStatusStyle(DayStatus status) => switch (status) {
     AppColors.teal800,
     AppColors.teal200,
   ),
+  DayStatus.online => const DayStatusStyle(
+    AppColors.violet100,
+    AppColors.violet800,
+    AppColors.violet200,
+  ),
   DayStatus.pending => const DayStatusStyle(
     AppColors.slate100,
     AppColors.slate400,
@@ -97,6 +106,7 @@ class AttendanceSummary {
     required this.sick,
     required this.excused,
     required this.makeup,
+    this.online = 0,
   });
 
   final int present;
@@ -106,9 +116,12 @@ class AttendanceSummary {
   final int excused;
   final int makeup;
 
-  /// 요약의 「출석」 칸. **`present` 만 쓰지 마라** — 대체 등원한 날이 출석·지각·
+  /// 온라인(2026-09-29). 출석으로 친다.
+  final int online;
+
+  /// 요약의 「출석」 칸. **`present` 만 쓰지 마라** — 대체 등원·온라인 날이 출석·지각·
   /// 결석 어디에도 안 잡힌다(5-1, 14-11).
-  int get attended => present + makeup;
+  int get attended => present + makeup + online;
 
   factory AttendanceSummary.fromJson(Map<String, dynamic> json) {
     int n(String key) => (json[key] as num?)?.toInt() ?? 0;
@@ -119,6 +132,7 @@ class AttendanceSummary {
       sick: n('sick'),
       excused: n('excused'),
       makeup: n('makeup'),
+      online: n('online'),
     );
   }
 }

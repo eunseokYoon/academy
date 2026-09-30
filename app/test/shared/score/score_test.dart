@@ -237,6 +237,64 @@ void main() {
     });
   });
 
+  group('미응시(2026-09-29)', () {
+    const absent = ScoreItem(
+      year: 2026,
+      month: 9,
+      week: 2,
+      weekLabel: '9월 2주',
+      absent: true,
+    );
+
+    test('absent 를 읽고, 옛 서버(필드 없음)는 false 다', () {
+      Map<String, dynamic> j(Map<String, dynamic> extra) => {
+        'year': 2026,
+        'month': 9,
+        'week': 2,
+        'weekLabel': '9월 2주',
+        ...extra,
+      };
+      expect(ScoreItem.fromJson(j({'absent': true})).absent, isTrue);
+      expect(ScoreItem.fromJson(j({})).absent, isFalse);
+    });
+
+    test('그래프는 미응시 줄을 건너뛴다', () {
+      final l = layoutChart([
+        _i(1, correct: 10, total: 20),
+        absent,
+        _i(3, correct: 12, total: 20),
+      ], ChartKind.bar)!;
+      expect(l.bars.length, 2);
+    });
+
+    testWidgets('목록에 회색 [미응시] 가 뜨고 점수·배지는 없다', (tester) async {
+      await _pump(
+        tester,
+        ScoreSectionList(
+          data: ScoreData(
+            retestScheduled: const [],
+            sections: [
+              ScoreSection(
+                testType: 'WORD',
+                label: '단어 테스트',
+                chartKind: ChartKind.none,
+                items: [
+                  _i(1, correct: 12, total: 15, result: 'PASS'),
+                  absent,
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(find.text('단어 테스트'), findsOneWidget);
+      expect(find.byKey(const Key('score-absent')), findsOneWidget);
+      expect(find.text('미응시'), findsOneWidget);
+      expect(find.byKey(const Key('score-result')), findsOneWidget); // 1주의 통과만
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('시험 일정', () {
     ExamSchedule e(String type, int dDay) => ExamSchedule(
       examType: type,
