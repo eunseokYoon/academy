@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -65,14 +66,12 @@ class StudentOnlineTestPage extends StatefulWidget {
 
 class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
     with ReappearReload<StudentOnlineTestPage> {
-  /// 화면이 들고 있는 답. 서버 응답으로 **한 번만** 채운다 — 다시 받아도 덮지
-  /// 않는다(고르는 중에 새로고침이 오면 방금 고른 답이 사라진다).
+  /// 화면이 들고 있는 답. **한 번만** 채운다 — 다시 받아도 덮지 않는다(고르는
+  /// 중에 새로고침이 오면 방금 고른 답이 사라진다). 컨트롤러의 초안이 서버 응답보다
+  /// 먼저다([OnlineTestTakeController.draftOf]).
   List<int?>? _answers;
   bool _dirty = false;
   Timer? _timer;
-
-  /// 저장을 한 줄로 세운다 — 앞 저장이 늦게 끝나 뒤 저장을 덮지 않게.
-  Future<void> _saving = Future<void>.value();
   DateTime? _savedAt;
   String? _saveError;
 
@@ -122,15 +121,22 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
     if (mounted) setState(() {});
   }
 
-  /// 서버가 준 답으로 한 번 채운다. 빌드에서 부른다 — 컨트롤러가 이미 데이터를
-  /// 들고 있으면(60초 안에 다시 들어옴) 알림이 오지 않아서다.
+  /// 한 번 채운다. 빌드에서 부른다 — 컨트롤러가 이미 데이터를 들고 있으면(60초
+  /// 안에 다시 들어옴) 알림이 오지 않아서다. 그때의 [OnlineTestTakeController.data]
+  /// 는 처음 받은 답이라 떠나기 전에 고른 답이 없다 — 초안을 먼저 본다.
   void _seedAnswers() {
     final view = widget.controller.data;
     if (_answers == null &&
         view != null &&
         view.take.testId == _id &&
         view.result == null) {
-      _answers = [...view.take.chosenChoices];
+      final draft = widget.controller.draftOf(_id);
+      _answers = [...draft ?? view.take.chosenChoices];
+      // 떠날 때의 저장이 실패했을 수 있다. 서버 답과 다르면 아직 안 나간 답으로 둔다 —
+      // 제출·자동 저장이 먼저 흘려 보낸다.
+      if (draft != null && !listEquals(draft, view.take.chosenChoices)) {
+        _dirty = true;
+      }
     }
   }
 
@@ -144,6 +150,7 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
       // 같은 번호를 다시 누르면 선택 해제다 — 틀린 답 확정보다 미체크가 낫다.
       answers[index] = answers[index] == choice ? null : choice;
       _dirty = true;
+      widget.controller.keepDraft(_id, answers);
       _saveError = null;
     });
     _timer?.cancel();
@@ -154,10 +161,11 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
   Future<void> _flush() {
     _timer?.cancel();
     final answers = _answers;
-    if (!_dirty || answers == null || _result != null) return _saving;
+    final c = widget.controller;
+    if (!_dirty || answers == null || _result != null) return c.saving;
     _dirty = false;
     final snapshot = [...answers];
-    return _saving = _saving.then((_) async {
+    return c.saving = c.saving.then((_) async {
       try {
         await widget.controller.repository.saveAnswers(_id, snapshot);
         if (mounted) setState(() => _savedAt = DateTime.now());
@@ -181,11 +189,9 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
     if (!_dirty || answers == null || _result != null) return;
     _dirty = false;
     final snapshot = [...answers];
-    unawaited(
-      _saving
-          .then((_) => controller.repository.saveAnswers(testId, snapshot))
-          .catchError((_) {}),
-    );
+    controller.saving = controller.saving
+        .then((_) => controller.repository.saveAnswers(testId, snapshot))
+        .catchError((_) {});
   }
 
   Future<void> _submit() async {
@@ -224,6 +230,7 @@ class _StudentOnlineTestPageState extends State<StudentOnlineTestPage>
     }
     try {
       final result = await widget.controller.repository.submit(_id);
+      widget.controller.clearDraft(_id);
       if (!mounted) return;
       widget.controller.markStale();
       widget.onSubmitted();

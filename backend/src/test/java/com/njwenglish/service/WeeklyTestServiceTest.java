@@ -452,6 +452,89 @@ class WeeklyTestServiceTest {
         verify(weeklyTestScoreRepository).delete(old);
     }
 
+    @Test
+    @DisplayName("화면을 연 뒤에 자동 반영된 클리닉이 있으면 헤더가 빈 채 저장해도 열을 지우지 않는다")
+    void 화면을_연_뒤에_생긴_헤더는_지키다() {
+        // 그리드를 열 때 그 주 클리닉 헤더가 없어 화면의 헤더 칸은 비어 있다. 그 사이
+        // 학생이 온라인 클리닉 테스트를 내 헤더와 칸이 생겼다. 선생님은 단어 점수만 적고
+        // 저장한다 — 비어 있던 클리닉 헤더가 삭제로 읽히면 CASCADE로 성적이 사라진다
+        OffsetDateTime loadedAt = OffsetDateTime.now().minusMinutes(10);
+        WeeklyTest header = clinicHeader(700L, (short) 15, (short) 15);
+        WeeklyTestScore autoFilled = WeeklyTestScore.create(header, hanul,
+            null, (short) 12, (short) 9, null, false);
+        ReflectionTestUtils.setField(autoFilled, "updatedAt", OffsetDateTime.now());
+
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.CLINIC, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(header));
+        given(weeklyTestScoreRepository.findByWeeklyTestIdIn(List.of(700L)))
+            .willReturn(List.of(autoFilled));
+
+        weeklyTestService.save(new WeeklyTestSaveRequest(3L, (short) 2026, (short) 5, (short) 3,
+            loadedAt,
+            List.of(new WeeklyTestSaveRequest.TestInput(
+                WeeklyTestType.CLINIC, null, null, null,
+                List.of(new WeeklyTestSaveRequest.CellInput(
+                    88L, null, null, null, null, false))))));
+
+        verify(weeklyTestRepository, never()).delete(any());
+        verify(weeklyTestScoreRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("새 칸과 옛 칸이 섞여 있으면 헤더는 남기고 화면에 보였던 칸만 지운다")
+    void 헤더를_비워도_옛_칸만_지운다() {
+        OffsetDateTime loadedAt = OffsetDateTime.now().minusMinutes(10);
+        WeeklyTest header = clinicHeader(700L, (short) 15, (short) 15);
+        WeeklyTestScore autoFilled = WeeklyTestScore.create(header, hanul,
+            null, (short) 12, (short) 9, null, false);
+        ReflectionTestUtils.setField(autoFilled, "updatedAt", OffsetDateTime.now());
+        WeeklyTestScore old = WeeklyTestScore.create(header, seojun,
+            null, (short) 10, (short) 8, null, false);
+        ReflectionTestUtils.setField(old, "updatedAt", OffsetDateTime.now().minusHours(1));
+
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.CLINIC, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(header));
+        given(weeklyTestScoreRepository.findByWeeklyTestIdIn(List.of(700L)))
+            .willReturn(List.of(autoFilled, old));
+
+        weeklyTestService.save(new WeeklyTestSaveRequest(3L, (short) 2026, (short) 5, (short) 3,
+            loadedAt,
+            List.of(new WeeklyTestSaveRequest.TestInput(
+                WeeklyTestType.CLINIC, null, null, null, List.of()))));
+
+        verify(weeklyTestRepository, never()).delete(any());
+        verify(weeklyTestScoreRepository).delete(old);
+        verify(weeklyTestScoreRepository, never()).delete(autoFilled);
+    }
+
+    @Test
+    @DisplayName("화면을 연 뒤에 바뀐 칸이 없으면 헤더를 비운 열은 통째로 지운다")
+    void 새_칸이_없으면_헤더를_지운다() {
+        OffsetDateTime loadedAt = OffsetDateTime.now();
+        WeeklyTest header = clinicHeader(700L, (short) 15, (short) 15);
+        WeeklyTestScore old = WeeklyTestScore.create(header, hanul,
+            null, (short) 12, (short) 9, null, false);
+        ReflectionTestUtils.setField(old, "updatedAt", OffsetDateTime.now().minusHours(1));
+
+        given(classRoomRepository.findById(3L)).willReturn(Optional.of(classRoom));
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.CLINIC, (short) 2026, (short) 5, (short) 3))
+            .willReturn(Optional.of(header));
+        given(weeklyTestScoreRepository.findByWeeklyTestIdIn(List.of(700L)))
+            .willReturn(List.of(old));
+
+        weeklyTestService.save(new WeeklyTestSaveRequest(3L, (short) 2026, (short) 5, (short) 3,
+            loadedAt,
+            List.of(new WeeklyTestSaveRequest.TestInput(
+                WeeklyTestType.CLINIC, null, null, null, List.of()))));
+
+        verify(weeklyTestRepository).delete(header);
+    }
+
     // ---------- 푸시(#4) ----------
 
     private void givenWordColumn(WeeklyTest test, WeeklyTestScore existing) {

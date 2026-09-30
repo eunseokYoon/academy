@@ -435,5 +435,62 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.repo.saves.single, [2, null, 1]);
     });
+
+    // 2026-09-30 리뷰: 컨트롤러는 세션 수명이라 처음 받은 답([2, null, null])을 들고
+    // 있다. 60초 안에 다시 들어오면 load 가 건너뛰어 그 옛 답으로 화면을 채웠고,
+    // 다음 자동 저장이 떠나기 전에 저장된 3번 답을 null 로 덮었다.
+    Future<void> reenter(WidgetTester tester, _Harness h) async {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      await _pump(
+        tester,
+        StudentOnlineTestPage(
+          testId: 7,
+          controller: h.controller,
+          openUrl: (_) async => true,
+          onSubmitted: () {},
+          now: () => _before,
+        ),
+      );
+    }
+
+    testWidgets('나갔다 60초 안에 다시 들어와도 떠나기 전에 고른 답을 덮지 않는다', (
+      tester,
+    ) async {
+      final h = await _pumpTake(tester, _Repo());
+      await tester.tap(find.byKey(const ValueKey('q-2-1')));
+      await tester.pump();
+      await reenter(tester, h);
+      expect(h.repo.log, ['take', 'save']); // 60초 규칙 — 다시 받지 않았다
+      expect(find.text('9월 2주 클리닉'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('q-1-3')));
+      await tester.pump(kAutosaveDelay);
+      await tester.pumpAndSettle();
+      expect(h.repo.saves.last, [2, 3, 1]);
+    });
+
+    testWidgets('떠날 때 저장이 실패했으면 다시 들어와 제출할 때 그 답을 먼저 저장한다', (
+      tester,
+    ) async {
+      final repo = _Repo(saveError: Exception('offline'));
+      final h = await _pumpTake(tester, repo);
+      await tester.tap(find.byKey(const ValueKey('q-2-1')));
+      await tester.pump();
+      await reenter(tester, h);
+
+      repo.saveError = null;
+      await _confirmSubmit(tester);
+      expect(repo.saves.single, [2, null, 1]);
+      expect(repo.log.last, 'submit');
+    });
+
+    testWidgets('제출하면 초안을 지운다', (tester) async {
+      final h = await _pumpTake(tester, _Repo());
+      await tester.tap(find.byKey(const ValueKey('q-2-1')));
+      await tester.pump();
+      await _confirmSubmit(tester);
+      expect(h.controller.draftOf(7), isNull);
+    });
   });
 }

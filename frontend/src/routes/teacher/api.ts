@@ -313,6 +313,12 @@ export interface AttendanceRoster {
   lessonDate: string;
   attendanceStatus: LessonAttendanceStatus;
   students: AttendanceRosterRow[];
+  /**
+   * 명단을 만든 서버 시각. 확정 요청이 그대로 돌려보낸다 — 화면을 연 뒤 영상 시청으로
+   * 온라인이 된 학생을 서버가 알아본다(없으면 화면의 옛 결석이 「되돌림」으로 읽혀 영구히 막힌다).
+   * 옛 서버는 안 준다.
+   */
+  loadedAt?: string;
 }
 
 export interface PendingLesson {
@@ -352,13 +358,17 @@ export interface AttendanceException {
 export const getAttendanceRoster = (lessonId: number) =>
   get<AttendanceRoster>(`/teacher/lessons/${lessonId}/attendance`);
 
-export const confirmAttendance = (lessonId: number, exceptions: AttendanceException[]) =>
+export const confirmAttendance = (
+  lessonId: number,
+  exceptions: AttendanceException[],
+  loadedAt: string | null,
+) =>
   post<{
     lessonId: number;
     attendanceStatus: LessonAttendanceStatus;
     confirmedAt: string;
     summary: AttendanceSummary;
-  }>(`/teacher/lessons/${lessonId}/attendance/confirm`, { exceptions });
+  }>(`/teacher/lessons/${lessonId}/attendance/confirm`, { exceptions, loadedAt });
 
 export const listPendingAttendance = () =>
   get<PendingAttendance>("/teacher/attendance/pending");
