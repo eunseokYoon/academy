@@ -94,7 +94,7 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
       YoutubePlayer(
         embedUrl: embedUrl,
         openUrl: widget.openUrl,
-        // 시청 기록(2026-09-29). 결석인 학생이 80% 이상 보면 서버가 출결을 온라인으로 바꾼다
+        // 시청 기록(2026-09-29). 선생님이 T-5 에서 이 시청률을 보고 온라인 출석을 고른다
         onWatch: (duration, buckets) => widget.controller.reportWatch(
           widget.lessonId,
           embedUrl,

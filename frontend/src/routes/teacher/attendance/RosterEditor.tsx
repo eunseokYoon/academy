@@ -89,8 +89,8 @@ export function RosterEditor({
               <span className="block text-xs text-slate-600">
                 {STATUS_LABEL[row.status]}
                 {/*
-                  영상 시청률(2026-09-29). 결석인데 80% 이상 보면 서버가 온라인으로 바꾼다.
-                  기기가 보내는 값이라 참고용이다 — 선생님이 상태를 고쳐 주면 그게 우선이다
+                  영상 시청률(2026-09-29). 선생님이 이 값을 보고 온라인을 직접 고른다 — 서버가
+                  출결을 자동으로 바꾸지 않는다(2026-09-30). 기기가 보내는 값이라 판단의 참고일 뿐이다
                 */}
                 {row.watchPercent != null && ` · 영상 ${row.watchPercent}%`}
               </span>

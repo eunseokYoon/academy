@@ -50,7 +50,7 @@ public class StudentLessonController {
 
     /**
      * 재생 보고(2026-09-29). 플레이어가 10~15초마다·멈춤·끝·떠날 때 보낸다. 매초 부르지 마라.
-     * 결석인 학생이 기준 이상 보면 출결이 온라인이 된다(VideoWatchService).
+     * 출결은 바꾸지 않는다 — 선생님이 T-5 에서 시청률을 보고 온라인을 고른다(2026-09-30).
      */
     @PostMapping("/{lessonId}/watch")
     public ApiResponse<Void> watch(@PathVariable Long lessonId,

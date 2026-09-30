@@ -9,7 +9,6 @@ import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.LessonVideo;
 import com.njwenglish.entity.LessonVideoWatch;
 import com.njwenglish.entity.Student;
-import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.LessonVideoWatchRepository;
 import java.time.OffsetDateTime;
@@ -27,20 +26,20 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>수업 시청률은 <b>그 수업의 지금 영상들 시청률의 평균</b>이다. 안 연 영상은 0%다.
  * 영상이 없는 수업은 null — 0%가 아니다(볼 것이 없었다).
  *
- * <p><b>결석인 학생이 {@link #ONLINE_THRESHOLD}% 이상 보면 출결이 자동으로 온라인이 된다.</b>
- * 선생님이 온라인을 되돌렸으면 다시 바뀌지 않는다({@code Attendance.onlineAutoBlocked}).
- * 출석·지각 등 이미 온 학생은 영상을 봐도 그대로다.
+ * <p><b>출결을 바꾸지 않는다(2026-09-30 사용자 결정).</b> 온라인 출석은 선생님이 T-5 에서
+ * 시청률을 보고 직접 고른다. 결석 + 80% 이면 자동으로 온라인이 되던 규칙(09-29)은 없앴다 —
+ * 자동으로 바꾸면 선생님이 되돌린 값을 기억할 장치({@code online_auto_blocked})와 열어 둔 명단의
+ * 옛 값을 가려낼 장치가 따라붙고, 그래도 선생님이 판단할 여지가 사라진다.
  */
 @Service
 @RequiredArgsConstructor
 public class VideoWatchService {
 
-    /** 온라인 출결 기준(%). 학부모의 「시청 완료」도 이 값이다. */
-    public static final int ONLINE_THRESHOLD = 80;
+    /** 학부모에게 「시청 완료」로 보이는 기준(%). 출결은 바꾸지 않는다(클래스 주석). */
+    public static final int WATCHED_THRESHOLD = 80;
 
     private final LessonRepository lessonRepository;
     private final LessonVideoWatchRepository watchRepository;
-    private final AttendanceRepository attendanceRepository;
     private final StudentAccessGuard studentAccessGuard;
 
     /**
@@ -67,13 +66,6 @@ public class VideoWatchService {
             .orElseGet(() -> watchRepository.save(
                 LessonVideoWatch.start(lesson, me, video.getUrl(), bucketCount, now)));
         watch.markWatched(request.buckets(), bucketCount, now);
-
-        Integer percent = percentOf(lesson, watchRepository.findByLessonIdAndStudentId(
-            lessonId, me.getId()));
-        if (percent != null && percent >= ONLINE_THRESHOLD) {
-            attendanceRepository.findByLessonIdAndStudentId(lessonId, me.getId())
-                .ifPresent(attendance -> attendance.markOnlineByWatch());
-        }
     }
 
     /** 한 학생의 수업 시청률. 영상이 없는 수업이면 null. */

@@ -99,7 +99,7 @@ public class AttendanceService {
 
         return new AttendanceRosterResponse(lesson.getId(), lesson.getClassRoom().getId(),
             lesson.getClassRoom().getName(), lesson.getLessonDate(),
-            lesson.getAttendanceStatus(), rows, OffsetDateTime.now());
+            lesson.getAttendanceStatus(), rows);
     }
 
     /**
@@ -124,9 +124,7 @@ public class AttendanceService {
         requireAllInRoster(exceptions.keySet(), students);
 
         Teacher teacher = currentTeacher();
-        // 재확정이면 앞 값이 있다 — 온라인을 되돌렸는지(막힘)를 판단하는 데 쓴다
-        Map<Long, Attendance> before = indexByStudent(attendanceRepository.findByLessonId(lessonId));
-        Map<Long, Integer> watch = videoWatchService.lessonPercents(lesson);
+        // 온라인은 선생님이 명단의 시청률을 보고 직접 고른다(2026-09-30). 시청률로 바꾸지 마라
         List<AttendanceStatus> statuses = new ArrayList<>(students.size());
         for (Student student : students) {
             AttendanceExceptionRequest exception = exceptions.get(student.getId());
@@ -134,23 +132,9 @@ public class AttendanceService {
                 ? AttendanceStatus.PRESENT : exception.status();
             String memo = exception == null ? null : exception.memo();
 
-            Attendance previous = before.get(student.getId());
-            if (watchedAfterLoad(previous, status, request.loadedAt())) {
-                status = AttendanceStatus.ONLINE;
-            }
-            boolean blocked = Attendance.nextOnlineAutoBlocked(
-                previous == null ? null : previous.getStatus(), status,
-                previous != null && previous.isOnlineAutoBlocked());
-            // 결석으로 찍었는데 이미 영상을 기준 이상 봤으면 온라인이다(선생님이 막지 않았으면)
-            if (status == AttendanceStatus.ABSENT && !blocked
-                && watch.getOrDefault(student.getId(), 0) >= VideoWatchService.ONLINE_THRESHOLD) {
-                status = AttendanceStatus.ONLINE;
-            }
-
             // attend_date에 lesson_date를 복사한다. 캘린더 조회가 이 컬럼에 의존한다
             attendanceRepository.upsert(lesson.getId(), lesson.getClassRoom().getId(),
-                student.getId(), lesson.getLessonDate(), status.name(), memo, teacher.getId(),
-                blocked);
+                student.getId(), lesson.getLessonDate(), status.name(), memo, teacher.getId());
             statuses.add(status);
         }
 
@@ -162,30 +146,6 @@ public class AttendanceService {
 
         return new AttendanceConfirmResponse(lesson.getId(), LessonAttendanceStatus.CONFIRMED,
             now, AttendanceSummaryResponse.of(statuses));
-    }
-
-    /**
-     * 선생님이 명단을 연 뒤에 영상 시청으로 온라인이 된 학생인가. 그렇다면 요청의 값은
-     * 선생님이 고른 것이 아니라 화면에 떠 있던 옛 값(결석)이다.
-     *
-     * <p>그대로 저장하면 {@link Attendance#nextOnlineAutoBlocked}가 「온라인을 되돌렸다」로
-     * 읽어 {@code online_auto_blocked}를 켠다. 영상을 다 본 학생이 영구히 결석이 되고
-     * 선생님은 되돌린 적이 없으니 알아챌 수도 없다(2026-09-30 리뷰). 성적 그리드의
-     * loadedAt(7-0)과 같은 이유다.
-     *
-     * <p>명단을 연 <b>뒤</b>에 바뀐 행만 본다. 화면에 온라인이 보였는데 다른 값으로 바꿨다면
-     * 선생님의 되돌림이라 그대로 따른다. 확정 upsert는 처음 넣는 행의 {@code updated_at}을
-     * 비워 두므로 null은 「명단보다 오래됐다」다. 자동 전환({@link Attendance#markOnlineByWatch})은
-     * 언제나 {@code updated_at}을 남긴다.
-     */
-    private static boolean watchedAfterLoad(Attendance previous, AttendanceStatus requested,
-                                            OffsetDateTime loadedAt) {
-        return loadedAt != null
-            && previous != null
-            && previous.getStatus() == AttendanceStatus.ONLINE
-            && requested != AttendanceStatus.ONLINE
-            && previous.getUpdatedAt() != null
-            && previous.getUpdatedAt().isAfter(loadedAt);
     }
 
     /**

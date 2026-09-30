@@ -316,10 +316,7 @@ function LessonConfirmPanel({ lessonId, onBack }: { lessonId: number; onBack: ()
   });
 
   const mutation = useMutation({
-    // 화면이 보고 있는 명단의 시각을 돌려보낸다. RosterEditor 는 명단을 다시 받으면 초안을
-    // 새 명단으로 되돌리므로 이 값이 곧 화면에 보이는 상태의 시각이다
-    mutationFn: (exceptions: AttendanceException[]) =>
-      confirmAttendance(lessonId, exceptions, roster.data?.loadedAt ?? null),
+    mutationFn: (exceptions: AttendanceException[]) => confirmAttendance(lessonId, exceptions),
     onSuccess: async (result) => {
       setError(null);
       setDone(
