@@ -16,6 +16,14 @@ import type { StudentScoreItem } from "../score/types";
  * 그래서 순서가 중요하다 — 내부·외부를 먼저 본다.
  */
 export function ScoreValueText({ item }: { item: StudentScoreItem }) {
+  // 빨강이 아니다 — 빨강은 결석·위험 하나다. 안 본 시험은 회색으로 사실만 알린다
+  if (item.absent) {
+    return (
+      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+        미응시
+      </span>
+    );
+  }
   if (item.internalCorrect !== null || item.externalCorrect !== null) {
     return (
       <span className="tnum text-slate-700">

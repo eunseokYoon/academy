@@ -7,7 +7,10 @@ import com.njwenglish.entity.enums.StudentStatus;
 import com.njwenglish.repository.ClassRoomRepository;
 import com.njwenglish.repository.EnrollmentRepository;
 import com.njwenglish.repository.LessonRepository;
+import com.njwenglish.repository.QnaPostRepository;
 import com.njwenglish.repository.StudentRepository;
+import com.njwenglish.repository.TeacherRepository;
+import com.njwenglish.common.security.CurrentUser;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -37,6 +40,8 @@ public class DashboardService {
     private final StudentRepository studentRepository;
     private final ClassRoomRepository classRoomRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final TeacherRepository teacherRepository;
+    private final QnaPostRepository qnaPostRepository;
 
     @Transactional(readOnly = true)
     public TeacherDashboardResponse dashboard() {
@@ -93,6 +98,14 @@ public class DashboardService {
             studentRepository.countByStatusAndUserIsNull(StudentStatus.ENROLLED),
             studentRepository.countByStatusAndParentIsNull(StudentStatus.ENROLLED),
             studentRepository.countByCreatedAtGreaterThanEqual(signupFrom),
-            classRoomRepository.countByStatusAndJoinCodeActiveTrue(ClassRoomStatus.ACTIVE));
+            classRoomRepository.countByStatusAndJoinCodeActiveTrue(ClassRoomStatus.ACTIVE),
+            newQuestionCount());
+    }
+
+    /** 선생님이 게시판을 마지막으로 연 뒤의 질문. 선생님 행이 없으면(관리 계정 등) 0이다. */
+    private long newQuestionCount() {
+        return teacherRepository.findByUserId(CurrentUser.get().userId())
+            .map(teacher -> qnaPostRepository.countRootsCreatedAfter(teacher.getQnaSeenAt()))
+            .orElse(0L);
     }
 }

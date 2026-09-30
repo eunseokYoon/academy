@@ -68,6 +68,30 @@ class ScoreValueWithBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 빨강이 아니다 — 빨강은 결석·위험 하나다. 안 본 시험은 회색으로 사실만 알린다(웹과 같다).
+    if (item.absent) {
+      // 줄 오른쪽에 붙인다. Expanded 안이라 감싸지 않으면 알약이 줄 폭만큼 늘어난다.
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          key: const Key('score-absent'),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.slate100,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: const Text(
+            '미응시',
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.slate600,
+            ),
+          ),
+        ),
+      );
+    }
     final text = scoreValueText(item);
     return Wrap(
       alignment: WrapAlignment.end,

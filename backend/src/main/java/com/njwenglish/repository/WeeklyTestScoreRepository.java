@@ -72,4 +72,23 @@ public interface WeeklyTestScoreRepository extends JpaRepository<WeeklyTestScore
                                              @Param("year") short year,
                                              @Param("month") short month,
                                              @Param("week") short week);
+
+    /**
+     * 학생 한 명의 그 주차 클리닉 칸이 차 있는가. S-10 목록이 오프라인으로 본 테스트를
+     * 거르는 데 쓴다 — T-14의 {@link #findStudentIdsWithClinicScore}와 같은 조건이다.
+     */
+    @Query("""
+        SELECT COUNT(s) > 0 FROM WeeklyTestScore s
+        WHERE s.student.id = :studentId
+          AND s.weeklyTest.classRoom.id = :classRoomId
+          AND s.weeklyTest.testType = 'CLINIC'
+          AND s.weeklyTest.year = :year
+          AND s.weeklyTest.month = :month
+          AND s.weeklyTest.week = :week
+        """)
+    boolean hasClinicScore(@Param("studentId") Long studentId,
+                           @Param("classRoomId") Long classRoomId,
+                           @Param("year") short year,
+                           @Param("month") short month,
+                           @Param("week") short week);
 }

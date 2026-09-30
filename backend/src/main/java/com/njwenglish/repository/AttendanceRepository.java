@@ -27,12 +27,13 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     @Query(value = """
         INSERT INTO attendances
           (lesson_id, class_room_id, student_id, attend_date, status, memo,
-           checked_by, checked_at, created_at)
+           checked_by, checked_at, created_at, online_auto_blocked)
         VALUES (:lessonId, :classRoomId, :studentId, :attendDate, :status, :memo,
-                :teacherId, now(), now())
+                :teacherId, now(), now(), :onlineAutoBlocked)
         ON CONFLICT (student_id, lesson_id) DO UPDATE
         SET status = EXCLUDED.status,
             memo = EXCLUDED.memo,
+            online_auto_blocked = EXCLUDED.online_auto_blocked,
             updated_by = EXCLUDED.checked_by,
             updated_at = now()
         """, nativeQuery = true)
@@ -42,7 +43,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
                 @Param("attendDate") LocalDate attendDate,
                 @Param("status") String status,
                 @Param("memo") String memo,
-                @Param("teacherId") Long teacherId);
+                @Param("teacherId") Long teacherId,
+                @Param("onlineAutoBlocked") boolean onlineAutoBlocked);
 
     @Query("""
         SELECT a FROM Attendance a

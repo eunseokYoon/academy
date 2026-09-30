@@ -10,6 +10,8 @@ export interface RosterRow {
   name: string;
   status: AttendanceStatus;
   memo: string | null;
+  /** 수업 영상 시청률. 영상이 없는 수업·클리닉이면 없다. */
+  watchPercent?: number | null;
 }
 
 interface Props {
@@ -84,7 +86,14 @@ export function RosterEditor({
               }`}
             >
               <span className="block text-sm font-medium text-slate-900">{row.name}</span>
-              <span className="block text-xs text-slate-600">{STATUS_LABEL[row.status]}</span>
+              <span className="block text-xs text-slate-600">
+                {STATUS_LABEL[row.status]}
+                {/*
+                  영상 시청률(2026-09-29). 결석인데 80% 이상 보면 서버가 온라인으로 바꾼다.
+                  기기가 보내는 값이라 참고용이다 — 선생님이 상태를 고쳐 주면 그게 우선이다
+                */}
+                {row.watchPercent != null && ` · 영상 ${row.watchPercent}%`}
+              </span>
               {row.memo && (
                 <span className="mt-0.5 block truncate text-xs text-slate-400">{row.memo}</span>
               )}

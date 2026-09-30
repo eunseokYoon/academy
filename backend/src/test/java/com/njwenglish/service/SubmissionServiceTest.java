@@ -160,10 +160,10 @@ class SubmissionServiceTest {
     }
 
     @Test
-    @DisplayName("사진 11장 업로드는 거부된다")
-    void 사진_11장_업로드는_거부된다() {
+    @DisplayName("사진 21장 업로드는 거부된다")
+    void 사진_21장_업로드는_거부된다() {
         givenMySubmission(FUTURE_DUE);
-        given(photoRepository.countBySubmissionId(4412L)).willReturn(10L);
+        given(photoRepository.countBySubmissionId(4412L)).willReturn(20L);
 
         assertThatThrownBy(() -> submissionService.issueUploadUrl(720L,
             new PhotoUploadUrlRequest("image/webp", 284012)))

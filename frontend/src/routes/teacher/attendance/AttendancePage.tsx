@@ -322,7 +322,8 @@ function LessonConfirmPanel({ lessonId, onBack }: { lessonId: number; onBack: ()
       setDone(
         `확정했습니다. 출석 ${result.summary.present} · 지각 ${result.summary.late} · ` +
           `결석 ${result.summary.absent} · 병결 ${result.summary.sick} · ` +
-          `공결 ${result.summary.excused} · 대체 등원 ${result.summary.makeup}`,
+          `공결 ${result.summary.excused} · 대체 등원 ${result.summary.makeup} · ` +
+          `온라인 ${result.summary.online ?? 0}`,
       );
       await queryClient.invalidateQueries({ queryKey: ["teacher", "attendance"] });
       await queryClient.invalidateQueries({ queryKey: ["teacher", "lessons"] });

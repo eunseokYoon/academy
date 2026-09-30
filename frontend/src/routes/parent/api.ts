@@ -111,25 +111,37 @@ export interface ParentLessonDetail {
   keyPoints: string | null;
   homeworkNote: string | null;
   clinicNote: string | null;
-  homework: {
-    homeworkId: number;
-    title: string;
-    /** 학부모 응답에서는 항상 null이다. 숙제 지시문은 P-3과 마찬가지로 내려오지 않는다. */
-    description: null;
-    kind: HomeworkKind;
-    /** GRID 열은 재제출을 열기 전까지 마감이 없다. */
-    dueAt: string | null;
-    /**
-     * 오프라인 채점 축. GRID면 이걸로 그려라 —
-     * submissionStatus는 ⭕를 받아도 NOT_SUBMITTED로 남아서 "미제출"이 뜬다.
-     */
-    result: HomeworkResult | null;
-    completionRate: number | null;
-    resolvedByResubmission: boolean;
-    submissionStatus: SubmissionStatus | null;
-  } | null;
+  /** 첫 숙제. homeworks[0] 과 같다. 새 화면은 homeworks 를 읽어라. */
+  homework: ParentLessonHomework | null;
+  /**
+   * 수업의 숙제 전부(2026-09-29). 옛 서버에는 없어서 `?? []` 로 받는다(7-3).
+   */
+  homeworks?: ParentLessonHomework[];
   /** null이면 아직 출석 확정 전이다. 결석이 아니다. */
   attendanceStatus: AttendanceStatus | null;
+  /**
+   * 수업 영상 시청 현황(2026-09-29). 영상이 없는 수업·옛 서버면 없다. <b>비율(%)은 오지 않는다</b> —
+   * 기기가 보내는 값이라 학부모에게는 현황만 보인다.
+   */
+  videoWatch?: "WATCHED" | "PARTIAL" | "NOT_WATCHED" | null;
+}
+
+export interface ParentLessonHomework {
+  homeworkId: number;
+  title: string;
+  /** 학부모 응답에서는 항상 null이다. 숙제 지시문은 P-3과 마찬가지로 내려오지 않는다. */
+  description: null;
+  kind: HomeworkKind;
+  /** GRID 열은 재제출을 열기 전까지 마감이 없다. */
+  dueAt: string | null;
+  /**
+   * 오프라인 채점 축. GRID면 이걸로 그려라 —
+   * submissionStatus는 ⭕를 받아도 NOT_SUBMITTED로 남아서 "미제출"이 뜬다.
+   */
+  result: HomeworkResult | null;
+  completionRate: number | null;
+  resolvedByResubmission: boolean;
+  submissionStatus: SubmissionStatus | null;
 }
 
 export const getChildLessons = (

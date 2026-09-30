@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import type { AttendanceCalendar as CalendarData, DayStatus } from "../attendance/types";
-import { DAY_STATUS_STYLE } from "../attendance/types";
+import { DAY_STATUS_STYLE, attendedCount } from "../attendance/types";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -150,7 +150,7 @@ function SummaryGrid({ data }: { data: CalendarData }) {
       label: "출석",
       // 배포 순서가 backend → web이지만, 옛 응답에 makeup이 없으면 NaN이 찍힌다.
       // 계약상 항상 있어도 어긴 쪽이 화면을 망가뜨리게 두지 않는다(7-3)
-      value: data.summary.present + (data.summary.makeup ?? 0),
+      value: attendedCount(data.summary),
       color: "text-emerald-600",
     },
     { label: "지각", value: data.summary.late, color: "text-amber-600" },

@@ -20,8 +20,6 @@ import type { WeekHomework } from "./report/ReportHomeworkCard";
 import { ReportTestCard } from "./report/ReportTestCard";
 import type { WeekTest } from "./report/ReportTestCard";
 
-const NOW = currentWeek();
-const YEARS = [NOW.year - 1, NOW.year];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const WEEKS = [1, 2, 3, 4, 5];
 
@@ -43,9 +41,13 @@ const WEEKS = [1, 2, 3, 4, 5];
  */
 export default function ParentReportPage() {
   const { selectedStudentId } = useSelectedChild();
-  const [year, setYear] = useState(NOW.year);
-  const [month, setMonth] = useState(NOW.month);
-  const [week, setWeek] = useState(NOW.week);
+  // 이번 주는 화면에 들어올 때 센다. 모듈을 읽을 때 한 번 세면(예전 방식) 탭을 열어 둔
+  // 채 주가 바뀌어도 옛 주가 기본값으로 남는다 — 학부모가 9월에 8월 5주를 봤다(2026-09-29)
+  const [now] = useState(() => currentWeek());
+  const YEARS = [now.year - 1, now.year];
+  const [year, setYear] = useState(now.year);
+  const [month, setMonth] = useState(now.month);
+  const [week, setWeek] = useState(now.week);
 
   const enabled = selectedStudentId !== null;
 
@@ -89,10 +91,14 @@ export default function ParentReportPage() {
   const loading =
     lessons.isPending || clinics.isPending || details.some((query) => query.isPending);
 
+  // 수업 하나에 숙제가 여럿일 수 있다(그리드 열 둘 이상). 첫 숙제(homework)만 보면
+  // 레포트에 하나만 뜬다 — 숙제 탭과 개수가 달랐다(2026-09-29). 옛 서버엔 homeworks 가 없다
   const homeworks: WeekHomework[] = lessonDetails.flatMap((lesson) =>
-    lesson.homework
-      ? [{ lessonId: lesson.lessonId, lessonDate: lesson.lessonDate, homework: lesson.homework }]
-      : [],
+    (lesson.homeworks ?? (lesson.homework ? [lesson.homework] : [])).map((homework) => ({
+      lessonId: lesson.lessonId,
+      lessonDate: lesson.lessonDate,
+      homework,
+    })),
   );
 
   // 선택한 주차의 값과, 그 주차까지의 시계열. 뒤 주차는 아직 안 일어난 일이라 자른다
@@ -115,7 +121,7 @@ export default function ParentReportPage() {
    * 규칙이다 — 한쪽만 고치면 같은 주가 웹과 앱에서 다른 숫자가 된다.
    */
   const came = (status: AttendanceStatus | null) =>
-    status === "PRESENT" || status === "LATE" || status === "MAKEUP";
+    status === "PRESENT" || status === "LATE" || status === "MAKEUP" || status === "ONLINE";
   const attended =
     lessonDetails.filter((lesson) => came(lesson.attendanceStatus)).length
     + clinicList.filter((clinic) => came(clinic.attendStatus)).length;

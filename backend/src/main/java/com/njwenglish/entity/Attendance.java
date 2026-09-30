@@ -73,11 +73,47 @@ public class Attendance extends BaseCreatedEntity {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    /**
+     * 선생님이 온라인을 다른 값으로 되돌렸으면 영상을 봐도 다시 자동으로 온라인이 되지 않는다(V28).
+     * 선생님이 직접 온라인으로 찍으면 풀린다.
+     */
+    @Column(name = "online_auto_blocked", nullable = false)
+    private boolean onlineAutoBlocked;
+
     /** 정정할 때만 호출한다. */
     public void correct(AttendanceStatus status, String memo, Teacher teacher) {
+        this.onlineAutoBlocked = nextOnlineAutoBlocked(this.status, status, onlineAutoBlocked);
         this.status = status;
         this.memo = memo;
         this.updatedBy = teacher;
         this.updatedAt = OffsetDateTime.now();
+    }
+
+    /**
+     * 결석인 학생이 영상을 기준 이상 봤다(VideoWatchService). 결석이 아니거나 선생님이 막았으면
+     * 아무것도 안 한다. 바꿨으면 true.
+     */
+    public boolean markOnlineByWatch() {
+        if (status != AttendanceStatus.ABSENT || onlineAutoBlocked) {
+            return false;
+        }
+        this.status = AttendanceStatus.ONLINE;
+        this.updatedAt = OffsetDateTime.now();
+        return true;
+    }
+
+    /**
+     * 선생님이 상태를 바꿀 때 막힘 여부. 온라인에서 다른 값으로 되돌리면 막고, 온라인으로 찍으면 푼다.
+     * 확정(upsert)과 정정 두 경로가 같이 쓴다 — 한쪽만 고치면 되돌린 값이 다시 온라인으로 튄다.
+     */
+    public static boolean nextOnlineAutoBlocked(AttendanceStatus before, AttendanceStatus after,
+                                                boolean blocked) {
+        if (after == AttendanceStatus.ONLINE) {
+            return false;
+        }
+        if (before == AttendanceStatus.ONLINE) {
+            return true;
+        }
+        return blocked;
     }
 }

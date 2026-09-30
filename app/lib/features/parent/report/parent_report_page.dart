@@ -52,13 +52,22 @@ class _ParentReportPageState extends State<ParentReportPage>
   late ReportWeek _week;
   late final int _thisYear;
 
+  /// 학부모가 직접 고른 주였다면, 고른 때의 「이번 주」. 자동으로 정해진 주면 null.
+  ///
+  /// **들어갈 때마다 이번 주가 떠야 한다(2026-09-29).** 셸이 State 를 살려 둬서
+  /// 한 번 정한 주가 며칠·몇 주씩 남았다 — 학부모가 레포트를 열면 지난달 5주가
+  /// 떠 있었다. 그래서 이번 주가 바뀌면 이번 주로 돌린다. 같은 주 안에서 고른
+  /// 지난 주차는 탭을 오가도 남긴다(보던 걸 뺏지 않는다).
+  ReportWeek? _pickedDuring;
+
+  ReportWeek get _thisWeek => currentReportWeek(widget.now ?? DateTime.now());
+
   @override
   void initState() {
     super.initState();
     final now = widget.now ?? DateTime.now();
     _thisYear = now.year;
-    // 세션 동안 보던 주로 돌아온다.
-    _week = widget.controller.param?.$2 ?? currentReportWeek(now);
+    _week = currentReportWeek(now);
     _attach();
   }
 
@@ -108,9 +117,19 @@ class _ParentReportPageState extends State<ParentReportPage>
   }
 
   @override
-  void onReappear() => _load();
+  void onReappear() {
+    final thisWeek = _thisWeek;
+    final picked = _pickedDuring;
+    // 자동으로 정한 주였거나, 고른 뒤로 주가 바뀌었으면 이번 주로 돌린다.
+    if ((picked == null || picked != thisWeek) && _week != thisWeek) {
+      _pickedDuring = null;
+      setState(() => _week = thisWeek);
+    }
+    _load();
+  }
 
   void _setWeek(ReportWeek w) {
+    _pickedDuring = _thisWeek;
     setState(() => _week = w);
     _load();
   }
@@ -480,6 +499,26 @@ class ReportLessonCard extends StatelessWidget {
               ),
             ],
           ),
+          // 영상 시청 현황(2026-09-29). 영상은 학부모에게 안 보이고, 봤는지만 보인다(웹과 같다).
+          if (lesson.videoWatch case final watch?) ...[
+            const SizedBox(height: 8),
+            Text.rich(
+              key: const Key('report-video-watch'),
+              TextSpan(
+                text: '수업 영상 · ',
+                children: [
+                  TextSpan(
+                    text: watch.label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.slate700,
+                    ),
+                  ),
+                ],
+              ),
+              style: const TextStyle(fontSize: 12, color: AppColors.slate500),
+            ),
+          ],
           if (blocks.isNotEmpty) ...[
             const SizedBox(height: 12),
             for (var i = 0; i < blocks.length; i++)

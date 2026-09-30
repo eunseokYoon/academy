@@ -5,6 +5,7 @@ import com.njwenglish.common.response.PageResponse;
 import com.njwenglish.dto.qna.QnaAnswerRequest;
 import com.njwenglish.dto.qna.QnaDetailResponse;
 import com.njwenglish.dto.qna.QnaQuestionUpdateRequest;
+import com.njwenglish.dto.qna.QnaSeenResponse;
 import com.njwenglish.dto.qna.QnaSummaryResponse;
 import com.njwenglish.dto.qna.QnaUploadUrlRequest;
 import com.njwenglish.dto.qna.QnaUploadUrlResponse;
@@ -44,6 +45,15 @@ public class TeacherQnaController {
         @RequestParam(required = false) Long classRoomId,
         @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.ok(qnaService.questions(classRoomId, pageable));
+    }
+
+    /**
+     * 게시판을 열었다. T-1의 「새 질문」이 0이 되고, 응답의 previousSeenAt 뒤 글이 「새 글」이다.
+     * 목록 GET 에 부수효과로 붙이지 않는다 — 반을 바꿔 가며 목록을 다시 받을 때마다 바뀐다.
+     */
+    @PostMapping("/seen")
+    public ApiResponse<QnaSeenResponse> seen() {
+        return ApiResponse.ok(qnaService.markSeenByTeacher());
     }
 
     @GetMapping("/{postId}")

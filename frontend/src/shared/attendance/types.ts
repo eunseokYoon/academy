@@ -4,7 +4,15 @@
  * PENDING은 출석이 아니라 "아직 확정되지 않은 날"이다. 미래 수업일도 PENDING이라
  * 이 구분이 없으면 아직 오지 않은 날이 초록색으로 보인다.
  */
-export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "SICK" | "EXCUSED" | "MAKEUP";
+export type AttendanceStatus =
+  | "PRESENT"
+  | "LATE"
+  | "ABSENT"
+  | "SICK"
+  | "EXCUSED"
+  | "MAKEUP"
+  /** 온라인(2026-09-29). 영상으로 들었다. 출석으로 친다. 수업에만 있다. */
+  | "ONLINE";
 export type DayStatus = AttendanceStatus | "PENDING";
 
 export interface AttendanceSummary {
@@ -15,6 +23,16 @@ export interface AttendanceSummary {
   excused: number;
   /** 대체 등원. 출석으로 친다 — 결석 쪽에 더하지 마라(2026-09-01 확정). */
   makeup: number;
+  /** 온라인. 출석으로 친다(2026-09-29). 옛 서버에는 없어서 선택 필드다. */
+  online?: number;
+}
+
+/**
+ * 「출석」 칸에 들어가는 수. 대체 등원·온라인도 온 것이다(CLAUDE.md 5-1).
+ * 화면마다 더하지 말고 이것을 써라 — 한 곳이 빠지면 같은 달이 화면마다 다른 숫자가 된다.
+ */
+export function attendedCount(summary: AttendanceSummary): number {
+  return summary.present + (summary.makeup ?? 0) + (summary.online ?? 0);
 }
 
 export interface AttendanceDay {
@@ -49,6 +67,8 @@ export const DAY_STATUS_STYLE: Record<DayStatus, { label: string; cell: string }
   SICK: { label: "병결", cell: "bg-sky-100 text-sky-800 ring-sky-200" },
   EXCUSED: { label: "공결", cell: "bg-slate-200 text-slate-700 ring-slate-300" },
   MAKEUP: { label: "대체 등원", cell: "bg-teal-100 text-teal-800 ring-teal-200" },
+  // 보라다 — 하늘색은 병결이 쓴다. 앱 AppColors.violet* 와 같은 값이다
+  ONLINE: { label: "온라인", cell: "bg-violet-100 text-violet-800 ring-violet-200" },
   PENDING: { label: "미확인", cell: "bg-slate-100 text-slate-400 ring-slate-200" },
 };
 
@@ -65,6 +85,8 @@ export const EXCEPTION_STATUSES: AttendanceStatus[] = [
   "SICK",
   "EXCUSED",
   "MAKEUP",
+  // 온라인도 수업에만 있다 — 클리닉에는 영상이 없다(2026-09-29)
+  "ONLINE",
 ];
 
 /** T-13(클리닉 출결)용. 대체 등원이 빠진다 — 위 주석을 봐라. */
@@ -82,4 +104,5 @@ export const STATUS_LABEL: Record<AttendanceStatus, string> = {
   SICK: "병결",
   EXCUSED: "공결",
   MAKEUP: "대체 등원",
+  ONLINE: "온라인",
 };

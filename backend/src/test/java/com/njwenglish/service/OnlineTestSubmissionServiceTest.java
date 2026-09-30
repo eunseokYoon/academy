@@ -33,6 +33,7 @@ import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import com.njwenglish.repository.WeeklyTestScoreRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,8 @@ class OnlineTestSubmissionServiceTest {
     private WeeklyTestService weeklyTestService;
     @Mock
     private StudentAccessGuard studentAccessGuard;
+    @Mock
+    private WeeklyTestScoreRepository weeklyTestScoreRepository;
 
     private OnlineTestSubmissionService onlineTestSubmissionService;
 
@@ -71,7 +74,7 @@ class OnlineTestSubmissionServiceTest {
     void setUp() {
         onlineTestSubmissionService = new OnlineTestSubmissionService(onlineTestRepository,
             onlineTestSubmissionRepository, presignedUrlProvider, weeklyTestService,
-            studentAccessGuard, eventPublisher);
+            studentAccessGuard, eventPublisher, weeklyTestScoreRepository);
         given(studentAccessGuard.requireSelf()).willReturn(me);
     }
 
@@ -83,7 +86,7 @@ class OnlineTestSubmissionServiceTest {
 
     private OnlineTest test(OffsetDateTime closesAt) {
         OnlineTest test = OnlineTest.create(classRoom, teacher, "6월 2주차 단어시험",
-            (short) 25, (short) 5, answers(25, 3), null, "online-tests/2026/06/key.pdf",
+            (short) 25, (short) 5, answers(25, 3), null, List.of("online-tests/2026/06/key.pdf"),
             null, (short) 2026, (short) 6, (short) 2, null, closesAt);
         ReflectionTestUtils.setField(test, "id", 55L);
         test.publish(OffsetDateTime.now().minusDays(1));
@@ -94,7 +97,7 @@ class OnlineTestSubmissionServiceTest {
     private OnlineTest splitTest() {
         OnlineTest test = OnlineTest.create(classRoom, teacher, "6월 2주차 클리닉",
             (short) 5, (short) 5, new Short[] {1, 2, 3, 1, 2}, null,
-            "online-tests/2026/06/key.pdf", (short) 3,
+            List.of("online-tests/2026/06/key.pdf"), (short) 3,
             (short) 2026, (short) 6, (short) 2, null, null);
         ReflectionTestUtils.setField(test, "id", 55L);
         test.publish(OffsetDateTime.now().minusDays(1));
@@ -113,13 +116,15 @@ class OnlineTestSubmissionServiceTest {
             .map(RecordComponent::getName)
             .toList();
 
-        assertThat(fields).doesNotContain("correctChoices", "answerS3Key", "answerFileUrl");
+        assertThat(fields).doesNotContain("correctChoices", "answerS3Key", "answerFileUrl",
+            "answerS3Keys", "answerFileUrls", "answerFiles");
 
         List<String> listFields = Arrays.stream(
                 StudentOnlineTestListItemResponse.class.getRecordComponents())
             .map(RecordComponent::getName)
             .toList();
-        assertThat(listFields).doesNotContain("correctChoices", "answerS3Key", "answerFileUrl");
+        assertThat(listFields).doesNotContain("correctChoices", "answerS3Key", "answerFileUrl",
+            "answerS3Keys", "answerFileUrls", "answerFiles");
     }
 
     @Test
@@ -224,6 +229,33 @@ class OnlineTestSubmissionServiceTest {
         assertThat(items).hasSize(1);
         assertThat(items.get(0).remainingMinutes()).isBetween(118L, 120L);
         assertThat(items.get(0).answeredCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("오프라인으로 본 주차의 테스트는 목록에서 빠진다 — 낸 것은 남는다")
+    void 오프라인으로_본_테스트는_목록에서_빠진다() {
+        // 매주 종이로 보는 학생에게 「응시 전」이 계속 쌓였다(2026-09-29)
+        OnlineTest offline = test(null);
+        OnlineTest submittedAndOffline = test(null);
+        OnlineTest open = test(null);
+        ReflectionTestUtils.setField(submittedAndOffline, "id", 56L);
+        ReflectionTestUtils.setField(open, "id", 57L);
+        ReflectionTestUtils.setField(open, "week", (short) 3);
+        OnlineTestSubmission done = OnlineTestSubmission.start(submittedAndOffline, me, (short) 25);
+        done.submit(OffsetDateTime.now(), new BigDecimal("80.00"), (short) 20);
+        given(onlineTestRepository.findOpenForStudent(any(), any()))
+            .willReturn(List.of(offline, submittedAndOffline, open));
+        given(onlineTestSubmissionRepository.findByStudentAndTests(any(), any()))
+            .willReturn(List.of(done));
+        given(weeklyTestScoreRepository.hasClinicScore(88L, 3L, offline.getYear(),
+            offline.getMonth(), offline.getWeek())).willReturn(true);
+        given(weeklyTestScoreRepository.hasClinicScore(88L, 3L, open.getYear(),
+            open.getMonth(), (short) 3)).willReturn(false);
+
+        List<StudentOnlineTestListItemResponse> items = onlineTestSubmissionService.myTests();
+
+        assertThat(items).extracting(StudentOnlineTestListItemResponse::testId)
+            .containsExactly(56L, 57L);
     }
 
     /**

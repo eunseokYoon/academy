@@ -65,8 +65,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SubmissionService {
 
-    /** 사진 10장, 장당 10MB. 리사이즈를 거치면 장당 1MB 미만이라 넉넉한 상한이다. */
-    private static final int MAX_PHOTOS = 10;
+    /**
+     * 사진 20장, 장당 10MB. 리사이즈를 거치면 장당 1MB 미만이라 넉넉한 상한이다.
+     * 10장에서 올렸다(2026-09-29, 학생 요청 — 재제출 분량이 10장을 넘는다).
+     * 웹 StudentHomeworkDetailPage.tsx 의 MAX_PHOTOS, 앱 kMaxPhotos 와 같이 고쳐라.
+     */
+    private static final int MAX_PHOTOS = 20;
     private static final int MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
     /**

@@ -6,10 +6,11 @@ import { errorMessage } from "../../../shared/api/errors";
 import { FormError } from "../../../shared/components/FormError";
 import { Modal } from "../../../shared/components/Modal";
 import { SubmitButton } from "../../../shared/components/SubmitButton";
-import { createOnlineTest, issueAnswerUploadUrl, listClassRooms } from "../api";
+import { createOnlineTest, listClassRooms } from "../api";
+import { AnswerFilesField } from "./AnswerFilesField";
+import type { AnswerFileDraft } from "./AnswerFilesField";
 
 const NOW = new Date();
-const MAX_ANSWER_BYTES = 50 * 1024 * 1024;
 
 /**
  * T-14 출제.
@@ -35,8 +36,7 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
   const [week, setWeek] = useState(1);
   const [internalQuestionCount, setInternalQuestionCount] = useState("");
   const [closesAt, setClosesAt] = useState("");
-  const [answerS3Key, setAnswerS3Key] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [answerFiles, setAnswerFiles] = useState<AnswerFileDraft[]>([]);
 
   const classRooms = useQuery({
     queryKey: ["teacher", "class-rooms"],
@@ -55,34 +55,6 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
     (value) => !Number.isInteger(value) || value < 1 || value > choices,
   );
 
-  /**
-   * 해설지는 서버를 거치지 않는다. presigned URL로 S3에 직접 PUT한다.
-   *
-   * <p>axios 인스턴스를 쓰지 않는다 — Authorization 헤더가 붙으면 서명이 어긋나 403이 난다.
-   * Content-Type은 발급 때 보낸 값과 반드시 같아야 한다.
-   */
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
-      if (file.size > MAX_ANSWER_BYTES) throw new Error("해설지는 50MB까지입니다.");
-      const { uploadUrl, s3Key } = await issueAnswerUploadUrl({
-        contentType: file.type,
-        bytes: file.size,
-      });
-      const response = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!response.ok) throw new Error("해설지를 올리지 못했습니다. 다시 시도해 주세요.");
-      return s3Key;
-    },
-    onSuccess: (s3Key) => {
-      setAnswerS3Key(s3Key);
-      setUploadError(null);
-    },
-    onError: (error) => setUploadError(errorMessage(error, "해설지 업로드에 실패했습니다.")),
-  });
-
   const save = useMutation({
     mutationFn: () =>
       createOnlineTest({
@@ -92,7 +64,8 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
         choiceCount: choices,
         correctChoices: parsed,
         points: null,
-        answerS3Key,
+        answerS3Key: null,
+        answerS3Keys: answerFiles.map((f) => f.s3Key),
         internalQuestionCount:
           internalQuestionCount.trim() === "" ? null : Number(internalQuestionCount),
         year,
@@ -236,23 +209,7 @@ export default function OnlineTestCreateModal({ onClose }: { onClose: () => void
           />
         </label>
 
-        <div className="space-y-1">
-          <label className="block text-sm text-slate-700">
-            해설지 (제출 후에만 학생에게 공개)
-            <input
-              type="file"
-              accept="application/pdf,image/jpeg,image/png,image/webp"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) upload.mutate(file);
-              }}
-              className="mt-1 w-full text-xs"
-            />
-          </label>
-          {upload.isPending && <p className="text-xs text-slate-500">업로드 중…</p>}
-          {answerS3Key && <p className="text-xs text-emerald-700">해설지 업로드 완료</p>}
-          <FormError message={uploadError} />
-        </div>
+        <AnswerFilesField files={answerFiles} onChange={setAnswerFiles} />
 
         {/*
           클리닉 테스트를 온라인으로 대체할 때 쓴다. 앞 N문항이 내부지문이면

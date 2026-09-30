@@ -48,7 +48,8 @@ export function CorrectCountChart({
   const split = chartKind === "SPLIT_BAR";
 
   /* 전체 문항 수가 없는 칸은 막대를 그릴 수 없다. 0으로 채우면 "다 틀렸다"로 읽힌다 */
-  const points = items.filter((item) =>
+  // 미응시 줄은 막대가 없다(값이 비어 있어 아래 조건에서도 빠지지만 뜻을 적어 둔다)
+  const points = items.filter((item) => !item.absent).filter((item) =>
     split
       ? item.internalTotal !== null || item.externalTotal !== null
       : item.correctCount !== null && item.totalCount !== null,

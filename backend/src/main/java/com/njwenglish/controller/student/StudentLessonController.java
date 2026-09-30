@@ -6,6 +6,8 @@ import com.njwenglish.dto.lesson.LessonReportListItemResponse;
 import com.njwenglish.dto.lesson.LessonReportResponse;
 import com.njwenglish.service.LessonReportService;
 import jakarta.validation.Valid;
+import com.njwenglish.dto.lesson.LessonWatchRequest;
+import com.njwenglish.service.VideoWatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudentLessonController {
 
     private final LessonReportService lessonReportService;
+    private final VideoWatchService videoWatchService;
 
     @GetMapping
     public ApiResponse<PageResponse<LessonReportListItemResponse>> list(
@@ -45,5 +48,14 @@ public class StudentLessonController {
         return ApiResponse.ok(lessonReportService.myLesson(lessonId));
     }
 
-    /** 재생 시작(0) · 30초마다 · 이탈 시에만 호출한다. 매초 호출하지 마라. */
+    /**
+     * 재생 보고(2026-09-29). 플레이어가 10~15초마다·멈춤·끝·떠날 때 보낸다. 매초 부르지 마라.
+     * 결석인 학생이 기준 이상 보면 출결이 온라인이 된다(VideoWatchService).
+     */
+    @PostMapping("/{lessonId}/watch")
+    public ApiResponse<Void> watch(@PathVariable Long lessonId,
+                                   @Valid @RequestBody LessonWatchRequest request) {
+        videoWatchService.record(lessonId, request);
+        return ApiResponse.ok();
+    }
 }

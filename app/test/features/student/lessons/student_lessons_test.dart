@@ -61,6 +61,16 @@ class _Repo implements StudentLessonRepository {
 
   @override
   Future<StudentLessonDetail> detail(int lessonId) async => detailValue!;
+
+  final List<(int, String, List<int>)> watches = [];
+
+  @override
+  Future<void> reportWatch(
+    int lessonId, {
+    required String embedUrl,
+    required double durationSeconds,
+    required List<int> buckets,
+  }) async => watches.add((lessonId, embedUrl, buckets));
 }
 
 /// 목록·상세가 `context.go` 로 옮기므로 라우터 안에 띄운다.

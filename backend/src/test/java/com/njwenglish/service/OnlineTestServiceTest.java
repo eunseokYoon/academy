@@ -108,7 +108,7 @@ class OnlineTestServiceTest {
     private OnlineTestCreateRequest request(short questionCount, Short[] correctChoices,
                                             Short[] points) {
         return new OnlineTestCreateRequest(3L, "6월 2주차 단어시험", questionCount, (short) 5,
-            correctChoices, points, null, null,
+            correctChoices, points, null, null, null,
             (short) 2026, (short) 6, (short) 2, null, null);
     }
 
@@ -169,7 +169,7 @@ class OnlineTestServiceTest {
         given(onlineTestRepository.findWithClassRoom(55L)).willReturn(Optional.of(publishedTest()));
 
         assertThatThrownBy(() -> onlineTestService.update(55L, new OnlineTestUpdateRequest(
-            null, null, null, answers(25, 1), null, null, null, null, null, null,
+            null, null, null, answers(25, 1), null, null, null, null, null, null, null,
             null, null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TEST_ALREADY_PUBLISHED);
@@ -182,7 +182,7 @@ class OnlineTestServiceTest {
         given(onlineTestRepository.findWithClassRoom(55L)).willReturn(Optional.of(test));
 
         onlineTestService.update(55L, new OnlineTestUpdateRequest(
-            "6월 2주차 단어시험(재공지)", null, null, null, null, null, null,
+            "6월 2주차 단어시험(재공지)", null, null, null, null, null, null, null,
             null, null, null, null, null));
 
         assertThat(test.getTitle()).isEqualTo("6월 2주차 단어시험(재공지)");
@@ -305,7 +305,7 @@ class OnlineTestServiceTest {
 
         assertThatThrownBy(() -> onlineTestService.create(new OnlineTestCreateRequest(
             3L, "6월 2주차 단어시험", (short) 25, (short) 5, answers(25, 3), null,
-            "online-tests/2026/06/남의파일.pdf", null,
+            "online-tests/2026/06/남의파일.pdf", null, null,
             (short) 2026, (short) 6, (short) 2, null, null)))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
@@ -315,5 +315,93 @@ class OnlineTestServiceTest {
         OnlineTestSubmission submission = OnlineTestSubmission.start(test, student, (short) 25);
         submission.submit(OffsetDateTime.now(), score, (short) 23);
         return submission;
+    }
+
+    // ---------- 해설지 여러 장(2026-09-29) ----------
+
+    private static final String KEY_A = "online-tests/2026/06/a.pdf";
+    private static final String KEY_B = "online-tests/2026/06/b.pdf";
+
+    private OnlineTestCreateRequest requestWithFiles(String single, List<String> keys) {
+        return new OnlineTestCreateRequest(3L, "6월 2주차 단어시험", (short) 25, (short) 5,
+            answers(25, 3), null, single, keys, null,
+            (short) 2026, (short) 6, (short) 2, null, null);
+    }
+
+    private OnlineTestUpdateRequest updateFiles(String single, List<String> keys) {
+        return new OnlineTestUpdateRequest(null, null, null, null, null, single, keys, null,
+            null, null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("해설지를 여러 장 올리면 순서대로 저장한다")
+    void 해설지_여러_장() {
+        given(answerKeys.matches(any(), org.mockito.ArgumentMatchers.eq(1L))).willReturn(true);
+        org.mockito.ArgumentCaptor<OnlineTest> saved =
+            org.mockito.ArgumentCaptor.forClass(OnlineTest.class);
+        given(onlineTestRepository.save(saved.capture())).willAnswer(i -> i.getArgument(0));
+
+        onlineTestService.create(requestWithFiles(null, List.of(KEY_A, KEY_B)));
+
+        assertThat(saved.getValue().getAnswerS3Keys()).containsExactly(KEY_A, KEY_B);
+    }
+
+    @Test
+    @DisplayName("옛 화면의 한 장(answerS3Key)도 받는다")
+    void 옛_화면의_한_장() {
+        given(answerKeys.matches(KEY_A, 1L)).willReturn(true);
+        org.mockito.ArgumentCaptor<OnlineTest> saved =
+            org.mockito.ArgumentCaptor.forClass(OnlineTest.class);
+        given(onlineTestRepository.save(saved.capture())).willAnswer(i -> i.getArgument(0));
+
+        onlineTestService.create(requestWithFiles(KEY_A, null));
+
+        assertThat(saved.getValue().getAnswerS3Keys()).containsExactly(KEY_A);
+    }
+
+    @Test
+    @DisplayName("해설지는 5장까지다")
+    void 해설지는_5장까지() {
+        given(answerKeys.matches(any(), org.mockito.ArgumentMatchers.eq(1L))).willReturn(true);
+        List<String> six = java.util.stream.IntStream.range(0, 6)
+            .mapToObj(i -> "online-tests/2026/06/" + i + ".pdf").toList();
+
+        assertThatThrownBy(() -> onlineTestService.create(requestWithFiles(null, six)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ATTACHMENT_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    @DisplayName("수정에서 null 은 그대로, 빈 배열은 전부 지우고 S3 에서도 지운다")
+    void 해설지_수정() {
+        OnlineTest test = publishedTest();
+        test.replaceAnswerFiles(List.of(KEY_A, KEY_B));
+        given(onlineTestRepository.findWithClassRoom(55L)).willReturn(Optional.of(test));
+
+        onlineTestService.update(55L, updateFiles(null, null));
+        assertThat(test.getAnswerS3Keys()).containsExactly(KEY_A, KEY_B);
+        verify(presignedUrlProvider, never()).deleteQuietly(any());
+
+        onlineTestService.update(55L, updateFiles(null, List.of()));
+        assertThat(test.getAnswerS3Keys()).isEmpty();
+        verify(presignedUrlProvider).deleteQuietly(KEY_A);
+        verify(presignedUrlProvider).deleteQuietly(KEY_B);
+    }
+
+    @Test
+    @DisplayName("상세 응답에 해설지 전부와 첫 장이 함께 나간다(옛 화면용)")
+    void 상세에_해설지_전부() {
+        OnlineTest test = publishedTest();
+        test.replaceAnswerFiles(List.of(KEY_A, KEY_B));
+        given(onlineTestRepository.findWithClassRoom(55L)).willReturn(Optional.of(test));
+        given(presignedUrlProvider.readUrl(KEY_A)).willReturn("https://s3/a");
+        given(presignedUrlProvider.readUrl(KEY_B)).willReturn("https://s3/b");
+
+        var detail = onlineTestService.detail(55L);
+
+        assertThat(detail.answerFiles()).extracting(f -> f.url())
+            .containsExactly("https://s3/a", "https://s3/b");
+        assertThat(detail.answerFileUrl()).isEqualTo("https://s3/a");
+        assertThat(detail.answerS3Key()).isEqualTo(KEY_A);
     }
 }

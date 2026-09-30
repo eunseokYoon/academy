@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 
 /**
  * T-14 온라인 테스트 관리. 시험은 <b>종이로</b> 보고 학생은 답만 웹에 입력한다.
@@ -57,6 +59,9 @@ public class OnlineTestService {
 
     /** 해설지는 문서 한 장이다. 자료실 상한과 같은 50MB면 충분하다. */
     private static final long MAX_ANSWER_BYTES = 50L * 1024 * 1024;
+
+    /** 해설지 장수 상한(2026-09-29). 공지 첨부(NoticeService.MAX_ATTACHMENTS)와 같다. */
+    private static final int MAX_ANSWER_FILES = 5;
 
     private final OnlineTestRepository onlineTestRepository;
     private final OnlineTestSubmissionRepository onlineTestSubmissionRepository;
@@ -80,7 +85,7 @@ public class OnlineTestService {
     @Transactional(readOnly = true)
     public OnlineTestDetailResponse detail(Long testId) {
         OnlineTest test = findTest(testId);
-        return OnlineTestDetailResponse.from(test, answerFileUrl(test));
+        return OnlineTestDetailResponse.from(test, answerFiles(test));
     }
 
     @Transactional
@@ -94,13 +99,15 @@ public class OnlineTestService {
         validateChoices(request.correctChoices(), questionCount, choiceCount);
         validatePoints(request.points(), questionCount);
         validateWeek(request.year(), request.month(), request.week());
-        String answerS3Key = validAnswerKey(request.answerS3Key(), teacher.getId());
+        List<String> answerS3Keys = validAnswerKeys(
+            request.answerS3Keys() != null ? request.answerS3Keys() : single(request.answerS3Key()),
+            teacher.getId());
         validatePeriod(request.opensAt(), request.closesAt());
         validateInternalCount(request.internalQuestionCount(), questionCount);
 
         OnlineTest test = onlineTestRepository.save(OnlineTest.create(
             classRoom, teacher, request.title().trim(), questionCount, choiceCount,
-            request.correctChoices(), request.points(), answerS3Key,
+            request.correctChoices(), request.points(), answerS3Keys,
             request.internalQuestionCount(),
             request.year(), request.month(), request.week(),
             request.opensAt(), request.closesAt()));
@@ -119,8 +126,14 @@ public class OnlineTestService {
         OnlineTest test = findTest(testId);
         Teacher teacher = currentTeacher();
         String title = request.title() == null ? test.getTitle() : request.title().trim();
-        String answerS3Key = request.answerS3Key() == null
-            ? test.getAnswerS3Key() : validAnswerKey(request.answerS3Key(), teacher.getId());
+        // 새 화면은 answerS3Keys(null=그대로, []=전부 삭제), 옛 화면은 새로 올린 한 장만 보낸다
+        List<String> answerS3Keys = request.answerS3Keys() != null
+            ? validAnswerKeys(request.answerS3Keys(), teacher.getId())
+            : request.answerS3Key() != null
+                ? validAnswerKeys(single(request.answerS3Key()), teacher.getId())
+                : test.getAnswerS3Keys();
+        List<String> removed = test.getAnswerS3Keys().stream()
+            .filter(key -> !answerS3Keys.contains(key)).toList();
         OffsetDateTime opensAt = request.opensAt() == null ? test.getOpensAt() : request.opensAt();
         OffsetDateTime closesAt = request.closesAt() == null
             ? test.getClosesAt() : request.closesAt();
@@ -128,8 +141,9 @@ public class OnlineTestService {
 
         if (test.isPublished()) {
             requireNoScoringChange(test, request);
-            test.editSchedule(title, answerS3Key, opensAt, closesAt);
-            return OnlineTestDetailResponse.from(test, answerFileUrl(test));
+            test.editSchedule(title, answerS3Keys, opensAt, closesAt);
+            deleteFilesAfterCommit(removed);
+            return OnlineTestDetailResponse.from(test, answerFiles(test));
         }
 
         short questionCount = request.questionCount() == null
@@ -150,9 +164,10 @@ public class OnlineTestService {
         validateWeek(year, month, week);
         validateInternalCount(internalQuestionCount, questionCount);
 
-        test.edit(title, questionCount, choiceCount, correctChoices, points, answerS3Key,
+        test.edit(title, questionCount, choiceCount, correctChoices, points, answerS3Keys,
             internalQuestionCount, year, month, week, opensAt, closesAt);
-        return OnlineTestDetailResponse.from(test, answerFileUrl(test));
+        deleteFilesAfterCommit(removed);
+        return OnlineTestDetailResponse.from(test, answerFiles(test));
     }
 
     /** 공개하면 학생 목록에 잡힌다. 이미 공개된 테스트를 다시 호출해도 시각은 그대로다. */
@@ -160,7 +175,7 @@ public class OnlineTestService {
     public OnlineTestDetailResponse publish(Long testId) {
         OnlineTest test = findTest(testId);
         test.publish(OffsetDateTime.now());
-        return OnlineTestDetailResponse.from(test, answerFileUrl(test));
+        return OnlineTestDetailResponse.from(test, answerFiles(test));
     }
 
     /**
@@ -177,11 +192,9 @@ public class OnlineTestService {
             throw new BusinessException(ErrorCode.SUBMISSION_EXISTS);
         }
         onlineTestSubmissionRepository.deleteByOnlineTestId(testId);
+        List<String> files = test.getAnswerS3Keys();
         onlineTestRepository.delete(test);
-
-        if (test.getAnswerS3Key() != null) {
-            presignedUrlProvider.deleteQuietly(test.getAnswerS3Key());
-        }
+        deleteFilesAfterCommit(files);
     }
 
     /**
@@ -364,9 +377,31 @@ public class OnlineTestService {
             .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
-    private String answerFileUrl(OnlineTest test) {
-        return test.getAnswerS3Key() == null
-            ? null : presignedUrlProvider.readUrl(test.getAnswerS3Key());
+    private List<OnlineTestDetailResponse.AnswerFile> answerFiles(OnlineTest test) {
+        return test.getAnswerS3Keys().stream()
+            .map(key -> new OnlineTestDetailResponse.AnswerFile(key,
+                presignedUrlProvider.readUrl(key)))
+            .toList();
+    }
+
+    /**
+     * S3 객체는 되돌릴 수 없어서 커밋이 확정된 뒤에 지운다. 트랜잭션 안에서 지우면 뒤에서
+     * 롤백돼도 파일은 이미 없다.
+     */
+    private void deleteFilesAfterCommit(List<String> s3Keys) {
+        if (s3Keys.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            s3Keys.forEach(presignedUrlProvider::deleteQuietly);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                s3Keys.forEach(presignedUrlProvider::deleteQuietly);
+            }
+        });
     }
 
     private BigDecimal average(List<OnlineTestResultsResponse.Item> items) {
@@ -440,14 +475,28 @@ public class OnlineTestService {
      *
      * <p><b>여기서 "영어"를 기본값으로 채우지 마라.</b> 성적 관리 범위가 미확정이다.
      */
-    private String validAnswerKey(String answerS3Key, Long teacherId) {
-        if (answerS3Key == null || answerS3Key.isBlank()) {
-            return null;
+    /**
+     * 해설지 키 검증. 빈 칸은 버리고, 서명이 이 선생님 것인지 본다. 5장이 상한이다
+     * (공지 첨부와 같다). 같은 키가 두 번 오면 한 번만 남긴다.
+     */
+    private List<String> validAnswerKeys(List<String> keys, Long teacherId) {
+        List<String> clean = keys.stream()
+            .filter(key -> key != null && !key.isBlank())
+            .distinct()
+            .toList();
+        if (clean.size() > MAX_ANSWER_FILES) {
+            throw new BusinessException(ErrorCode.ATTACHMENT_LIMIT_EXCEEDED);
         }
-        if (!answerKeys.matches(answerS3Key, teacherId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        for (String key : clean) {
+            if (!answerKeys.matches(key, teacherId)) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
         }
-        return answerS3Key;
+        return clean;
+    }
+
+    private static List<String> single(String key) {
+        return key == null ? List.of() : List.of(key);
     }
 
     /** DB CHECK가 1~100이다. */

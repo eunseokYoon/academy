@@ -150,6 +150,25 @@ class StudentLessonRepository {
     () => _dio.get<Map<String, dynamic>>('/api/student/lessons/$lessonId'),
     (data) => StudentLessonDetail.fromJson(data! as Map<String, dynamic>),
   );
+
+  /// 재생 보고(2026-09-29). 플레이어가 본 10초 칸을 모아 보낸다. 결석인 학생이 80% 이상
+  /// 보면 서버가 출결을 온라인으로 바꾼다. 실패는 부르는 쪽이 버린다(시청 기록은 곁다리다).
+  Future<void> reportWatch(
+    int lessonId, {
+    required String embedUrl,
+    required double durationSeconds,
+    required List<int> buckets,
+  }) => unwrapCall<void>(
+    () => _dio.post<Map<String, dynamic>>(
+      '/api/student/lessons/$lessonId/watch',
+      data: {
+        'embedUrl': embedUrl,
+        'durationSeconds': durationSeconds,
+        'buckets': buckets,
+      },
+    ),
+    (_) {},
+  );
 }
 
 class StudentLessonsController
@@ -178,4 +197,21 @@ class StudentLessonDetailController
 
   @override
   Future<StudentLessonDetail> fetch(int param) => _repository.detail(param);
+
+  /// 화면의 플레이어가 부른다. 실패는 버린다 — 재생을 막을 일이 아니다.
+  Future<void> reportWatch(
+    int lessonId,
+    String embedUrl,
+    double durationSeconds,
+    List<int> buckets,
+  ) async {
+    try {
+      await _repository.reportWatch(
+        lessonId,
+        embedUrl: embedUrl,
+        durationSeconds: durationSeconds,
+        buckets: buckets,
+      );
+    } catch (_) {}
+  }
 }

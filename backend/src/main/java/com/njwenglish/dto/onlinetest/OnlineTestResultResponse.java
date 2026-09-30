@@ -27,7 +27,10 @@ public record OnlineTestResultResponse(
     /** internalQuestionCount가 null이면 null이다. */
     Short externalCorrect,
     OffsetDateTime submittedAt,
+    /** 첫 해설지. answerFileUrls[0] 과 같다 — 옛 화면이 읽는다(7-3). */
     String answerFileUrl,
+    /** 해설지 전부(2026-09-29). 없으면 빈 배열이다. */
+    List<String> answerFileUrls,
     List<QuestionResult> results
 ) {
     /** chosen이 null이면 미체크다. 오답으로 처리되고 감점은 없다. */

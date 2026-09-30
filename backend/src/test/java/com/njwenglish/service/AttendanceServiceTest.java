@@ -77,6 +77,9 @@ class AttendanceServiceTest {
 
     private Lesson lesson;
 
+    @Mock
+    private VideoWatchService videoWatchService;
+
     @BeforeEach
     void setUp() {
         ClassRoom classRoom = ClassRoom.create(null, "고2 심화반", "HK7F2Q", null);
@@ -84,7 +87,8 @@ class AttendanceServiceTest {
         lesson = Fixtures.lesson(501L, classRoom, LESSON_DATE);
 
         attendanceService = new AttendanceService(attendanceRepository, lessonRepository,
-            enrollmentRepository, teacherRepository, submissionRepository, studentAccessGuard, eventPublisher);
+            enrollmentRepository, teacherRepository, submissionRepository, studentAccessGuard, eventPublisher,
+            videoWatchService);
     }
 
     @AfterEach
@@ -142,7 +146,7 @@ class AttendanceServiceTest {
         assertThat(response.summary().present()).isEqualTo(3);
         assertThat(response.summary().absent()).isZero();
         verify(attendanceRepository, times(3)).upsert(eq(501L), eq(3L), anyLong(),
-            eq(LESSON_DATE), eq("PRESENT"), eq(null), eq(1L));
+            eq(LESSON_DATE), eq("PRESENT"), eq(null), eq(1L), eq(false));
         assertThat(lesson.getAttendanceStatus()).isEqualTo(LessonAttendanceStatus.CONFIRMED);
         assertThat(lesson.getAttendanceConfirmedBy()).isSameAs(teacher);
     }
@@ -163,12 +167,12 @@ class AttendanceServiceTest {
         assertThat(response.summary().sick()).isEqualTo(1);
 
         // attend_date에 lesson_date를 복사하지 않으면 캘린더 조회가 통째로 빈다
-        verify(attendanceRepository).upsert(501L, 3L, 88L, LESSON_DATE, "PRESENT", null, 1L);
-        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "무단", 1L);
+        verify(attendanceRepository).upsert(501L, 3L, 88L, LESSON_DATE, "PRESENT", null, 1L, false);
+        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "무단", 1L, false);
         // 푸시 #8 — 결석·병결도 포함한 재원생 전원. 하루 1건 묶기는 PushPlanner 몫이다
         verify(eventPublisher).publishEvent(PushEvent.of(PushTopic.ATTENDANCE_LESSON,
             List.of(seo.getId(), kim.getId(), park.getId()), null));
-        verify(attendanceRepository).upsert(501L, 3L, 97L, LESSON_DATE, "SICK", "병원 진료", 1L);
+        verify(attendanceRepository).upsert(501L, 3L, 97L, LESSON_DATE, "SICK", "병원 진료", 1L, false);
     }
 
     @Test
@@ -187,7 +191,7 @@ class AttendanceServiceTest {
         assertThat(second.attendanceStatus()).isEqualTo(LessonAttendanceStatus.CONFIRMED);
         assertThat(second.summary().late()).isEqualTo(1);
         verify(attendanceRepository, times(2)).upsert(eq(501L), eq(3L), eq(91L),
-            eq(LESSON_DATE), any(), any(), eq(1L));
+            eq(LESSON_DATE), any(), any(), eq(1L), eq(false));
     }
 
     @Test
@@ -203,7 +207,7 @@ class AttendanceServiceTest {
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
 
         verify(attendanceRepository, never()).upsert(anyLong(), anyLong(), anyLong(),
-            any(), any(), any(), anyLong());
+            any(), any(), any(), anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -435,5 +439,52 @@ class AttendanceServiceTest {
                 return attendStatus;
             }
         };
+    }
+
+    // ---------- 온라인(2026-09-29) ----------
+
+    private static com.njwenglish.entity.Attendance savedRow(Student student,
+                                                            AttendanceStatus status,
+                                                            boolean blocked) throws Exception {
+        var ctor = com.njwenglish.entity.Attendance.class.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        var a = ctor.newInstance();
+        ReflectionTestUtils.setField(a, "student", student);
+        ReflectionTestUtils.setField(a, "status", status);
+        ReflectionTestUtils.setField(a, "onlineAutoBlocked", blocked);
+        return a;
+    }
+
+    @Test
+    @DisplayName("결석으로 확정해도 이미 영상을 80% 이상 봤으면 온라인이다")
+    void 결석인데_영상을_봤으면_온라인() {
+        loginAsTeacher();
+        givenLessonWithRoster(seo, kim);
+        given(videoWatchService.lessonPercents(lesson)).willReturn(java.util.Map.of(91L, 85));
+
+        AttendanceConfirmResponse response = attendanceService.confirm(501L,
+            new AttendanceConfirmRequest(List.of(
+                new AttendanceExceptionRequest(91L, AttendanceStatus.ABSENT, null))));
+
+        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ONLINE", null, 1L, false);
+        // 온라인은 출석 쪽이다 — 결석으로 세지 않는다
+        assertThat(response.summary().absent()).isZero();
+        assertThat(response.summary().online()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("선생님이 온라인을 결석으로 되돌려 재확정하면 결석이고, 막혀서 다시 안 바뀐다")
+    void 선생님이_되돌리면_막힌다() throws Exception {
+        loginAsTeacher();
+        givenLessonWithRoster(kim);
+        given(attendanceRepository.findByLessonId(501L))
+            .willReturn(List.of(savedRow(kim, AttendanceStatus.ONLINE, false)));
+        given(videoWatchService.lessonPercents(lesson)).willReturn(java.util.Map.of(91L, 95));
+
+        attendanceService.confirm(501L, new AttendanceConfirmRequest(List.of(
+            new AttendanceExceptionRequest(91L, AttendanceStatus.ABSENT, "안 봄"))));
+
+        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "안 봄", 1L,
+            true);
     }
 }

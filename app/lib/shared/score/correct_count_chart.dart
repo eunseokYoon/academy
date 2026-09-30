@@ -65,7 +65,9 @@ ChartLayout? layoutChart(
 }) {
   if (kind == ChartKind.none) return null;
   final split = kind == ChartKind.splitBar;
+  // 미응시 줄은 막대가 없다(값이 비어 아래 조건에서도 빠지지만 뜻을 적어 둔다).
   final points = items
+      .where((i) => !i.absent)
       .where(
         (i) => split
             ? i.internalTotal != null || i.externalTotal != null

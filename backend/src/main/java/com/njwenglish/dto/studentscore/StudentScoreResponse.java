@@ -61,7 +61,18 @@ public record StudentScoreResponse(
         Short externalTotal,
         TestResult result,
         boolean retestPassed,
-        boolean retestScheduled
+        boolean retestScheduled,
+        /**
+         * 미응시(2026-09-29). 그 주차에 반이 그 시험을 봤는데(다른 학생 성적이 있다)
+         * 이 학생 칸만 비어 있다. 값 칸은 전부 null 이다 — 0점이 아니다. 그래프는 이 줄을
+         * 건너뛰고 목록만 [미응시]를 그린다. 판정은 StudentScoreQueryService 한 곳이다.
+         */
+        boolean absent
     ) {
+        /** 미응시 줄. 값을 채울 방법이 없게 여기서만 만든다. */
+        public static Item absentAt(short year, short month, short week, String weekLabel) {
+            return new Item(year, month, week, weekLabel, null, null, null,
+                null, null, null, null, null, false, false, true);
+        }
     }
 }

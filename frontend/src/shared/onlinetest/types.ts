@@ -31,6 +31,9 @@ export interface OnlineTestResult {
   internalCorrect: number | null;
   externalCorrect: number | null;
   submittedAt: string;
+  /** 첫 해설지(옛 필드). 새 화면은 answerFileUrls 를 읽어라. */
   answerFileUrl: string | null;
+  /** 해설지 전부(2026-09-29). 옛 서버에는 없어서 선택 필드다. */
+  answerFileUrls?: string[];
   results: QuestionResult[];
 }

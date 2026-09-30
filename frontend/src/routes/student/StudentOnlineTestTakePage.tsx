@@ -257,16 +257,20 @@ function ResultView({ result }: { result: OnlineTestResult }) {
         )}
       </div>
 
-      {result.answerFileUrl && (
-        <a
-          href={result.answerFileUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="block rounded-xl border border-slate-300 bg-white px-4 py-3 text-center
-                     text-sm font-medium text-brand-900"
-        >
-          해설지 보기
-        </a>
+      {/* 해설지는 여러 장일 수 있다(2026-09-29). 한 장이면 예전 문구 그대로다 */}
+      {(result.answerFileUrls ?? (result.answerFileUrl ? [result.answerFileUrl] : [])).map(
+        (url, i, all) => (
+          <a
+            key={url}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="block rounded-xl border border-slate-300 bg-white px-4 py-3 text-center
+                       text-sm font-medium text-brand-900"
+          >
+            {all.length > 1 ? `해설지 ${i + 1} 보기` : "해설지 보기"}
+          </a>
+        ),
       )}
 
       <section className="rounded-2xl bg-white p-4 shadow-card">

@@ -1,6 +1,7 @@
 package com.njwenglish.repository;
 
 import com.njwenglish.entity.QnaPost;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +47,14 @@ public interface QnaPostRepository extends JpaRepository<QnaPost, Long> {
         """)
     Page<QnaPost> findRootsForTeacher(@Param("classRoomIds") Collection<Long> classRoomIds,
                                       Pageable pageable);
+
+    /** T-1 「새 질문」. 선생님이 게시판을 마지막으로 연 뒤에 올라온 질문 수다(답글은 세지 않는다). */
+    @Query("""
+        SELECT COUNT(q) FROM QnaPost q
+        WHERE q.parent IS NULL
+          AND q.createdAt > :since
+        """)
+    long countRootsCreatedAfter(@Param("since") OffsetDateTime since);
 
     /** 상세의 답글. 대화 순서라 오름차순이다. */
     @EntityGraph(attributePaths = {"student", "teacher"})

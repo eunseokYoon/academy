@@ -17,8 +17,8 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 정보를 찾을 수 없습니다."),
     ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 출석입니다."),
     DUE_DATE_PASSED(HttpStatus.CONFLICT, "마감 시간이 지났습니다."),
-    PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 10장까지 첨부할 수 있습니다."),
-    /** 게시판은 5장이다. 숙제(10장)와 상한이 달라서 메시지를 공유할 수 없다. */
+    PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 20장까지 첨부할 수 있습니다."),
+    /** 게시판은 5장이다. 숙제(20장)와 상한이 달라서 메시지를 공유할 수 없다. */
     QNA_PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 5장까지 첨부할 수 있습니다."),
     ATTACHMENT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "첨부 파일은 최대 5개까지 올릴 수 있습니다."),
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),

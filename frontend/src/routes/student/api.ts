@@ -307,6 +307,12 @@ export const listMyLessons = (params: {
   page?: number;
 }) => get<PageResponse<StudentLessonListItem>>("/student/lessons", params);
 
+/** 수업 영상 재생 보고(2026-09-29). useYoutubeWatch 가 부른다. */
+export const reportLessonWatch = (
+  lessonId: number,
+  body: { embedUrl: string; durationSeconds: number; buckets: number[] },
+) => post<void>(`/student/lessons/${lessonId}/watch`, body);
+
 export const getMyLesson = (lessonId: number) =>
   get<StudentLessonDetail>(`/student/lessons/${lessonId}`);
 

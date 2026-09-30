@@ -56,10 +56,10 @@ class WeeklyReport {
   final int attended;
   final List<WeekTest> tests;
 
-  /// 그 주 수업에 딸린 숙제. 어느 수업의 것인지 날짜와 함께 든다.
+  /// 그 주 수업에 딸린 숙제 **전부**. 어느 수업의 것인지 날짜와 함께 든다.
   List<(String, LessonHomework)> get homeworks => [
     for (final l in lessons)
-      if (l.homework case final h?) (l.lessonDate, h),
+      for (final h in l.homeworks) (l.lessonDate, h),
   ];
 
   int get doneHomeworks => homeworks.where((h) => h.$2.done).length;
@@ -69,7 +69,10 @@ class WeeklyReport {
 /// 2026-09-27 확정). 웹 `ParentReportPage` 의 `came` 과 같은 규칙이다 — 한쪽만
 /// 고치면 같은 주가 웹과 앱에서 다른 숫자가 된다. 미확인은 아직 모르는 것이라 세지 않는다.
 bool _came(DayStatus? s) =>
-    s == DayStatus.present || s == DayStatus.late || s == DayStatus.makeup;
+    s == DayStatus.present ||
+    s == DayStatus.late ||
+    s == DayStatus.makeup ||
+    s == DayStatus.online;
 
 /// 받은 것들을 한 장으로 엮는다. 계산이 전부 여기 있다 — 테스트가 직접 부른다.
 ///

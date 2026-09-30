@@ -23,7 +23,27 @@ const kPlayerOrigin = 'https://njwenglish.com';
 /// (`YoutubeUrls.embedUrlOf` 가 정본이다. 재생목록 `?list=` 가 이미 있을 수 있다).
 String playerUrlOf(String embedUrl) =>
     '$embedUrl${embedUrl.contains('?') ? '&' : '?'}'
-    'rel=0&modestbranding=1&autoplay=1&playsinline=1';
+    'rel=0&modestbranding=1&autoplay=1&playsinline=1'
+    // IFrame API 가 이 플레이어를 붙잡으려면 둘 다 있어야 한다(시청 기록).
+    '&enablejsapi=1&origin=${Uri.encodeComponent(kPlayerOrigin)}';
+
+/// 시청 기록의 칸 길이(초). 서버 `LessonVideoWatch.BUCKET_SECONDS` 와 같아야 한다.
+const kWatchBucketSeconds = 10;
+
+/// 웹뷰의 JS 가 보낸 `{"d": 길이, "b": [칸...]}`. 모양이 틀리면 null 이다(버린다).
+(double, List<int>)? parseWatchReport(String raw) {
+  try {
+    final json = jsonDecode(raw) as Map<String, dynamic>;
+    final duration = (json['d'] as num).toDouble();
+    final buckets = [
+      for (final b in json['b'] as List<dynamic>) (b as num).toInt(),
+    ];
+    if (duration <= 0 || buckets.isEmpty) return null;
+    return (duration, buckets);
+  } catch (_) {
+    return null;
+  }
+}
 
 /// 수업 영상 한 편. 웹처럼 화면 안의 16:9 칸에서 재생한다.
 ///
@@ -33,9 +53,19 @@ String playerUrlOf(String embedUrl) =>
 /// 플레이어 안의 링크(YouTube 로고·「YouTube에서 보기」)는 웹뷰 안에서 열지 않고
 /// 기기로 넘긴다. 안에서 열면 youtube.com 전체가 16:9 칸 안에 뜬다.
 class YoutubePlayer extends StatefulWidget {
-  const YoutubePlayer({super.key, required this.embedUrl, this.openUrl});
+  const YoutubePlayer({
+    super.key,
+    required this.embedUrl,
+    this.openUrl,
+    this.onWatch,
+  });
 
   final String embedUrl;
+
+  /// 시청 기록(2026-09-29). 플레이어가 **실제로 재생한** 10초 칸 번호와 영상 길이를
+  /// 15초마다·멈춤·끝에 넘긴다. 웹 `shared/lesson/youtubeWatch.ts` 와 같은 규칙이다 —
+  /// 화면을 열어 두기만 하거나 건너뛴 구간은 안 쌓인다.
+  final void Function(double durationSeconds, List<int> buckets)? onWatch;
 
   /// 플레이어 밖으로 나가는 링크. 없으면 시스템 브라우저·YouTube 앱이다.
   final UrlOpener? openUrl;
@@ -59,7 +89,8 @@ class _YoutubePlayerState extends State<YoutubePlayer> {
       ..setBackgroundColor(Colors.black)
       ..setNavigationDelegate(
         NavigationDelegate(onNavigationRequest: _onNavigation),
-      );
+      )
+      ..addJavaScriptChannel('Watch', onMessageReceived: _onWatchMessage);
     final platform = controller.platform;
     if (platform is AndroidWebViewController) {
       // 사용자가 이미 「시청하기」를 눌렀다. 한 번 더 누르게 하지 않는다.
@@ -71,6 +102,21 @@ class _YoutubePlayerState extends State<YoutubePlayer> {
     }
     controller.loadHtmlString(_html(widget.embedUrl), baseUrl: kPlayerOrigin);
     return controller;
+  }
+
+  void _onWatchMessage(JavaScriptMessage message) {
+    final report = parseWatchReport(message.message);
+    if (report == null || !mounted) return;
+    widget.onWatch?.call(report.$1, report.$2);
+  }
+
+  @override
+  void dispose() {
+    // 떠날 때 남은 칸을 보낸다. 웹뷰가 먼저 닫히면 마지막 15초 안쪽은 잃는다(받아들인 손실이다).
+    _controller
+        .runJavaScript('window.flushWatch && flushWatch()')
+        .catchError((_) {});
+    super.dispose();
   }
 
   NavigationDecision _onNavigation(NavigationRequest request) {
@@ -126,8 +172,32 @@ String _html(String embedUrl) {
 <style>html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden}
 iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>
 </head><body>
-<iframe src="$src" title="수업 영상"
+<iframe id="p" src="$src" title="수업 영상"
  allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
  referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<script>
+// 시청 기록. 1초마다 재생 중(1)이면 재생 위치의 10초 칸을 칠하고, 15초마다·멈춤(2)·끝(0)에 보낸다.
+var player = null, pending = {};
+function flushWatch() {
+  if (!player || !window.Watch) return;
+  var keys = Object.keys(pending);
+  var d = player.getDuration ? player.getDuration() : 0;
+  if (keys.length === 0 || !(d > 0)) return;
+  pending = {};
+  Watch.postMessage(JSON.stringify({d: d, b: keys.map(Number)}));
+}
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('p', {events: {onStateChange: function (e) {
+    if (e.data === 0 || e.data === 2) flushWatch();
+  }}});
+}
+setInterval(function () {
+  if (player && player.getPlayerState && player.getPlayerState() === 1) {
+    pending[Math.floor(player.getCurrentTime() / $kWatchBucketSeconds)] = true;
+  }
+}, 1000);
+setInterval(flushWatch, 15000);
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
 </body></html>''';
 }
