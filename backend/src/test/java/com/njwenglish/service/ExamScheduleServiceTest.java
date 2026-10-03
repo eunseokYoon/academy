@@ -125,4 +125,35 @@ class ExamScheduleServiceTest {
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
     }
 
+
+    // ---------- 수정 (2026-10-03) ----------
+
+    @Test
+    @DisplayName("시험 범위만 고치면 기간은 그대로다")
+    void 범위만_고친다() {
+        ExamSchedule existing = schedule(12L, LocalDate.of(2026, 6, 25));
+        given(examScheduleRepository.findWithClassRoom(12L)).willReturn(Optional.of(existing));
+
+        examScheduleService.update(12L, new com.njwenglish.dto.score.ExamScheduleUpdateRequest(
+            null, null, "  교과서 5~9과, 부교재 3강  "));
+
+        assertThat(existing.getScopeNote()).isEqualTo("교과서 5~9과, 부교재 3강");
+        assertThat(existing.getStartDate()).isEqualTo(LocalDate.of(2026, 6, 25));
+        assertThat(existing.getEndDate()).isEqualTo(LocalDate.of(2026, 6, 30));
+    }
+
+    @Test
+    @DisplayName("범위가 null이면 그대로, 빈 문자열이면 지운다")
+    void 빈_범위는_지운다() {
+        ExamSchedule existing = schedule(12L, LocalDate.of(2026, 6, 25));
+        given(examScheduleRepository.findWithClassRoom(12L)).willReturn(Optional.of(existing));
+
+        examScheduleService.update(12L, new com.njwenglish.dto.score.ExamScheduleUpdateRequest(
+            LocalDate.of(2026, 6, 26), null, null));
+        assertThat(existing.getScopeNote()).isEqualTo("교과서 5~8과");
+
+        examScheduleService.update(12L, new com.njwenglish.dto.score.ExamScheduleUpdateRequest(
+            null, null, "   "));
+        assertThat(existing.getScopeNote()).isNull();
+    }
 }

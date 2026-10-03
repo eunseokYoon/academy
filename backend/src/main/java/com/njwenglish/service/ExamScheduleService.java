@@ -72,8 +72,11 @@ public class ExamScheduleService {
         LocalDate endDate = request.endDate() == null ? schedule.getEndDate() : request.endDate();
         requireValidPeriod(startDate, endDate);
 
-        schedule.reschedule(startDate, endDate,
-            request.scopeNote() == null ? schedule.getScopeNote() : request.scopeNote());
+        // 범위: null 이면 그대로, 빈 문자열이면 지운다(2026-10-03). 둘을 같게 다루면 한 번 적은
+        // 범위를 지울 방법이 없다 — 수업 영상 배열의 null/빈 배열과 같은 규칙이다
+        String scopeNote = request.scopeNote() == null ? schedule.getScopeNote()
+            : request.scopeNote().isBlank() ? null : request.scopeNote().trim();
+        schedule.reschedule(startDate, endDate, scopeNote);
         return ExamScheduleResponse.from(schedule);
     }
 
