@@ -64,6 +64,11 @@ class _FakeAuthRepo implements AuthRepository {
   }) => throw UnimplementedError('스모크 테스트는 비밀번호 변경을 거치지 않는다');
 
   @override
+
+  Future<void> deleteAccount(String password) async {}
+
+
+  @override
   Future<void> logout() async {}
 
   @override

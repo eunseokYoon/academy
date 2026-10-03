@@ -136,6 +136,18 @@ class AuthController extends ChangeNotifier {
     _set(const AuthSnapshot.loggedOut());
   }
 
+  /// 본인 계정 삭제(2026-10-03). 서버가 로그인 계정만 지우고 학습 기록은 남긴다
+  /// (`AccountDeletionService`). 실패하면(비밀번호가 틀림 등) 던진다 — 화면이 문구를 띄운다.
+  ///
+  /// 성공하면 [logout] 과 같은 끝으로 간다. `loggedOut` 이 되면 `PushRegistrar` 가 기기 토큰을
+  /// 지우고 세션이 버려진다. 서버의 기기 토큰은 계정과 함께 CASCADE 로 지워져서
+  /// `beforeLogout`(기기 해제 호출)은 부르지 않는다 — 계정이 없어진 뒤라 401 이다.
+  Future<void> deleteAccount(String password) async {
+    await _repository.deleteAccount(password);
+    await _clearLocal();
+    _set(const AuthSnapshot.loggedOut());
+  }
+
   /// `PasswordGateInterceptor`가 부른다(Task 7). 역할은 유지한다 —
   /// 비밀번호를 바꾸면 그 역할 화면으로 돌아가야 한다.
   void markPasswordChangeRequired() {

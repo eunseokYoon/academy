@@ -3,6 +3,7 @@ package com.njwenglish.controller.auth;
 import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.error.ErrorCode;
 import com.njwenglish.common.response.ApiResponse;
+import com.njwenglish.dto.auth.AccountDeleteRequest;
 import com.njwenglish.dto.auth.LoginRequest;
 import com.njwenglish.dto.auth.LoginResponse;
 import com.njwenglish.dto.auth.LoginResult;
@@ -11,6 +12,7 @@ import com.njwenglish.dto.auth.PasswordChangeRequest;
 import com.njwenglish.dto.auth.SignupRequest;
 import com.njwenglish.dto.auth.SignupResponse;
 import com.njwenglish.dto.auth.TokenResponse;
+import com.njwenglish.service.AccountDeletionService;
 import com.njwenglish.service.AuthService;
 import com.njwenglish.service.SignupService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -40,6 +42,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final SignupService signupService;
+    private final AccountDeletionService accountDeletionService;
 
     @Value("${app.jwt.refresh-token-validity-seconds}")
     private long refreshTokenValiditySeconds;
@@ -86,6 +89,18 @@ public class AuthController {
     public ApiResponse<Void> changePassword(@Valid @RequestBody PasswordChangeRequest request,
                                             HttpServletResponse response) {
         authService.changePassword(request);
+        expireRefreshCookie(response);
+        return ApiResponse.ok();
+    }
+
+    /**
+     * 본인 계정 삭제(학생·학부모). 로그인 계정만 지우고 학습 기록은 남긴다 — AccountDeletionService.
+     * DELETE에 본문을 싣지 않으려고 POST다(프록시가 DELETE 본문을 버리는 경우가 있다).
+     */
+    @PostMapping("/account/delete")
+    public ApiResponse<Void> deleteAccount(@Valid @RequestBody AccountDeleteRequest request,
+                                           HttpServletResponse response) {
+        accountDeletionService.deleteMyAccount(request);
         expireRefreshCookie(response);
         return ApiResponse.ok();
     }

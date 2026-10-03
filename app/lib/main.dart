@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -77,6 +78,7 @@ import 'shared/notice/notice_data.dart';
 import 'package:academy_app/shared/lib/param_controller.dart';
 
 import 'shared/widgets/reappear_reload.dart';
+import 'shared/widgets/youtube_player.dart' show kPlayerOrigin;
 import 'shared/widgets/role_shell.dart';
 
 /// 운영은 `--dart-define=API_BASE_URL=https://...`로 넣는다.
@@ -86,8 +88,12 @@ import 'shared/widgets/role_shell.dart';
 /// 연결이 조용히 실패한다. iOS 시뮬레이터는 호스트와 같은 `localhost`다.
 String resolveBaseUrl() {
   const fromDefine = String.fromEnvironment('API_BASE_URL');
+  // 릴리스 빌드에서 --dart-define 을 잊으면 개발 주소로 붙어 로그인이 전부 「연결 실패」로만 보였다
+  // (2026-09-30 리뷰). 릴리스의 기본값은 운영 주소다 — 스테이징이 없어 다른 운영 주소가 없다.
   final value = fromDefine.isNotEmpty
       ? fromDefine
+      : kReleaseMode
+      ? kPlayerOrigin
       : (Platform.isAndroid ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
   // 끝의 '/'를 남기면 Uri.parse('$baseUrl/api/auth')가 '//api/auth'가 되어
   // 쿠키 path가 요청 path와 영영 안 맞는다 — 리프레시 쿠키가 조용히 안 실려
@@ -531,6 +537,7 @@ class _AcademyAppState extends State<AcademyApp> {
                   controller: _session.studentScores,
                   pushSetting: _session.pushSetting,
                   onLogout: widget.auth.logout,
+                  onDeleteAccount: widget.auth.deleteAccount,
                 ),
               ),
             ],
@@ -637,6 +644,7 @@ class _AcademyAppState extends State<AcademyApp> {
                   controller: _session.parentMe,
                   pushSetting: _session.pushSetting,
                   onLogout: widget.auth.logout,
+                  onDeleteAccount: widget.auth.deleteAccount,
                 ),
               ),
             ],

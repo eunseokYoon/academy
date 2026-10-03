@@ -24,6 +24,9 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     /** 퇴원 여부를 가리지 않는다. 학부모 계정을 지워도 되는지 판단할 때 쓴다. */
     long countByParentId(Long parentId);
 
+    /** 학부모 계정 삭제 때 연결을 끊을 자녀 전부(퇴원생 포함). */
+    List<Student> findByParentId(Long parentId);
+
     /**
      * T-2 목록. 세 필터가 모두 선택이라 null이면 조건을 통과시킨다.
      *

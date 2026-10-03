@@ -76,6 +76,17 @@ class _FakeRepo implements AuthRepository {
   @override
   Future<void> logout() async => logoutCalls++;
 
+  /// 있으면 deleteAccount 가 이것을 던진다(비밀번호 틀림 흉내).
+  Object? deleteError;
+  final List<String> deletedWith = [];
+
+  @override
+  Future<void> deleteAccount(String password) async {
+    final error = deleteError;
+    if (error != null) throw error;
+    deletedWith.add(password);
+  }
+
   @override
   Future<SignupResponse> signup({
     required String code,
@@ -229,6 +240,39 @@ void main() {
     await c.bootstrap();
 
     expect(c.snapshot.status, AuthStatus.unknown);
+    expect(await tokens.read(), 'at-1');
+  });
+
+  // 2026-10-03: 스토어가 요구하는 앱 안 계정 삭제
+  test('계정을 삭제하면 보관소를 비우고 loggedOut이다', () async {
+    await tokens.write('at-1');
+    await cookieKv.write('refresh_cookie', 'rt-1');
+    final repo = _FakeRepo(meResult: meOf(UserRole.student));
+    final c = controllerWith(repo);
+    await c.bootstrap();
+
+    await c.deleteAccount('pw-1234');
+
+    expect(repo.deletedWith, ['pw-1234']);
+    expect(c.snapshot.status, AuthStatus.loggedOut);
+    expect(await tokens.read(), isNull);
+    expect(await cookieKv.read('refresh_cookie'), isNull);
+  });
+
+  test('계정 삭제가 거절되면(비밀번호 틀림) 그대로 로그인 상태다', () async {
+    await tokens.write('at-1');
+    final repo = _FakeRepo(meResult: meOf(UserRole.parent))
+      ..deleteError = const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+        statusCode: 401,
+      );
+    final c = controllerWith(repo);
+    await c.bootstrap();
+
+    await expectLater(c.deleteAccount('wrong'), throwsA(isA<ApiException>()));
+
+    expect(c.snapshot.status, AuthStatus.ready);
     expect(await tokens.read(), 'at-1');
   });
 

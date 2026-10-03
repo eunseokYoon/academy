@@ -1,46 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:academy_app/features/auth/legal_info.dart';
 import 'package:academy_app/features/auth/privacy_page.dart';
 import 'package:academy_app/features/auth/terms_page.dart';
 import 'package:academy_app/shared/widgets/legal.dart';
 
 void main() {
-  testWidgets('약관에 초안 표시가 있다', (tester) async {
-    // 학원이 확정해야 하는 값이 남아 있다는 사실을 화면에서 알려야 한다.
+  // 2026-10-03 학원이 확정한 값. 예전에는 Pending 으로 남겨 두었다(빈칸이면 스토어 심사·법정 고지가 막힌다).
+  testWidgets('처리방침에 학원이 확정한 값이 들어 있고 빈칸이 없다', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    expect(find.textContaining('확정 예정'), findsNothing);
+    expect(find.textContaining('확인 필요'), findsNothing);
+    expect(find.textContaining(legalOperator), findsWidgets);
+    expect(find.textContaining('$legalOfficer · $legalPhone'), findsOneWidget);
+    expect(find.textContaining('퇴원한 날로부터 12개월'), findsOneWidget);
+    expect(find.textContaining('Amazon Web Services'), findsOneWidget);
+    expect(find.textContaining('Supabase'), findsOneWidget);
+    expect(find.textContaining('최대 4주)'), findsOneWidget);
+  });
+
+  testWidgets('처리방침과 약관이 계정 삭제 방법을 알린다(스토어 요구)', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
+    expect(find.textContaining('「계정 삭제」'), findsOneWidget);
+    expect(find.textContaining(accountDeletionUrl), findsOneWidget);
     await tester.pumpWidget(const MaterialApp(home: TermsPage()));
-    expect(find.byType(LegalDraftNotice), findsOneWidget);
-  });
-
-  testWidgets('처방침에 초안 표시가 있다', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    expect(find.byType(LegalDraftNotice), findsOneWidget);
-  });
-
-  testWidgets('보관 기간 값을 Pending 으로 남긴다', (tester) async {
-    // 퇴원 후 보관 기간을 그럴듯하게 채우면 그것이 그대로 고지가 된다.
-    // 섹션 3에 있는 Pending을 구체적으로 확인한다.
-    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    final section3 = find.text('3. 보관 기간');
-    expect(section3, findsOneWidget);
-    // 섹션 3 내 Pending이 있는지 확인
-    expect(find.byType(Pending), findsWidgets);
-    expect(find.text('[확정 예정]'), findsNWidgets(2)); // 섹션 3, 4에 각각 하나씩
-  });
-
-  testWidgets('클라우드 사업자 값을 Pending 으로 남긴다', (tester) async {
-    // 제3자 제공 섹션의 클라우드 사업자를 그럴듯하게 채우면 그것이 그대로 고지가 된다.
-    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    final section4 = find.text('4. 제3자 제공과 처리 위탁');
-    expect(section4, findsOneWidget);
-    expect(find.text('[확정 예정]'), findsNWidgets(2)); // 섹션 3, 4에 각각 하나씩
-  });
-
-  testWidgets('연락처를 Pending 으로 남긴다', (tester) async {
-    // 문의처의 담당자·연락처를 그럴듯하게 채우면 그것이 그대로 고지가 된다.
-    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    final section8 = find.text('8. 문의처');
-    expect(section8, findsOneWidget);
-    expect(find.text('[담당자·연락처 확정 예정]'), findsOneWidget);
+    expect(find.textContaining('계정을 삭제할 수 있습니다'), findsOneWidget);
+    expect(find.textContaining(legalPhone), findsOneWidget);
   });
 
   testWidgets('두 화면 모두 절이 하나 이상 있다', (tester) async {
@@ -59,6 +44,8 @@ void main() {
     expect(find.text('제5조 (이용자의 의무)'), findsOneWidget);
     expect(find.text('제6조 (서비스의 중단)'), findsOneWidget);
     expect(find.text('제7조 (약관의 변경)'), findsOneWidget);
+    expect(find.text('제8조 (문의처)'), findsOneWidget);
+    expect(find.text('부칙'), findsOneWidget);
   });
 
   testWidgets('처방침의 절 제목들을 확인한다', (tester) async {
@@ -70,14 +57,8 @@ void main() {
     expect(find.text('5. 개인정보의 국외 이전'), findsOneWidget);
     expect(find.text('6. 이용자의 권리'), findsOneWidget);
     expect(find.text('7. 안전성 확보 조치'), findsOneWidget);
-    expect(find.text('8. 문의처'), findsOneWidget);
-  });
-
-  testWidgets('푸시 알림의 국외 이전 — Google 문의처와 4주는 Pending 이다', (tester) async {
-    // 기억으로 적은 값이다. 그럴듯하게 채우면 그것이 그대로 고지가 된다.
-    await tester.pumpWidget(const MaterialApp(home: PrivacyPage()));
-    expect(find.text('[Google 문의처 확정 예정]'), findsOneWidget);
-    expect(find.text('[확인 필요]'), findsOneWidget);
+    expect(find.text('8. 개인정보 보호책임자와 문의처'), findsOneWidget);
+    expect(find.text('9. 시행일'), findsOneWidget);
   });
 
   testWidgets('국외 이전의 거부 방법이 가리키는 스위치가 앱에 있다', (tester) async {

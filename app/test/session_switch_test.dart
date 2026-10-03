@@ -48,6 +48,11 @@ class _SwitchAuthRepo implements AuthRepository {
   }) async => LoginResponse(accessToken: 'at-${next.id}', user: next);
 
   @override
+
+  Future<void> deleteAccount(String password) async {}
+
+
+  @override
   Future<void> logout() async {}
 
   @override

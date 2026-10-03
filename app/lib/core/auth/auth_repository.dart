@@ -76,6 +76,16 @@ class AuthRepository {
     );
   }
 
+  /// 본인 계정 삭제(2026-10-03, 스토어 요구). 비밀번호가 틀리면 401 `INVALID_CREDENTIALS`.
+  /// 서버가 리프레시 토큰을 지우고 쿠키도 만료시킨다 — 부르는 쪽이 보관소를 비운다.
+  Future<void> deleteAccount(String password) => unwrapCall<void>(
+    () => _dio.post<Map<String, dynamic>>(
+      '/api/auth/account/delete',
+      data: {'password': password},
+    ),
+    (_) {},
+  );
+
   Future<void> logout() => unwrapCall<void>(
     () => _dio.post<Map<String, dynamic>>('/api/auth/logout'),
     (_) {},

@@ -58,6 +58,7 @@ Future<int Function()> _pump(WidgetTester tester, _Repo repo) async {
           controller: c,
           pushSetting: push,
           onLogout: () async => logouts++,
+          onDeleteAccount: (_) async {},
         ),
       ),
     ),

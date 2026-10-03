@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AccountDeleteButton } from "../../shared/auth/AccountDeleteButton";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -111,9 +112,13 @@ export default function ParentMePage() {
         <Link to="/privacy" className="text-slate-500 underline">
           개인정보처리방침
         </Link>
-        <button type="button" onClick={() => void signOut()} className="text-slate-500 underline">
-          로그아웃
-        </button>
+        <div className="flex items-center gap-4">
+          {/* 스토어 심사가 요구하는 앱 안 계정 삭제(2026-10-03) */}
+          <AccountDeleteButton />
+          <button type="button" onClick={() => void signOut()} className="text-slate-500 underline">
+            로그아웃
+          </button>
+        </div>
       </div>
     </div>
   );

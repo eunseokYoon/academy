@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { AccountDeleteButton } from "../../shared/auth/AccountDeleteButton";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { ExamDdayList } from "../../shared/components/ExamDdayList";
@@ -69,9 +70,13 @@ export default function StudentScorePage() {
         <Link to="/privacy" className="text-slate-500 underline">
           개인정보처리방침
         </Link>
-        <button type="button" onClick={() => void signOut()} className="text-slate-500 underline">
-          로그아웃
-        </button>
+        <div className="flex items-center gap-4">
+          {/* 스토어 심사가 요구하는 앱 안 계정 삭제(2026-10-03) */}
+          <AccountDeleteButton />
+          <button type="button" onClick={() => void signOut()} className="text-slate-500 underline">
+            로그아웃
+          </button>
+        </div>
       </div>
     </div>
   );

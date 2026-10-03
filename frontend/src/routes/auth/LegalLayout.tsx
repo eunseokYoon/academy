@@ -4,14 +4,6 @@ import type { ReactNode } from "react";
  * 약관·처리방침 공통 조각. 상호·연락처·보관기간 등 학원이 확정해야 하는 값은
  * 그럴듯하게 지어내지 않고 초안 표시로 남긴다.
  */
-export function LegalDraftNotice() {
-  return (
-    <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-      초안입니다. 상호·연락처·보관 기간 등 최종 문구는 학원에서 확정한 뒤 반영합니다.
-    </p>
-  );
-}
-
 export function LegalSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-6">

@@ -75,6 +75,16 @@ public class Student extends BaseTimeEntity {
         this.parent = parent;
     }
 
+    /** 학생 본인의 계정 삭제(AccountDeletionService). 학생 행과 기록은 남아 미가입 학생이 된다. */
+    public void unlinkUser() {
+        this.user = null;
+    }
+
+    /** 학부모의 계정 삭제. 자녀는 그대로 두고 연결만 끊는다. */
+    public void unlinkParent() {
+        this.parent = null;
+    }
+
     public void rename(String name) {
         this.name = name;
     }

@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/branding.dart';
 import '../../shared/widgets/legal.dart';
+import 'legal_info.dart';
 
 /// C-3. 법정 고지라 로그인 전에도 읽을 수 있다.
 ///
@@ -26,11 +28,10 @@ class TermsPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const LegalDraftNotice(),
                   const LegalSection(
                     title: '제1조 (목적)',
                     body: Text(
-                      '본 약관은 학원이 제공하는 학습 관리 서비스(이하 "서비스")의 이용 조건과 절차, 이용자와 학원의 권리·의무를 정하는 것을 목적으로 합니다.',
+                      '본 약관은 $legalOperator(이하 “학원”)이 제공하는 학습 관리 서비스 $academyName(이하 “서비스”)의 이용 조건과 절차, 이용자와 학원의 권리·의무를 정하는 것을 목적으로 합니다.',
                     ),
                   ),
                   const LegalSection(
@@ -42,13 +43,14 @@ class TermsPage extends StatelessWidget {
                   const LegalSection(
                     title: '제3조 (계정 관리)',
                     body: Text(
-                      '가입 직후 비밀번호는 임시값이며, 변경하기 전까지는 비밀번호 변경 외의 기능을 이용할 수 없습니다. 계정 정보를 타인에게 알려주어 발생한 문제에 대해 학원은 책임지지 않습니다. 비밀번호를 분실한 경우 담당 강사에게 문의해 초기화받습니다.',
+                      '가입 직후 비밀번호는 임시값이며, 변경하기 전까지는 비밀번호 변경 외의 기능을 이용할 수 없습니다. 계정 정보를 타인에게 알려주어 발생한 문제에 대해 학원은 책임지지 않습니다. 비밀번호를 분실한 경우 담당 강사에게 문의해 초기화받습니다.'
+                      '\n학생과 보호자는 앱과 웹의 「내 정보」에서 언제든지 계정을 삭제할 수 있습니다. 삭제하면 로그인 정보는 즉시 파기되며, 학습 기록은 개인정보처리방침에 정한 기간 동안 보관된 뒤 파기됩니다.',
                     ),
                   ),
                   const LegalSection(
                     title: '제4조 (서비스의 내용)',
                     body: Text(
-                      '서비스는 수업 일정과 출석, 숙제 제출과 확인, 시험 결과, 학습 자료와 공지의 열람 기능을 제공합니다. 제공 범위는 이용자의 역할(학생·보호자·강사)에 따라 다릅니다.',
+                      '서비스는 수업 일정과 출석, 숙제 제출과 확인, 시험 결과, 공지 열람, 질문 게시판 기능을 제공합니다. 제공 범위는 이용자의 역할(학생·보호자·강사)에 따라 다릅니다.',
                     ),
                   ),
                   const LegalSection(
@@ -68,6 +70,14 @@ class TermsPage extends StatelessWidget {
                     body: Text(
                       '학원은 필요한 경우 약관을 변경할 수 있으며, 변경된 약관은 본 화면에 게시한 때부터 효력이 발생합니다.',
                     ),
+                  ),
+                  const LegalSection(
+                    title: '제8조 (문의처)',
+                    body: Text('$legalOperator · 대표 $legalOfficer · $legalPhone'),
+                  ),
+                  const LegalSection(
+                    title: '부칙',
+                    body: Text('이 약관은 2026년 10월 3일부터 시행합니다.'),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 32),

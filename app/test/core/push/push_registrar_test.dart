@@ -49,6 +49,11 @@ class _AuthRepo implements AuthRepository {
   );
 
   @override
+
+  Future<void> deleteAccount(String password) async {}
+
+
+  @override
   Future<void> logout() async => _log.add('POST /api/auth/logout');
 
   @override

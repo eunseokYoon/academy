@@ -6,6 +6,7 @@ import SignupPage from "./routes/auth/SignupPage";
 import PasswordPage from "./routes/auth/PasswordPage";
 import TermsPage from "./routes/auth/TermsPage";
 import PrivacyPage from "./routes/auth/PrivacyPage";
+import AccountDeletionPage from "./routes/auth/AccountDeletionPage";
 import StudentLayout from "./routes/student/StudentLayout";
 import StudentAttendancePage from "./routes/student/StudentAttendancePage";
 import StudentClinicPage from "./routes/student/StudentClinicPage";
@@ -56,6 +57,8 @@ export const router = createBrowserRouter([
   { path: "/signup", element: <SignupPage /> },
   { path: "/terms", element: <TermsPage /> },
   { path: "/privacy", element: <PrivacyPage /> },
+  // 구글플레이가 요구하는 앱 밖 계정 삭제 안내. 로그인 없이 열린다
+  { path: "/account-deletion", element: <AccountDeletionPage /> },
   {
     // 역할을 가리지 않는다. 초기 비밀번호 상태에서 유일하게 열리는 화면이다
     path: "/password",

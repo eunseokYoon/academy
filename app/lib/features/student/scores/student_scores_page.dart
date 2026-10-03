@@ -28,11 +28,15 @@ class StudentScoresPage extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onLogout,
+    required this.onDeleteAccount,
     required this.pushSetting,
   });
 
   final StudentScoreController controller;
   final Future<void> Function() onLogout;
+
+  /// 계정 삭제(2026-10-03, 스토어 요구). `AuthController.deleteAccount`.
+  final Future<void> Function(String password) onDeleteAccount;
 
   /// 알림 받기 스위치. 본문과 따로 받는다([PushSettingTile]).
   final PushSettingController pushSetting;
@@ -101,6 +105,7 @@ class _StudentScoresPageState extends State<StudentScoresPage>
         AccountFooter(
           logoutKey: const Key('student-logout'),
           onLogout: widget.onLogout,
+          onDeleteAccount: widget.onDeleteAccount,
         ),
       ],
     );
