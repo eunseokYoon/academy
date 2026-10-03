@@ -60,6 +60,8 @@ public class QnaService {
     private static final List<Long> NO_CLASS_ROOM = List.of(-1L);
 
     private static final int MAX_PHOTOS = 5;
+    /** 장당 10MB. 숙제 사진과 같다 — 리사이즈를 거치면 1MB 미만이라 넉넉하다. */
+    private static final int MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
     private final QnaPostRepository qnaPostRepository;
     private final QnaPhotoRepository qnaPhotoRepository;
@@ -124,10 +126,14 @@ public class QnaService {
         if (!qnaMediaKeys.isSupportedPhotoType(request.contentType())) {
             throw new BusinessException(ErrorCode.UNSUPPORTED_FILE_TYPE);
         }
+        // 크기를 안 보던 때는 게시판이 숙제 사진 상한을 우회하는 통로였다(2026-09-30 리뷰)
+        if (request.bytes() > MAX_PHOTO_BYTES) {
+            throw new BusinessException(ErrorCode.FILE_TOO_LARGE);
+        }
         Long userId = CurrentUser.get().userId();
         String s3Key = qnaMediaKeys.issuePhoto(userId, request.contentType(), LocalDate.now());
         return new QnaUploadUrlResponse(
-            presignedUrlProvider.uploadUrl(s3Key, request.contentType()), s3Key);
+            presignedUrlProvider.uploadUrl(s3Key, request.contentType(), request.bytes()), s3Key);
     }
 
     // ---------- 학생 쓰기 ----------

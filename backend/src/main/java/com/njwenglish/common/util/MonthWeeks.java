@@ -1,6 +1,9 @@
 package com.njwenglish.common.util;
 
+import com.njwenglish.common.error.BusinessException;
+import com.njwenglish.common.error.ErrorCode;
 import java.time.LocalDate;
+import java.time.YearMonth;
 
 /**
  * "몇 월 몇 주차"의 <b>정본</b>. 달 안에서 1일부터 7일씩 끊어 1~5주차로 본다.
@@ -32,7 +35,22 @@ public final class MonthWeeks {
         return label((short) date.getMonthValue(), of(date));
     }
 
-    /** 그 주차의 첫날. 2주차면 8일이다. */
+    /**
+     * 그 달에 있는 주차인가. <b>평년 2월(28일)에는 5주차가 없다</b> — 29일부터 시작해야 하는데
+     * 그날이 없다. 화면의 주차 선택지는 언제나 1~5라서 고를 수는 있다(2026-09-30 리뷰에서
+     * {@link #startOf}가 {@code LocalDate.of(y, 2, 29)}로 터져 500이 났다).
+     * 주차 범위를 받는 조회는 이걸 먼저 보고 false면 빈 결과를 돌려준다.
+     *
+     * <p>월·주차가 아예 범위 밖(13월, 0·6주차)이면 화면이 만들 수 없는 값이라 400이다.
+     */
+    public static boolean exists(int year, int month, int week) {
+        if (month < 1 || month > 12 || week < 1 || week > 5) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return (week - 1) * 7 + 1 <= YearMonth.of(year, month).lengthOfMonth();
+    }
+
+    /** 그 주차의 첫날. 2주차면 8일이다. 없는 주차면 터진다 — {@link #exists}를 먼저 봐라. */
     public static LocalDate startOf(int year, int month, int week) {
         return LocalDate.of(year, month, (week - 1) * 7 + 1);
     }

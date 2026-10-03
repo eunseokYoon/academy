@@ -61,6 +61,8 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+  # 웹뷰를 가짜로 끼워 YoutubePlayer 의 시청 보고를 테스트한다(이미 webview_flutter 가 끌어온다)
+  webview_flutter_platform_interface: ^2.15.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

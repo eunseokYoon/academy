@@ -151,8 +151,8 @@ class StudentLessonRepository {
     (data) => StudentLessonDetail.fromJson(data! as Map<String, dynamic>),
   );
 
-  /// 재생 보고(2026-09-29). 플레이어가 본 10초 칸을 모아 보낸다. 결석인 학생이 80% 이상
-  /// 보면 서버가 출결을 온라인으로 바꾼다. 실패는 부르는 쪽이 버린다(시청 기록은 곁다리다).
+  /// 재생 보고(2026-09-29). 플레이어가 본 10초 칸을 모아 보낸다. 선생님이 그 시청률을 보고
+  /// 온라인 출석을 고른다. 실패는 부르는 쪽이 버린다(시청 기록은 곁다리다).
   Future<void> reportWatch(
     int lessonId, {
     required String embedUrl,

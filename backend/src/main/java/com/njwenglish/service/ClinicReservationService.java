@@ -147,6 +147,12 @@ public class ClinicReservationService {
      * <b>먼저 비워야</b> 같은 학생이 두 시간대에 RESERVED로 남지 않는다.
      * 정원 재확인은 선생님 배정과 같은 reserveLocked를 탄다 — 정원 잠금·중복 검사·
      * 슬롯 검증이 전부 거기 있다. 이동 전용 경로를 따로 만들지 마라.
+     *
+     * <p><b>바꾸는 예약 쪽도 검사한다</b>(2026-09-30 리뷰). 목적지만 보던 때는 선생님이 결석으로
+     * 확정한 예약을 학생이 다른 시각으로 바꾸면 {@code changeArrivalTime}이 출결을 비우고,
+     * 다른 클리닉으로 옮기면 원래 예약이 MOVED가 되어 학부모 캘린더에서 결석이 사라졌다.
+     * 출결이 확정됐거나 이미 지난 클리닉은 학생이 손댈 수 없다 — 「선생님이 깜빡한 날이
+     * 학부모에게 초록으로 보이면 안 된다」(5번)와 같은 무결성이다. 바꿔야 하면 선생님이 한다.
      */
     @Transactional
     public ClinicReservationCreateResponse change(Long clinicId,
@@ -155,6 +161,10 @@ public class ClinicReservationService {
         ClinicReservation reservation = findMyReservation(clinicId, student);
         Clinic fromClinic = reservation.getClinic();
         LocalTime fromArrivalTime = reservation.getArrivalTime();
+        if (reservation.getAttendStatus() != null
+            || fromClinic.getClinicDate().isBefore(LocalDate.now())) {
+            throw new BusinessException(ErrorCode.CLINIC_CHANGE_CLOSED);
+        }
 
         boolean sameClinic = request.targetClinicId() == null
             || request.targetClinicId().equals(clinicId);

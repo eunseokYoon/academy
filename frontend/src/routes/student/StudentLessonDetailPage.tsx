@@ -24,7 +24,7 @@ export default function StudentLessonDetailPage() {
     queryFn: () => getMyLesson(id),
   });
 
-  // 시청 기록(2026-09-29). 결석인 학생이 80% 이상 보면 서버가 출결을 온라인으로 바꾼다.
+  // 시청 기록(2026-09-29). 선생님이 T-5 에서 이 시청률을 보고 온라인 출석을 고른다.
   // 훅은 조기 반환보다 위에 있어야 한다 — 재생 중인 영상이 없으면 아무것도 안 한다
   const playingUrl = playing === null ? null : data?.videos[playing]?.embedUrl ?? null;
   useYoutubeWatch(playerRef, playingUrl, (report) => reportLessonWatch(id, report));

@@ -124,9 +124,7 @@ public class AttendanceService {
         requireAllInRoster(exceptions.keySet(), students);
 
         Teacher teacher = currentTeacher();
-        // 재확정이면 앞 값이 있다 — 온라인을 되돌렸는지(막힘)를 판단하는 데 쓴다
-        Map<Long, Attendance> before = indexByStudent(attendanceRepository.findByLessonId(lessonId));
-        Map<Long, Integer> watch = videoWatchService.lessonPercents(lesson);
+        // 온라인은 선생님이 명단의 시청률을 보고 직접 고른다(2026-09-30). 시청률로 바꾸지 마라
         List<AttendanceStatus> statuses = new ArrayList<>(students.size());
         for (Student student : students) {
             AttendanceExceptionRequest exception = exceptions.get(student.getId());
@@ -134,20 +132,9 @@ public class AttendanceService {
                 ? AttendanceStatus.PRESENT : exception.status();
             String memo = exception == null ? null : exception.memo();
 
-            Attendance previous = before.get(student.getId());
-            boolean blocked = Attendance.nextOnlineAutoBlocked(
-                previous == null ? null : previous.getStatus(), status,
-                previous != null && previous.isOnlineAutoBlocked());
-            // 결석으로 찍었는데 이미 영상을 기준 이상 봤으면 온라인이다(선생님이 막지 않았으면)
-            if (status == AttendanceStatus.ABSENT && !blocked
-                && watch.getOrDefault(student.getId(), 0) >= VideoWatchService.ONLINE_THRESHOLD) {
-                status = AttendanceStatus.ONLINE;
-            }
-
             // attend_date에 lesson_date를 복사한다. 캘린더 조회가 이 컬럼에 의존한다
             attendanceRepository.upsert(lesson.getId(), lesson.getClassRoom().getId(),
-                student.getId(), lesson.getLessonDate(), status.name(), memo, teacher.getId(),
-                blocked);
+                student.getId(), lesson.getLessonDate(), status.name(), memo, teacher.getId());
             statuses.add(status);
         }
 
@@ -197,6 +184,9 @@ public class AttendanceService {
      */
     @Transactional(readOnly = true)
     public List<WeekLessonResponse> week(int year, int month, int week) {
+        if (!MonthWeeks.exists(year, month, week)) {
+            return List.of();
+        }
         return lessonRepository.findForAttendanceWeek(
                 MonthWeeks.startOf(year, month, week),
                 MonthWeeks.endOf(year, month, week),

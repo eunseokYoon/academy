@@ -146,7 +146,7 @@ class AttendanceServiceTest {
         assertThat(response.summary().present()).isEqualTo(3);
         assertThat(response.summary().absent()).isZero();
         verify(attendanceRepository, times(3)).upsert(eq(501L), eq(3L), anyLong(),
-            eq(LESSON_DATE), eq("PRESENT"), eq(null), eq(1L), eq(false));
+            eq(LESSON_DATE), eq("PRESENT"), eq(null), eq(1L));
         assertThat(lesson.getAttendanceStatus()).isEqualTo(LessonAttendanceStatus.CONFIRMED);
         assertThat(lesson.getAttendanceConfirmedBy()).isSameAs(teacher);
     }
@@ -167,12 +167,12 @@ class AttendanceServiceTest {
         assertThat(response.summary().sick()).isEqualTo(1);
 
         // attend_date에 lesson_date를 복사하지 않으면 캘린더 조회가 통째로 빈다
-        verify(attendanceRepository).upsert(501L, 3L, 88L, LESSON_DATE, "PRESENT", null, 1L, false);
-        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "무단", 1L, false);
+        verify(attendanceRepository).upsert(501L, 3L, 88L, LESSON_DATE, "PRESENT", null, 1L);
+        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "무단", 1L);
         // 푸시 #8 — 결석·병결도 포함한 재원생 전원. 하루 1건 묶기는 PushPlanner 몫이다
         verify(eventPublisher).publishEvent(PushEvent.of(PushTopic.ATTENDANCE_LESSON,
             List.of(seo.getId(), kim.getId(), park.getId()), null));
-        verify(attendanceRepository).upsert(501L, 3L, 97L, LESSON_DATE, "SICK", "병원 진료", 1L, false);
+        verify(attendanceRepository).upsert(501L, 3L, 97L, LESSON_DATE, "SICK", "병원 진료", 1L);
     }
 
     @Test
@@ -191,7 +191,7 @@ class AttendanceServiceTest {
         assertThat(second.attendanceStatus()).isEqualTo(LessonAttendanceStatus.CONFIRMED);
         assertThat(second.summary().late()).isEqualTo(1);
         verify(attendanceRepository, times(2)).upsert(eq(501L), eq(3L), eq(91L),
-            eq(LESSON_DATE), any(), any(), eq(1L), eq(false));
+            eq(LESSON_DATE), any(), any(), eq(1L));
     }
 
     @Test
@@ -207,7 +207,7 @@ class AttendanceServiceTest {
             .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED);
 
         verify(attendanceRepository, never()).upsert(anyLong(), anyLong(), anyLong(),
-            any(), any(), any(), anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+            any(), any(), any(), anyLong());
     }
 
     @Test
@@ -441,50 +441,43 @@ class AttendanceServiceTest {
         };
     }
 
-    // ---------- 온라인(2026-09-29) ----------
-
-    private static com.njwenglish.entity.Attendance savedRow(Student student,
-                                                            AttendanceStatus status,
-                                                            boolean blocked) throws Exception {
-        var ctor = com.njwenglish.entity.Attendance.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        var a = ctor.newInstance();
-        ReflectionTestUtils.setField(a, "student", student);
-        ReflectionTestUtils.setField(a, "status", status);
-        ReflectionTestUtils.setField(a, "onlineAutoBlocked", blocked);
-        return a;
-    }
+    // ---------- 온라인(2026-09-29, 2026-09-30 자동 전환 없앰) ----------
 
     @Test
-    @DisplayName("결석으로 확정해도 이미 영상을 80% 이상 봤으면 온라인이다")
-    void 결석인데_영상을_봤으면_온라인() {
+    @DisplayName("결석으로 확정하면 영상을 다 봤어도 결석이다 — 온라인은 선생님이 고른다")
+    void 영상을_봐도_결석은_결석() {
         loginAsTeacher();
-        givenLessonWithRoster(seo, kim);
-        given(videoWatchService.lessonPercents(lesson)).willReturn(java.util.Map.of(91L, 85));
+        givenLessonWithRoster(kim);
 
         AttendanceConfirmResponse response = attendanceService.confirm(501L,
             new AttendanceConfirmRequest(List.of(
                 new AttendanceExceptionRequest(91L, AttendanceStatus.ABSENT, null))));
 
-        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ONLINE", null, 1L, false);
-        // 온라인은 출석 쪽이다 — 결석으로 세지 않는다
+        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", null, 1L);
+        verify(videoWatchService, never()).lessonPercents(any());
+        assertThat(response.summary().absent()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("선생님이 온라인을 고르면 온라인이고 출석 쪽으로 센다")
+    void 선생님이_고르면_온라인() {
+        loginAsTeacher();
+        givenLessonWithRoster(kim);
+
+        AttendanceConfirmResponse response = attendanceService.confirm(501L,
+            new AttendanceConfirmRequest(List.of(
+                new AttendanceExceptionRequest(91L, AttendanceStatus.ONLINE, null))));
+
+        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ONLINE", null, 1L);
         assertThat(response.summary().absent()).isZero();
         assertThat(response.summary().online()).isEqualTo(1);
     }
 
+    // 2026-09-30 리뷰: 화면의 주차 선택지가 1~5라 평년 2월 5주를 고를 수 있고, 그때 500이 났다
     @Test
-    @DisplayName("선생님이 온라인을 결석으로 되돌려 재확정하면 결석이고, 막혀서 다시 안 바뀐다")
-    void 선생님이_되돌리면_막힌다() throws Exception {
-        loginAsTeacher();
-        givenLessonWithRoster(kim);
-        given(attendanceRepository.findByLessonId(501L))
-            .willReturn(List.of(savedRow(kim, AttendanceStatus.ONLINE, false)));
-        given(videoWatchService.lessonPercents(lesson)).willReturn(java.util.Map.of(91L, 95));
-
-        attendanceService.confirm(501L, new AttendanceConfirmRequest(List.of(
-            new AttendanceExceptionRequest(91L, AttendanceStatus.ABSENT, "안 봄"))));
-
-        verify(attendanceRepository).upsert(501L, 3L, 91L, LESSON_DATE, "ABSENT", "안 봄", 1L,
-            true);
+    @DisplayName("평년 2월 5주차는 빈 목록이다 — 없는 날짜로 조회하지 않는다")
+    void 없는_주차는_빈_목록() {
+        assertThat(attendanceService.week(2027, 2, 5)).isEmpty();
+        verify(lessonRepository, never()).findForAttendanceWeek(any(), any(), any());
     }
 }

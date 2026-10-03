@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ErrorCode {
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청입니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "인증이 만료되었습니다. 다시 로그인해 주세요."),
     TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "유효하지 않은 인증 정보입니다."),
@@ -22,6 +23,9 @@ public enum ErrorCode {
     QNA_PHOTO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "사진은 최대 5장까지 첨부할 수 있습니다."),
     ATTACHMENT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "첨부 파일은 최대 5개까지 올릴 수 있습니다."),
     CLINIC_CAPACITY_EXCEEDED(HttpStatus.CONFLICT, "정원이 모두 찼습니다."),
+    /** 학생의 클리닉 변경·이동. 출결이 확정됐거나 지난 클리닉은 바꾸면 그 기록이 사라진다. */
+    CLINIC_CHANGE_CLOSED(HttpStatus.CONFLICT,
+        "출결이 확정됐거나 지난 클리닉은 바꿀 수 없습니다. 선생님께 말씀해 주세요."),
     SUBMISSION_EXISTS(HttpStatus.CONFLICT, "제출한 학생이 있어 삭제할 수 없습니다."),
     NO_RESUBMIT_TARGET(HttpStatus.CONFLICT, "다시 제출할 학생이 없습니다."),
     RESUBMIT_NOT_REQUIRED(HttpStatus.CONFLICT, "다시 제출할 숙제가 아닙니다."),
@@ -29,8 +33,8 @@ public enum ErrorCode {
     // 공개 후 정답을 고치면 이미 응시한 학생의 점수가 소급 변경된다. 삭제 후 재출제가 유일한 경로다
     TEST_ALREADY_PUBLISHED(HttpStatus.CONFLICT,
         "공개된 테스트의 정답과 문항 수는 수정할 수 없습니다. 삭제 후 다시 출제해 주세요."),
-    CLASS_ROOM_HAS_RECORDS(HttpStatus.CONFLICT, "수업·배정 기록이 있어 삭제할 수 없습니다. 종료 처리를 사용해 주세요."),
-    LESSON_HAS_RECORDS(HttpStatus.CONFLICT, "출석·숙제 기록이 있어 삭제할 수 없습니다."),
+    CLASS_ROOM_HAS_RECORDS(HttpStatus.CONFLICT, "수업·배정·공지·시험 등 기록이 있어 삭제할 수 없습니다. 종료 처리를 사용해 주세요."),
+    LESSON_HAS_RECORDS(HttpStatus.CONFLICT, "출석·숙제·수업일 변경 요청 기록이 있어 삭제할 수 없습니다."),
     CLINIC_HAS_RECORDS(HttpStatus.CONFLICT,
         "배정·변경 기록이 있어 삭제할 수 없습니다. 닫기를 사용해 주세요."),
     INVITE_CODE_INVALID(HttpStatus.BAD_REQUEST, "초대코드가 유효하지 않습니다."),

@@ -83,6 +83,11 @@ public class StudentScoreQueryService {
             .map(e -> e.getClassRoom().getId()).distinct().toList();
         return weeklyTestRepository.findTakenByOthersOnly(classRoomIds, studentId).stream()
             .filter(test -> {
+                // 평년 2월 5주처럼 없는 주차에 성적 헤더가 있을 수 있다(화면이 1~5를 다 준다).
+                // 날짜가 없으니 「지났다」·「다녔다」를 판정할 수 없어 미응시로 띄우지 않는다
+                if (!MonthWeeks.exists(test.getYear(), test.getMonth(), test.getWeek())) {
+                    return false;
+                }
                 LocalDate start = MonthWeeks.startOf(test.getYear(), test.getMonth(),
                     test.getWeek());
                 LocalDate end = MonthWeeks.endOf(test.getYear(), test.getMonth(),

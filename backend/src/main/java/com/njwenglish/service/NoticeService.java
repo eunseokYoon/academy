@@ -212,7 +212,7 @@ public class NoticeService {
         String s3Key = materialKeys.issue(teacher.getId(), extension, LocalDate.now());
         String contentType = materialKeys.contentTypeOf(extension);
         return new MaterialUploadUrlResponse(
-            presignedUrlProvider.uploadUrl(s3Key, contentType), s3Key, contentType);
+            presignedUrlProvider.uploadUrl(s3Key, contentType, request.bytes()), s3Key, contentType);
     }
 
     /** 초안으로 만든다. publish를 호출해야 학생·학부모에게 보인다. */

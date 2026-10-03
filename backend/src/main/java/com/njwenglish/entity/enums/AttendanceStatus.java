@@ -11,7 +11,7 @@ public enum AttendanceStatus {
     PRESENT, LATE, ABSENT, SICK, EXCUSED, MAKEUP,
     /**
      * 온라인(2026-09-29). 수업에 못 오고 영상으로 들었다. <b>출석으로 친다</b>(MAKEUP 과 같은 쪽).
-     * 결석인 학생이 영상을 80% 이상 보면 자동으로 이 값이 된다(VideoWatchService). 수업에만 있다 —
+     * 선생님이 T-5 에서 시청률을 보고 직접 고른다 — 시청으로 자동으로 바뀌지 않는다(2026-09-30). 수업에만 있다 —
      * 클리닉에는 영상이 없다. CHECK 제약 두 곳(V28)을 같이 고쳐라.
      */
     ONLINE

@@ -158,8 +158,7 @@ public class WeeklyTestService {
             : !input.hasNoHeader();
 
         if (!wantsColumn) {
-            // 헤더를 지우면 딸린 셀도 ON DELETE CASCADE로 함께 사라진다
-            found.ifPresent(weeklyTestRepository::delete);
+            found.ifPresent(header -> deleteColumn(header, request.loadedAt()));
             return;
         }
 
@@ -178,6 +177,32 @@ public class WeeklyTestService {
                 written.add(cell.studentId());
             }
         }
+    }
+
+    /**
+     * 헤더를 비워 보낸 열을 지운다. 헤더를 지우면 딸린 셀도 ON DELETE CASCADE로 함께 사라진다.
+     *
+     * <p><b>화면을 연 뒤에 생긴 칸이 있으면 헤더를 남긴다.</b> 선생님이 그리드를 열었을 때
+     * 그 주 클리닉 헤더가 없었다면 화면의 헤더 칸은 비어 있다. 그 사이 학생이 온라인
+     * 클리닉 테스트를 내면 {@link #reflectClinicScore}가 헤더와 칸을 만든다. 그대로 두면
+     * 선생님이 단어 점수만 적고 저장해도 비어 있던 클리닉 헤더가 삭제로 읽혀 방금 반영된
+     * 성적이 CASCADE로 사라진다. {@link #saveCell}의 loadedAt 검사와 같은 이유다 —
+     * 그쪽은 칸 삭제만 지켰다. 이때는 화면에 보였던(loadedAt보다 오래된) 칸만 지운다.
+     */
+    private void deleteColumn(WeeklyTest header, OffsetDateTime loadedAt) {
+        if (loadedAt != null) {
+            List<WeeklyTestScore> scores = weeklyTestScoreRepository
+                .findByWeeklyTestIdIn(List.of(header.getId()));
+            boolean hasFresh = scores.stream()
+                .anyMatch(score -> score.getUpdatedAt().isAfter(loadedAt));
+            if (hasFresh) {
+                scores.stream()
+                    .filter(score -> !score.getUpdatedAt().isAfter(loadedAt))
+                    .forEach(weeklyTestScoreRepository::delete);
+                return;
+            }
+        }
+        weeklyTestRepository.delete(header);
     }
 
     // ---------- 온라인 테스트 자동 반영 ----------
@@ -217,13 +242,17 @@ public class WeeklyTestService {
         Optional<WeeklyTest> found = weeklyTestRepository
             .findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
                 classRoom.getId(), WeeklyTestType.CLINIC, year, month, week);
-        if (found.isPresent() && !matchesTotals(found.get(), internalTotal, externalTotal)) {
+        if (found.isEmpty()) {
+            // 같은 주차를 동시에 낸 학생이 먼저 만들었을 수 있다 — 충돌하면 넘어가고 다시 읽는다
+            weeklyTestRepository.insertClinicHeaderIfAbsent(classRoom.getId(), year, month, week,
+                internalTotal, externalTotal);
+            found = weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+                classRoom.getId(), WeeklyTestType.CLINIC, year, month, week);
+        }
+        if (found.isEmpty() || !matchesTotals(found.get(), internalTotal, externalTotal)) {
             return;
         }
-
-        WeeklyTest header = found.orElseGet(() -> weeklyTestRepository.save(
-            WeeklyTest.create(classRoom, WeeklyTestType.CLINIC, year, month, week,
-                null, internalTotal, externalTotal)));
+        WeeklyTest header = found.get();
 
         if (weeklyTestScoreRepository
             .findByWeeklyTestIdAndStudentId(header.getId(), student.getId()).isPresent()) {

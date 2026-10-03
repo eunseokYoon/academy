@@ -40,11 +40,23 @@ public interface ClassRoomRepository extends JpaRepository<ClassRoom, Long> {
     /**
      * 운영이 시작된 반은 지울 수 없다. 하나라도 있으면 409이고 close를 안내한다.
      * 억지로 지우면 학생의 과거 출석·숙제 기록이 함께 사라진다.
+     *
+     * <p><b>ON DELETE가 없는(RESTRICT) class_room_id는 전부 여기 있어야 한다</b>(2026-09-30 리뷰).
+     * 학생을 받기 전에 시험 일정·반 공지·온라인 테스트·주차 성적 헤더만 만들어 둔 반을 지우면
+     * FK 위반 500이 났다. attendances·qna_posts·course_reviews는 수업·배정이 먼저 있어야 생기지만
+     * 판정이 다른 테이블의 생성 순서에 기대지 않게 같이 둔다. class_room_schedules는 CASCADE다.
      */
     @Query(value = """
-        SELECT EXISTS (SELECT 1 FROM lessons     WHERE class_room_id = :classRoomId)
-            OR EXISTS (SELECT 1 FROM enrollments WHERE class_room_id = :classRoomId)
-            OR EXISTS (SELECT 1 FROM homeworks   WHERE class_room_id = :classRoomId)
+        SELECT EXISTS (SELECT 1 FROM lessons        WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM enrollments    WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM homeworks      WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM attendances    WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM notices        WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM exam_schedules WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM online_tests   WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM weekly_tests   WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM qna_posts      WHERE class_room_id = :classRoomId)
+            OR EXISTS (SELECT 1 FROM course_reviews WHERE class_room_id = :classRoomId)
         """, nativeQuery = true)
     boolean hasRecords(@Param("classRoomId") Long classRoomId);
 }

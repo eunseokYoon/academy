@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,12 +42,13 @@ void main() {
   (Dio, FakeAdapter, FakeAdapter) build({
     required List<FakeReply> main,
     required List<FakeReply> plain,
+    HttpClientAdapter? plainOverride,
   }) {
     final mainAdapter = FakeAdapter(replies: main);
     final plainAdapter = FakeAdapter(replies: plain);
 
     final plainDio = Dio(BaseOptions(baseUrl: 'https://example.test'))
-      ..httpClientAdapter = plainAdapter;
+      ..httpClientAdapter = plainOverride ?? plainAdapter;
 
     final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
       ..httpClientAdapter = mainAdapter
@@ -132,6 +135,49 @@ void main() {
     expect(expiredCalls, 1);
   });
 
+  // 2026-09-30 리뷰: 리프레시 호출이 연결 실패로 끝나도 세션 만료로 처리해 토큰을 비웠다
+  test('리프레시가 서버에 닿지 못하면 토큰을 남기고 연결 오류로 넘긴다', () async {
+    await tokens.write('old');
+    final (dio, _, _) = build(
+      main: [const FakeReply(statusCode: 401, body: unauthorized)],
+      plain: const [],
+      plainOverride: _OfflineAdapter(),
+    );
+
+    await expectLater(
+      dio.get<Map<String, dynamic>>('/api/student/home'),
+      throwsA(
+        isA<DioException>()
+            .having((e) => e.response, 'response', isNull)
+            .having((e) => e.type, 'type', DioExceptionType.connectionError),
+      ),
+    );
+
+    expect(await tokens.read(), 'old');
+    expect(expiredCalls, 0);
+  });
+
+  test('리프레시가 5xx면 토큰을 남긴다', () async {
+    await tokens.write('old');
+    final (dio, _, _) = build(
+      main: [const FakeReply(statusCode: 401, body: unauthorized)],
+      plain: [
+        const FakeReply(
+          statusCode: 503,
+          body: {'success': false, 'data': null, 'error': null},
+        ),
+      ],
+    );
+
+    await expectLater(
+      dio.get<Map<String, dynamic>>('/api/student/home'),
+      throwsA(isA<DioException>()),
+    );
+
+    expect(await tokens.read(), 'old');
+    expect(expiredCalls, 0);
+  });
+
   test('리프레시 성공 후 재시도가 실패해도 세션을 비우지 않는다', () async {
     // 실사례: 비밀번호 변경 화면에서 현재 비밀번호를 한 번 틀리면
     // (백엔드가 INVALID_CREDENTIALS 를 401 로 준다) 리프레시 자체는 쿠키가
@@ -194,4 +240,20 @@ void main() {
     expect(plainAdapter.received, isEmpty);
     expect(expiredCalls, 0);
   });
+}
+
+/// 서버에 닿지 못한다(비행기 모드). 응답이 없다.
+class _OfflineAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) => throw DioException(
+    requestOptions: options,
+    type: DioExceptionType.connectionError,
+  );
+
+  @override
+  void close({bool force = false}) {}
 }

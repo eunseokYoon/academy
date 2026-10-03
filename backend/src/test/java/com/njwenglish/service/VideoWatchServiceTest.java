@@ -11,14 +11,11 @@ import com.njwenglish.common.error.BusinessException;
 import com.njwenglish.common.security.StudentAccessGuard;
 import com.njwenglish.dto.lesson.LessonWatchRequest;
 import com.njwenglish.dto.lesson.VideoWatchState;
-import com.njwenglish.entity.Attendance;
 import com.njwenglish.entity.ClassRoom;
 import com.njwenglish.entity.Lesson;
 import com.njwenglish.entity.LessonVideo;
 import com.njwenglish.entity.LessonVideoWatch;
 import com.njwenglish.entity.Student;
-import com.njwenglish.entity.enums.AttendanceStatus;
-import com.njwenglish.repository.AttendanceRepository;
 import com.njwenglish.repository.LessonRepository;
 import com.njwenglish.repository.LessonVideoWatchRepository;
 import com.njwenglish.support.Fixtures;
@@ -37,7 +34,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 수업 영상 시청 기록과 온라인 자동 출결(V28, 2026-09-29). */
+/** 수업 영상 시청 기록(V28, 2026-09-29). 출결은 바꾸지 않는다(2026-09-30). */
 @ExtendWith(MockitoExtension.class)
 class VideoWatchServiceTest {
 
@@ -50,8 +47,6 @@ class VideoWatchServiceTest {
     @Mock
     private LessonVideoWatchRepository watchRepository;
     @Mock
-    private AttendanceRepository attendanceRepository;
-    @Mock
     private StudentAccessGuard studentAccessGuard;
 
     private VideoWatchService service;
@@ -61,8 +56,7 @@ class VideoWatchServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new VideoWatchService(lessonRepository, watchRepository, attendanceRepository,
-            studentAccessGuard);
+        service = new VideoWatchService(lessonRepository, watchRepository, studentAccessGuard);
         lesson = Fixtures.lesson(30L, room, LocalDate.of(2026, 9, 21));
     }
 
@@ -76,16 +70,6 @@ class VideoWatchServiceTest {
 
     private static List<Integer> range(int from, int to) {
         return IntStream.range(from, to).boxed().toList();
-    }
-
-    private static Attendance attendance(AttendanceStatus status, boolean blocked)
-        throws Exception {
-        var ctor = Attendance.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        Attendance a = ctor.newInstance();
-        ReflectionTestUtils.setField(a, "status", status);
-        ReflectionTestUtils.setField(a, "onlineAutoBlocked", blocked);
-        return a;
     }
 
     @Nested
@@ -151,41 +135,48 @@ class VideoWatchServiceTest {
             given(lessonRepository.findForStudent(30L, 91L)).willReturn(Optional.of(lesson));
         }
 
+        /** DB 행이 ON CONFLICT로 만들어졌다고 치고, 잠금 조회가 그 행을 돌려준다. */
         private void firstReport() {
-            given(watchRepository.findByLessonIdAndStudentIdAndVideoUrl(30L, 91L, URL_A))
-                .willReturn(Optional.empty());
-            given(watchRepository.save(any())).willAnswer(i -> {
-                saved = i.getArgument(0);
-                return saved;
-            });
+            saved = LessonVideoWatch.start(lesson, kim, URL_A, 10, OffsetDateTime.now());
+            given(watchRepository.findForUpdate(30L, 91L, URL_A)).willReturn(Optional.of(saved));
         }
 
         @Test
-        @DisplayName("결석인 학생이 80% 이상 보면 온라인이 된다")
-        void 결석이면_온라인() throws Exception {
+        @DisplayName("재생 보고는 본 칸만 칠한다 — 80% 이상이어도 출결은 건드리지 않는다(2026-09-30)")
+        void 칸만_칠한다() {
             firstReport();
-            Attendance absent = attendance(AttendanceStatus.ABSENT, false);
-            given(watchRepository.findByLessonIdAndStudentId(30L, 91L))
-                .willAnswer(i -> List.of(saved));
-            given(attendanceRepository.findByLessonIdAndStudentId(30L, 91L))
-                .willReturn(Optional.of(absent));
 
             service.record(30L, new LessonWatchRequest(EMBED_A, 100.0, range(0, 8)));
 
+            // 출결을 읽거나 바꿀 의존성이 서비스에 아예 없다(생성자). 온라인은 선생님이 고른다
             assertThat(saved.percent()).isEqualTo(80);
-            assertThat(absent.getStatus()).isEqualTo(AttendanceStatus.ONLINE);
+        }
+
+        // 2026-09-30 리뷰: 「찾아서 없으면 save」는 첫 보고 둘이 겹치면 유니크 위반 500이 났고,
+        // 잠금 없이 읽고 칠해서 늦게 커밋한 보고가 앞 보고의 칸을 덮었다
+        @Test
+        @DisplayName("행 만들기는 ON CONFLICT, 칠하기는 잠근 행에 한다 — save 경로를 타지 않는다")
+        void 만들고_잠가서_칠한다() {
+            firstReport();
+
+            service.record(30L, new LessonWatchRequest(EMBED_A, 100.0, range(0, 3)));
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(watchRepository);
+            order.verify(watchRepository).insertIfAbsent(30L, 91L, URL_A, 10);
+            order.verify(watchRepository).findForUpdate(30L, 91L, URL_A);
+            verify(watchRepository, never()).save(any());
+            assertThat(saved.percent()).isEqualTo(30);
         }
 
         @Test
-        @DisplayName("80% 미만이면 결석 그대로다")
-        void 미만이면_그대로() throws Exception {
+        @DisplayName("이미 칠해진 행에는 칸을 더한다 — 앞 보고의 칸이 지워지지 않는다")
+        void 앞_보고의_칸을_지키다() {
             firstReport();
-            given(watchRepository.findByLessonIdAndStudentId(30L, 91L))
-                .willAnswer(i -> List.of(saved));
+            saved.markWatched(range(0, 4), 10, OffsetDateTime.now()); // 앞 보고가 커밋한 칸
 
-            service.record(30L, new LessonWatchRequest(EMBED_A, 100.0, range(0, 7)));
+            service.record(30L, new LessonWatchRequest(EMBED_A, 100.0, range(4, 6)));
 
-            verify(attendanceRepository, never()).findByLessonIdAndStudentId(any(), any());
+            assertThat(saved.percent()).isEqualTo(60);
         }
 
         @Test
@@ -193,19 +184,9 @@ class VideoWatchServiceTest {
         void 없는_영상은_버린다() {
             service.record(30L, new LessonWatchRequest(
                 "https://www.youtube.com/embed/zzzzzzzzzzz", 100.0, range(0, 10)));
-            verify(watchRepository, never()).save(any());
+            verify(watchRepository, never()).insertIfAbsent(any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyInt());
         }
-    }
-
-    @Test
-    @DisplayName("출석한 학생·선생님이 되돌린 학생은 바뀌지 않는다")
-    void 출석과_막힘은_그대로() throws Exception {
-        Attendance present = attendance(AttendanceStatus.PRESENT, false);
-        Attendance blocked = attendance(AttendanceStatus.ABSENT, true);
-        assertThat(present.markOnlineByWatch()).isFalse();
-        assertThat(blocked.markOnlineByWatch()).isFalse();
-        assertThat(present.getStatus()).isEqualTo(AttendanceStatus.PRESENT);
-        assertThat(blocked.getStatus()).isEqualTo(AttendanceStatus.ABSENT);
     }
 
     @Test
@@ -216,21 +197,5 @@ class VideoWatchServiceTest {
         assertThatThrownBy(() -> service.record(30L,
             new LessonWatchRequest(EMBED_A, 100.0, List.of(0))))
             .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    @DisplayName("선생님이 온라인을 되돌리면 막히고, 온라인으로 찍으면 풀린다")
-    void 선생님_수정() throws Exception {
-        assertThat(Attendance.nextOnlineAutoBlocked(AttendanceStatus.ONLINE,
-            AttendanceStatus.ABSENT, false)).isTrue();
-        assertThat(Attendance.nextOnlineAutoBlocked(AttendanceStatus.ABSENT,
-            AttendanceStatus.ONLINE, true)).isFalse();
-        assertThat(Attendance.nextOnlineAutoBlocked(AttendanceStatus.PRESENT,
-            AttendanceStatus.ABSENT, false)).isFalse();
-
-        Attendance online = attendance(AttendanceStatus.ONLINE, false);
-        online.correct(AttendanceStatus.ABSENT, null, Fixtures.teacherEntity(1L));
-        assertThat(online.isOnlineAutoBlocked()).isTrue();
-        assertThat(online.markOnlineByWatch()).isFalse();
     }
 }

@@ -1,4 +1,5 @@
 import 'package:cookie_jar/cookie_jar.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:academy_app/core/api/api_exception.dart';
 import 'package:academy_app/core/auth/auth_controller.dart';
@@ -17,6 +18,7 @@ class _FakeRepo implements AuthRepository {
     this.meResult,
     this.loginResult,
     this.throwOnMe = false,
+    this.meError,
     this.jarProbe,
     this.probeUri,
   });
@@ -24,6 +26,9 @@ class _FakeRepo implements AuthRepository {
   MeResponse? meResult;
   LoginResponse? loginResult;
   bool throwOnMe;
+
+  /// 있으면 me()가 이것을 던진다(연결 실패·5xx 흉내).
+  Object? meError;
 
   int meCalls = 0;
   int logoutCalls = 0;
@@ -44,10 +49,13 @@ class _FakeRepo implements AuthRepository {
       final cookies = await jarProbe!.loadForRequest(probeUri!);
       cookiePresentAtMeCall = cookies.any((c) => c.name == 'refreshToken');
     }
+    final error = meError;
+    if (error != null) throw error;
     if (throwOnMe) {
       throw const ApiException(
         code: 'TOKEN_INVALID',
         message: '유효하지 않은 인증 정보입니다.',
+        statusCode: 401,
       );
     }
     return meResult!;
@@ -165,7 +173,7 @@ void main() {
     expect(repo.cookiePresentAtMeCall, isTrue);
   });
 
-  test('me가 실패하면 보관소를 비우고 loggedOut이다', () async {
+  test('me가 401로 거절되면 보관소를 비우고 loggedOut이다', () async {
     await tokens.write('at-1');
     await cookieKv.write('refresh_cookie', 'rt-1');
     final c = controllerWith(_FakeRepo(throwOnMe: true));
@@ -175,6 +183,53 @@ void main() {
     expect(c.snapshot.status, AuthStatus.loggedOut);
     expect(await tokens.read(), isNull);
     expect(await cookieKv.read('refresh_cookie'), isNull);
+  });
+
+  // 2026-09-30 리뷰: 예전에는 어떤 실패든 보관소를 비워 망이 없을 때 앱을 열면 매번
+  // 로그아웃됐다(푸시 기기 토큰까지 지워졌다).
+  test('연결이 안 되면 로그인 정보를 남기고 다시 시도를 띄운다', () async {
+    await tokens.write('at-1');
+    await cookieKv.write('refresh_cookie', 'rt-1');
+    final repo = _FakeRepo(
+      meError: DioException(
+        requestOptions: RequestOptions(path: '/api/auth/me'),
+        type: DioExceptionType.connectionError,
+      ),
+    );
+    final c = controllerWith(repo);
+
+    await c.bootstrap();
+
+    expect(c.snapshot.status, AuthStatus.unknown);
+    expect(c.bootError, isNotNull);
+    expect(await tokens.read(), 'at-1');
+    expect(await cookieKv.read('refresh_cookie'), 'rt-1');
+
+    // 망이 돌아와 다시 시도하면 복원된다
+    repo
+      ..meError = null
+      ..meResult = meOf(UserRole.parent);
+    await c.bootstrap();
+    expect(c.snapshot.status, AuthStatus.ready);
+    expect(c.bootError, isNull);
+  });
+
+  test('서버가 5xx면 로그인 정보를 남긴다', () async {
+    await tokens.write('at-1');
+    final c = controllerWith(
+      _FakeRepo(
+        meError: const ApiException(
+          code: 'INTERNAL_ERROR',
+          message: '서버 오류가 발생했습니다.',
+          statusCode: 500,
+        ),
+      ),
+    );
+
+    await c.bootstrap();
+
+    expect(c.snapshot.status, AuthStatus.unknown);
+    expect(await tokens.read(), 'at-1');
   });
 
   test('mustChangePassword면 ready가 아니다', () async {

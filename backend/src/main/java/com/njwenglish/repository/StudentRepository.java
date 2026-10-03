@@ -113,6 +113,13 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
      * 있다는 것 자체가 제3자가 아니라 실제로 활동한 학생이라는 증거다. student_id에
      * ON DELETE가 없어(RESTRICT 기본값) 이 검사를 빼먹으면 삭제가 409가 아니라 FK 위반으로
      * 처리되지 않은 500이 된다.
+     *
+     * <p><b>ON DELETE가 없는(RESTRICT) student_id는 전부 여기 있어야 한다</b>(2026-09-30 리뷰에서
+     * 둘이 빠져 있었다). 수업일 변경 요청(lesson_change_requests)은 재원만 하면 반 코드로 들어온
+     * 제3자도 만들 수 있고, 승인되면 개인 공지(notices.student_id)가 생긴다. 빠지면 409가 아니라
+     * FK 위반 500이다. 클리닉 변경 기록(clinic_change_logs)은 예약이 있어야 생기고 예약은 지워지지
+     * 않으므로(unassign은 CANCELED) clinic_reservations가 덮는다. ON DELETE CASCADE인
+     * course_reviews·lesson_video_watches는 넣지 않는다 — 후기는 운영 기록이 아니다(12번).
      */
     @Query(value = """
         SELECT EXISTS (SELECT 1 FROM attendances             WHERE student_id = :studentId)
@@ -124,6 +131,8 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             OR EXISTS (SELECT 1 FROM online_test_submissions WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM clinic_reservations     WHERE student_id = :studentId)
             OR EXISTS (SELECT 1 FROM qna_posts               WHERE student_id = :studentId)
+            OR EXISTS (SELECT 1 FROM lesson_change_requests  WHERE student_id = :studentId)
+            OR EXISTS (SELECT 1 FROM notices                 WHERE student_id = :studentId)
         """, nativeQuery = true)
     boolean hasOperationalRecords(@Param("studentId") Long studentId);
 

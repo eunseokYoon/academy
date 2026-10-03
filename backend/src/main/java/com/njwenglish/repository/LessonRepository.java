@@ -30,10 +30,17 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     /**
      * 수업일을 지울 수 있는지. 출석·숙제가 걸려 있으면 FK로 막히기 전에 409로 돌려준다.
      * 그 수업은 이미 운영된 날이라 지우면 학생의 기록이 사라진다.
+     *
+     * <p><b>수업일 변경 요청도 막는다</b>(2026-09-30 리뷰). 요청은 대개 <b>미래</b> 수업을 가리켜서
+     * 출석·숙제가 아직 없는 수업이 이 검사를 통과한 뒤 FK 위반 500이 났다. 승인된 요청은 학생에게
+     * 「그날 그 반으로 간다」고 공지까지 나간 상태라, 수업을 조용히 지우면 안 된다.
+     * ON DELETE CASCADE인 lesson_videos·lesson_video_watches는 넣지 않는다.
      */
     @Query(value = """
-        SELECT EXISTS (SELECT 1 FROM attendances WHERE lesson_id = :lessonId)
-            OR EXISTS (SELECT 1 FROM homeworks   WHERE lesson_id = :lessonId)
+        SELECT EXISTS (SELECT 1 FROM attendances            WHERE lesson_id = :lessonId)
+            OR EXISTS (SELECT 1 FROM homeworks              WHERE lesson_id = :lessonId)
+            OR EXISTS (SELECT 1 FROM lesson_change_requests WHERE from_lesson_id = :lessonId
+                                                               OR to_lesson_id = :lessonId)
         """, nativeQuery = true)
     boolean hasRecords(@Param("lessonId") Long lessonId);
 

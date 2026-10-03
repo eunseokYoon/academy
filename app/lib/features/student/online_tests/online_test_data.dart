@@ -290,6 +290,25 @@ class OnlineTestTakeController extends ParamController<int, OnlineTestView> {
   /// 화면이 저장·제출에 직접 쓴다.
   final OnlineTestRepository repository;
 
+  /// 화면이 마지막으로 들고 있던 답(테스트별). **떠났다 다시 들어오면 서버 응답보다
+  /// 이것을 먼저 쓴다.** 이 컨트롤러는 세션 수명이라 [data] 가 처음 받은 답을 그대로
+  /// 들고 있다 — 60초 안에 다시 들어오면 `load` 가 건너뛰고, 다시 받더라도 도착 전까지
+  /// 옛 [data] 가 보인다. 그 옛 답으로 화면을 채우면 다음 자동 저장이 서버에 이미
+  /// 저장된 답을 null 로 덮는다(2026-09-30 리뷰에서 발견). 제출하면 지운다.
+  final Map<int, List<int?>> _drafts = {};
+
+  List<int?>? draftOf(int testId) => _drafts[testId];
+
+  void keepDraft(int testId, List<int?> answers) =>
+      _drafts[testId] = [...answers];
+
+  void clearDraft(int testId) => _drafts.remove(testId);
+
+  /// 저장을 한 줄로 세운다 — 앞 저장이 늦게 끝나 뒤 저장을 덮지 않게. 화면이 아니라
+  /// 여기 두는 이유는 떠날 때 흘려 보낸 저장과 다시 들어와 고른 답의 저장이 **다른
+  /// 화면 State** 에서 나가기 때문이다.
+  Future<void> saving = Future<void>.value();
+
   @override
   Future<OnlineTestView> fetch(int param) async {
     final take = await repository.take(param);
