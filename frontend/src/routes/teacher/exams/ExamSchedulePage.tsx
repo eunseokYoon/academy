@@ -12,7 +12,9 @@ import {
   deleteExamSchedule,
   listClassRooms,
   listExamSchedules,
+  updateExamSchedule,
 } from "../api";
+import type { ExamSchedule } from "../api";
 import { today } from "../format";
 
 const NOW = new Date();
@@ -36,6 +38,8 @@ export default function ExamSchedulePage() {
   const queryClient = useQueryClient();
   const [year, setYear] = useState(NOW.getFullYear());
   const [creating, setCreating] = useState<{ semester: number; examType: ExamType } | null>(null);
+  /** 고치는 중인 칸. 기간·범위만 고친다 — 반·학기·시험종류는 UNIQUE 키라 지우고 다시 만든다. */
+  const [editing, setEditing] = useState<{ schedule: ExamSchedule; label: string } | null>(null);
 
   const classRooms = useQuery({
     queryKey: ["teacher", "class-rooms"],
@@ -115,17 +119,33 @@ export default function ExamSchedulePage() {
                             {cell.startDate.slice(5).replace(/-/g, ".")}~
                             {cell.endDate.slice(5).replace(/-/g, ".")}
                           </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm(`${room.name} ${column.label} 일정을 삭제할까요?`)) {
-                                remove.mutate(cell.examScheduleId);
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditing({
+                                  schedule: cell,
+                                  label: `${room.name} ${column.label}`,
+                                })
                               }
-                            }}
-                            className="text-xs text-slate-400 underline"
-                          >
-                            삭제
-                          </button>
+                              className="text-xs text-slate-600 underline"
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  window.confirm(`${room.name} ${column.label} 일정을 삭제할까요?`)
+                                ) {
+                                  remove.mutate(cell.examScheduleId);
+                                }
+                              }}
+                              className="text-xs text-slate-400 underline"
+                            >
+                              삭제
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         // 미등록이 눈에 띄어야 한다
@@ -141,6 +161,18 @@ export default function ExamSchedulePage() {
       </div>
 
       {remove.isError && <FormError message={errorMessage(remove.error)} />}
+
+      {editing && (
+        <EditModal
+          schedule={editing.schedule}
+          label={editing.label}
+          onClose={() => setEditing(null)}
+          onDone={() => {
+            void queryClient.invalidateQueries({ queryKey: ["teacher", "exam-schedules"] });
+            setEditing(null);
+          }}
+        />
+      )}
 
       {creating && (
         <CreateModal
@@ -311,6 +343,91 @@ function CreateModal({
 
         <SubmitButton pending={save.isPending} disabled={selected.length === 0}>
           {selected.length}개 반에 등록
+        </SubmitButton>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * 기간·범위 수정(2026-10-03). 예전에는 범위를 고치려면 지우고 처음부터 다시 등록해야 했다 —
+ * 내신 성적이 연결된 일정은 지울 수도 없다(409).
+ *
+ * <p>범위를 비우고 저장하면 지운다. 서버가 null은 「그대로」, 빈 문자열은 「지움」으로 받는다.
+ */
+function EditModal({
+  schedule,
+  label,
+  onClose,
+  onDone,
+}: {
+  schedule: ExamSchedule;
+  label: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [startDate, setStartDate] = useState(schedule.startDate);
+  const [endDate, setEndDate] = useState(schedule.endDate);
+  const [scopeNote, setScopeNote] = useState(schedule.scopeNote ?? "");
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateExamSchedule(schedule.examScheduleId, {
+        startDate,
+        endDate,
+        scopeNote: scopeNote.trim(),
+      }),
+    onSuccess: onDone,
+  });
+
+  // 서버도 막지만(400) 화면에서 먼저 막는다
+  const invalidPeriod = endDate < startDate;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!invalidPeriod) save.mutate();
+  }
+
+  return (
+    <Modal title={`${label} 수정`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-sm text-slate-700">
+            시작일
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+          </label>
+          <label className="text-sm text-slate-700">
+            종료일
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+          </label>
+        </div>
+        {invalidPeriod && <FormError message="종료일이 시작일보다 앞설 수 없습니다." />}
+
+        <label className="block text-sm text-slate-700">
+          시험 범위
+          <textarea
+            value={scopeNote}
+            onChange={(e) => setScopeNote(e.target.value)}
+            rows={3}
+            placeholder="교과서 5~8과, 부교재 전 범위"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+        </label>
+
+        {save.isError && <FormError message={errorMessage(save.error)} />}
+
+        <SubmitButton pending={save.isPending} disabled={invalidPeriod}>
+          저장
         </SubmitButton>
       </form>
     </Modal>

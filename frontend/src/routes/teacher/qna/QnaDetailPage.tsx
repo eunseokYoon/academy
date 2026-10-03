@@ -1,12 +1,22 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { answerTeacherQna, deleteTeacherQna, fetchTeacherQnaDetail } from "../api";
+import { errorMessage } from "../../../shared/api/errors";
+import { FormError } from "../../../shared/components/FormError";
+import {
+  answerTeacherQna,
+  deleteTeacherQna,
+  fetchTeacherQnaDetail,
+  updateTeacherQna,
+} from "../api";
 import { PhotoPicker } from "../../../shared/qna/PhotoPicker";
 import { PhotoStrip } from "../../../shared/qna/PhotoStrip";
 
 /**
- * T-15 상세. 답글을 쓰고, 부적절한 글·답글을 내린다.
+ * T-15 상세. 답글을 쓰고 고치고, 부적절한 글·답글을 내린다.
+ *
+ * <p>고칠 수 있는 것은 <b>선생님 본인 답글의 본문뿐이다</b>(서버의 `editable`). 학생 글을 대신
+ * 고치면 학생이 안 쓴 말이 남는다. 사진은 고치지 않는다 — 바꾸려면 지우고 다시 쓴다.
  *
  * <p>질문 삭제는 답글과 사진까지 함께 지운다(ON DELETE CASCADE). 되돌릴 수 없다.
  */
@@ -18,6 +28,8 @@ export default function QnaDetailPage() {
 
   const [content, setContent] = useState("");
   const [s3Keys, setS3Keys] = useState<string[]>([]);
+  /** 고치는 중인 답글. 한 번에 하나만 연다. */
+  const [editing, setEditing] = useState<{ answerId: number; content: string } | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["teacher", "qna", "detail", id],
@@ -29,6 +41,15 @@ export default function QnaDetailPage() {
     onSuccess: () => {
       setContent("");
       setS3Keys([]);
+      queryClient.invalidateQueries({ queryKey: ["teacher", "qna", "detail", id] });
+    },
+  });
+
+  const edit = useMutation({
+    mutationFn: (target: { answerId: number; content: string }) =>
+      updateTeacherQna(target.answerId, { content: target.content }),
+    onSuccess: () => {
+      setEditing(null);
       queryClient.invalidateQueries({ queryKey: ["teacher", "qna", "detail", id] });
     },
   });
@@ -83,17 +104,73 @@ export default function QnaDetailPage() {
             }`}
           >
             <p className="text-xs font-medium text-brand-700">{item.authorName}</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-brand-800">{item.content}</p>
-            <PhotoStrip photos={item.photos} />
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("이 답글을 지울까요?")) removePost.mutate(item.answerId);
-              }}
-              className="mt-2 text-xs text-red-600"
-            >
-              답글 삭제
-            </button>
+            {editing?.answerId === item.answerId ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (editing.content.trim() !== "") edit.mutate(editing);
+                }}
+                className="mt-2 space-y-2"
+              >
+                <textarea
+                  value={editing.content}
+                  onChange={(e) => setEditing({ ...editing, content: e.target.value })}
+                  rows={4}
+                  required
+                  autoFocus
+                  className="w-full rounded-lg border border-brand-200 p-2 text-sm"
+                />
+                {edit.isError && <FormError message={errorMessage(edit.error)} />}
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={edit.isPending || editing.content.trim() === ""}
+                    className="rounded-lg bg-brand-900 px-3 py-1.5 text-xs font-medium text-white
+                               disabled:opacity-50"
+                  >
+                    {edit.isPending ? "저장 중…" : "저장"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(null);
+                      edit.reset();
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-xs text-brand-700 ring-1 ring-brand-200"
+                  >
+                    취소
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-brand-800">{item.content}</p>
+                <PhotoStrip photos={item.photos} />
+                <div className="mt-2 flex gap-3">
+                  {item.editable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        edit.reset();
+                        setEditing({ answerId: item.answerId, content: item.content });
+                      }}
+                      className="text-xs text-brand-700 underline"
+                    >
+                      답글 수정
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("이 답글을 지울까요?")) removePost.mutate(item.answerId);
+                    }}
+                    className="text-xs text-red-600"
+                  >
+                    답글 삭제
+                  </button>
+                </div>
+              </>
+            )}
           </li>
         ))}
       </ul>
