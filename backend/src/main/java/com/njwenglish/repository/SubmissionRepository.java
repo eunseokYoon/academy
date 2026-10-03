@@ -179,15 +179,17 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * {@link com.njwenglish.entity.Submission#isResubmitTarget()}과 같은 조건이다.
      *
      * <p>submitted는 그대로 둔다. 실제로 온라인 제출 절차를 탄 것만 status가 바뀌므로 —
-     * GRID든 ONLINE이든 — "제출" 그대로가 맞는 뜻이다.
+     * GRID든 ONLINE이든 — "제출" 그대로가 맞는 뜻이다. 그래서 선생님이 되돌린 GRID 학생은
+     * 「제출」과 「미제출」에 함께 잡힌다 — 한 번 냈고, 다시 내야 한다.
+     *
+     * <p>GRID는 status를 보지 않는다 — {@link #countPendingHomeworks}의 주석을 봐라.
      */
     @Query("""
         SELECT h.id AS homeworkId,
                COUNT(s) AS total,
                SUM(CASE
                      WHEN h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID THEN
-                       CASE WHEN s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED
-                             AND h.dueAt IS NOT NULL
+                       CASE WHEN h.dueAt IS NOT NULL
                              AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
                                               com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)
                             THEN 1 ELSE 0 END
@@ -282,13 +284,20 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      *
      * <p>GRID는 <b>재제출 대상인데 아직 안 낸 것</b>만 센다. ⭕를 받은 칸은 status가
      * 영원히 NOT_SUBMITTED라 status만 보면 다 해온 학생의 홈에 큰 숫자가 뜬다.
+     *
+     * <p><b>GRID는 status를 보지 않는다(2026-09-30 리뷰).</b> 판정은 4-3의 정본 한 줄
+     * ({@link com.njwenglish.entity.Submission#isResubmitTarget()})과 같아야 한다. 선생님이
+     * ❌·🔺로 되돌린(T-7 「미흡」 포함) 학생은 status가 SUBMITTED로 남는데(4-5·4-9),
+     * 여기에 {@code status = NOT_SUBMITTED}를 붙이면 제출 경로는 열려 있는데 할 일 목록에서만
+     * 빠진다. 낸 재제출은 그 순간 ⭕가 되어 result 조건으로 빠지므로 status가 필요 없다.
      */
     @Query("""
         SELECT COUNT(s) FROM Submission s JOIN s.homework h
         WHERE s.student.id = :studentId
-          AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED
-          AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
-               OR (h.dueAt IS NOT NULL
+          AND ((h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+                AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
+               OR (h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+                   AND h.dueAt IS NOT NULL
                    AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
                                     com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)))
         """)
@@ -313,14 +322,18 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * <p><b>GRID는 재제출 대상만 담는다.</b> ⭕를 받은 칸은 status가 영원히 NOT_SUBMITTED라
      * 이 조건이 없으면 다 해온 학생의 홈에도 "할 일"이 남아 보인다. 미채점(재제출 미오픈)
      * 열도 같은 이유로 뺀다 — 선생님이 아직 확인하지 않은 것이지 학생이 할 일이 아니다.
+     *
+     * <p>GRID는 status를 보지 않는다 — {@link #countPendingHomeworks}의 주석을 봐라.
      */
     @Query("""
         SELECT s FROM Submission s
         JOIN FETCH s.homework h
         JOIN FETCH h.classRoom
-        WHERE s.student.id = :studentId AND s.status = 'NOT_SUBMITTED'
-          AND (h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
-               OR (h.dueAt IS NOT NULL
+        WHERE s.student.id = :studentId
+          AND ((h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+                AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
+               OR (h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+                   AND h.dueAt IS NOT NULL
                    AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
                                     com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)))
         ORDER BY h.dueAt, h.id

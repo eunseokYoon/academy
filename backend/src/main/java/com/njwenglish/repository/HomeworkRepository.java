@@ -68,22 +68,25 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
      * T-1이 처리할 일 없는 항목으로 가득 찬다. 미채점 열은 여기 띄우지 않는다 —
      * 선생님은 그리드 화면에서 직접 확인한다.
      *
-     * <p>JPQL에는 FILTER 절이 없어 SUM(CASE ...)로 센다. 숙제 수가 연 수백 건이라
-     * 전체를 훑어도 문제가 없다.
+     * <p>숙제 수가 연 수백 건이라 전체를 훑어도 문제가 없다.
+     *
+     * <p>GRID는 status를 보지 않는다 — {@code SubmissionRepository.countPendingHomeworks}의
+     * 주석을 봐라.
      */
     @Query("""
         SELECT h.id AS homeworkId,
                h.title AS title,
                h.classRoom.name AS classRoomName,
                h.dueAt AS dueAt,
-               SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) AS notSubmitted
+               COUNT(s) AS notSubmitted
         FROM Homework h JOIN Submission s ON s.homework = h
-        WHERE h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
-           OR (h.dueAt IS NOT NULL
+        WHERE ((h.kind = com.njwenglish.entity.enums.HomeworkKind.ONLINE
+            AND s.status = com.njwenglish.entity.enums.SubmissionStatus.NOT_SUBMITTED)
+           OR (h.kind = com.njwenglish.entity.enums.HomeworkKind.GRID
+               AND h.dueAt IS NOT NULL
                AND s.result IN (com.njwenglish.entity.enums.HomeworkResult.PARTIAL,
-                                com.njwenglish.entity.enums.HomeworkResult.NOT_DONE))
+                                com.njwenglish.entity.enums.HomeworkResult.NOT_DONE)))
         GROUP BY h.id, h.title, h.classRoom.name, h.dueAt
-        HAVING SUM(CASE WHEN s.status = 'NOT_SUBMITTED' THEN 1 ELSE 0 END) > 0
         ORDER BY h.dueAt DESC
         """)
     List<PendingRow> findPendingSummaries();

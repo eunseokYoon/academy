@@ -212,30 +212,68 @@ class ClinicReservationServiceTest {
             List.of(seo.getId(), kim.getId()), null));
     }
 
+    // 2026-09-30 리뷰: 예전에는 확정된 예약도 학생이 시각을 바꿀 수 있었고 changeArrivalTime 이
+    // 출결을 비웠다 — 선생님이 찍은 결석이 학생 손으로 지워졌다. 이제 바꾸는 예약 쪽을 막는다.
     @Test
-    @DisplayName("확정된 예약이 시각을 옮기면 출결이 비워진다 — 선생님이 못 본 학생이 확정에 섞이면 안 된다")
-    void changingArrivalTimeClearsAttendance() {
-        Fixtures.login(Fixtures.studentUser(880L));
-        Clinic wide = Clinic.open(teacher, LocalDate.now().plusDays(7),
-            LocalTime.of(17, 0), LocalTime.of(22, 0), (short) 6, null);
-        ReflectionTestUtils.setField(wide, "id", 50L);
+    @DisplayName("출결이 확정된 예약은 학생이 시각을 바꿀 수 없다 — 결석이 지워지면 안 된다")
+    void checkedReservationCannotChangeArrivalTime() {
+        Clinic wide = wideClinic(50L);
         given(studentAccessGuard.requireSelf()).willReturn(seo);
-
-        // 선생님이 17시 슬롯을 확정하며 결석 처리한 예약
         ClinicReservation reserved =
             Fixtures.reservationAt(902L, wide, seo, null, LocalTime.of(17, 0));
         reserved.checkAttendance(AttendanceStatus.ABSENT, "무단", teacher, OffsetDateTime.now());
         given(reservationRepository.findByClinicIdAndStudentIdAndStatus(
             50L, seo.getId(), ReservationStatus.RESERVED)).willReturn(Optional.of(reserved));
 
-        clinicReservationService.change(50L, new ClinicReservationChangeRequest(
-            null, LocalTime.of(20, 0), "학원 셔틀 시간이 바뀌었습니다"));
+        assertThatThrownBy(() -> clinicReservationService.change(50L,
+            new ClinicReservationChangeRequest(null, LocalTime.of(20, 0), "셔틀이 바뀌었어요")))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_CHANGE_CLOSED);
 
-        assertThat(reserved.getArrivalTime()).isEqualTo(LocalTime.of(20, 0));
-        assertThat(reserved.getAttendStatus()).isNull();
-        assertThat(reserved.getMemo()).isNull();
-        assertThat(reserved.getCheckedBy()).isNull();
-        assertThat(reserved.getCheckedAt()).isNull();
+        assertThat(reserved.getAttendStatus()).isEqualTo(AttendanceStatus.ABSENT);
+        assertThat(reserved.getArrivalTime()).isEqualTo(LocalTime.of(17, 0));
+        verify(changeLogRepository, never()).save(any());
+        verify(noticeService, never()).publishForStudent(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("출결이 확정된 예약은 다른 클리닉으로도 옮길 수 없다 — MOVED가 되면 결석이 캘린더에서 사라진다")
+    void checkedReservationCannotMove() {
+        Clinic from = wideClinic(50L);
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        ClinicReservation reserved =
+            Fixtures.reservationAt(902L, from, seo, null, LocalTime.of(17, 0));
+        reserved.checkAttendance(AttendanceStatus.ABSENT, null, teacher, OffsetDateTime.now());
+        given(reservationRepository.findByClinicIdAndStudentIdAndStatus(
+            50L, seo.getId(), ReservationStatus.RESERVED)).willReturn(Optional.of(reserved));
+
+        assertThatThrownBy(() -> clinicReservationService.change(50L,
+            new ClinicReservationChangeRequest(51L, LocalTime.of(19, 0), "다른 날로 옮길게요")))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_CHANGE_CLOSED);
+
+        assertThat(reserved.getStatus()).isEqualTo(ReservationStatus.RESERVED);
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("지난 클리닉의 예약은 출결이 비어 있어도 옮길 수 없다 — 안 온 날이 사라진다")
+    void pastReservationCannotMove() {
+        Clinic past = Clinic.open(teacher, LocalDate.now().minusDays(1),
+            LocalTime.of(17, 0), LocalTime.of(22, 0), (short) 6, null);
+        ReflectionTestUtils.setField(past, "id", 50L);
+        given(studentAccessGuard.requireSelf()).willReturn(seo);
+        ClinicReservation reserved =
+            Fixtures.reservationAt(902L, past, seo, null, LocalTime.of(17, 0));
+        given(reservationRepository.findByClinicIdAndStudentIdAndStatus(
+            50L, seo.getId(), ReservationStatus.RESERVED)).willReturn(Optional.of(reserved));
+
+        assertThatThrownBy(() -> clinicReservationService.change(50L,
+            new ClinicReservationChangeRequest(51L, LocalTime.of(19, 0), "못 갔어요")))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CLINIC_CHANGE_CLOSED);
+
+        assertThat(reserved.getStatus()).isEqualTo(ReservationStatus.RESERVED);
     }
 
     // ---------- 시간대별 출결 (2026-09-01) ----------

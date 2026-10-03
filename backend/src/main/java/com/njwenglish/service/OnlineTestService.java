@@ -292,7 +292,7 @@ public class OnlineTestService {
         String s3Key = answerKeys.issue(currentTeacher().getId(), request.contentType(),
             LocalDate.now());
         return new AnswerUploadUrlResponse(
-            presignedUrlProvider.uploadUrl(s3Key, request.contentType()), s3Key);
+            presignedUrlProvider.uploadUrl(s3Key, request.contentType(), request.bytes()), s3Key);
     }
 
     // ---------- 내부 ----------

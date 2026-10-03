@@ -184,6 +184,9 @@ public class AttendanceService {
      */
     @Transactional(readOnly = true)
     public List<WeekLessonResponse> week(int year, int month, int week) {
+        if (!MonthWeeks.exists(year, month, week)) {
+            return List.of();
+        }
         return lessonRepository.findForAttendanceWeek(
                 MonthWeeks.startOf(year, month, week),
                 MonthWeeks.endOf(year, month, week),

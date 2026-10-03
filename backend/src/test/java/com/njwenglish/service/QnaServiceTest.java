@@ -358,4 +358,30 @@ class QnaServiceTest {
 
         verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
+
+    // 2026-09-30 리뷰: 게시판 업로드는 크기를 검사하지 않아 숙제 사진 상한을 우회하는 통로였다
+    @Test
+    @DisplayName("게시판 사진이 10MB를 넘으면 업로드 URL을 주지 않는다")
+    void 게시판_사진_용량_상한() {
+        given(qnaMediaKeys.isSupportedPhotoType("image/webp")).willReturn(true);
+
+        assertThatThrownBy(() -> qnaService.uploadUrl(
+            new com.njwenglish.dto.qna.QnaUploadUrlRequest("image/webp", 10 * 1024 * 1024 + 1)))
+            .isInstanceOf(com.njwenglish.common.error.BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode",
+                com.njwenglish.common.error.ErrorCode.FILE_TOO_LARGE);
+        verify(presignedUrlProvider, never()).uploadUrl(any(), any(),
+            org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName("게시판 업로드 URL은 신고한 크기로 서명된다")
+    void 게시판_업로드는_크기를_서명한다() {
+        given(qnaMediaKeys.isSupportedPhotoType("image/webp")).willReturn(true);
+        given(qnaMediaKeys.issuePhoto(any(), any(), any())).willReturn("qna/k.webp");
+
+        qnaService.uploadUrl(new com.njwenglish.dto.qna.QnaUploadUrlRequest("image/webp", 345_678));
+
+        verify(presignedUrlProvider).uploadUrl("qna/k.webp", "image/webp", 345_678L);
+    }
 }

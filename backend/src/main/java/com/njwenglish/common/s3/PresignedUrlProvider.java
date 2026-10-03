@@ -41,14 +41,20 @@ public class PresignedUrlProvider {
     }
 
     /**
-     * 업로드용 PUT URL. 클라이언트는 여기에 발급 때와 <b>같은 Content-Type</b>으로 PUT해야 한다.
-     * 헤더가 다르면 서명이 어긋나 403이 난다.
+     * 업로드용 PUT URL. 클라이언트는 여기에 발급 때와 <b>같은 Content-Type, 같은 크기</b>로
+     * PUT해야 한다. 둘 다 서명에 들어가서 다르면 S3가 403으로 거절한다.
+     *
+     * <p><b>크기(Content-Length)를 서명하는 이유</b>(2026-09-30 리뷰): 서버의 용량 상한은
+     * 발급 요청의 bytes만 검사한다. 서명에 크기가 없으면 {@code bytes: 1}로 URL을 받아
+     * 5GB를 올릴 수 있었다 — 숙제 영상 100MB 상한(CLAUDE.md 6번)이 저장 비용을 막는 유일한
+     * 장치인데 실제로는 걸리지 않았다. 웹·앱 모두 발급에 보낸 값과 같은 크기로 PUT한다.
      */
-    public String uploadUrl(String s3Key, String contentType) {
+    public String uploadUrl(String s3Key, String contentType, long bytes) {
         PutObjectRequest put = PutObjectRequest.builder()
             .bucket(bucket)
             .key(s3Key)
             .contentType(contentType)
+            .contentLength(bytes)
             .build();
 
         return presigner.presignPutObject(PutObjectPresignRequest.builder()

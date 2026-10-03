@@ -156,7 +156,7 @@ public class SubmissionService {
         String s3Key = mediaKeys.issuePhoto(
             submission.getId(), request.contentType(), LocalDate.now());
         return new MediaUploadUrlResponse(
-            presignedUrlProvider.uploadUrl(s3Key, request.contentType()), s3Key);
+            presignedUrlProvider.uploadUrl(s3Key, request.contentType(), request.bytes()), s3Key);
     }
 
     /** S3 PUT이 끝난 뒤의 등록. 여기서 서명을 대조하지 않으면 앞의 발급이 무의미해진다. */
@@ -206,7 +206,7 @@ public class SubmissionService {
         String s3Key = mediaKeys.issueVideo(
             submission.getId(), request.contentType(), LocalDate.now());
         return new MediaUploadUrlResponse(
-            presignedUrlProvider.uploadUrl(s3Key, request.contentType()), s3Key);
+            presignedUrlProvider.uploadUrl(s3Key, request.contentType(), request.bytes()), s3Key);
     }
 
     /**

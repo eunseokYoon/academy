@@ -213,6 +213,9 @@ public class ClinicService {
     @Transactional(readOnly = true)
     public List<ClinicListItemResponse> listForTeacher(int year, int month, int week,
                                                        ClinicStatus status) {
+        if (!MonthWeeks.exists(year, month, week)) {
+            return List.of();
+        }
         List<Clinic> clinics = clinicRepository.findInRange(
             MonthWeeks.startOf(year, month, week), MonthWeeks.endOf(year, month, week), status);
         Map<Long, Long> counts = reservedCounts(clinics);
@@ -287,6 +290,9 @@ public class ClinicService {
     public List<ParentClinicResponse> listForChild(Long studentId, int year, int month,
                                                    Integer week) {
         Student student = studentAccessGuard.requireAccessible(studentId);
+        if (week != null && !MonthWeeks.exists(year, month, week)) {
+            return List.of();
+        }
 
         LocalDate monthStart = LocalDate.of(year, month, 1);
         LocalDate from = week != null ? MonthWeeks.startOf(year, month, week) : monthStart;

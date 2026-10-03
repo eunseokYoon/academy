@@ -472,4 +472,12 @@ class AttendanceServiceTest {
         assertThat(response.summary().absent()).isZero();
         assertThat(response.summary().online()).isEqualTo(1);
     }
+
+    // 2026-09-30 리뷰: 화면의 주차 선택지가 1~5라 평년 2월 5주를 고를 수 있고, 그때 500이 났다
+    @Test
+    @DisplayName("평년 2월 5주차는 빈 목록이다 — 없는 날짜로 조회하지 않는다")
+    void 없는_주차는_빈_목록() {
+        assertThat(attendanceService.week(2027, 2, 5)).isEmpty();
+        verify(lessonRepository, never()).findForAttendanceWeek(any(), any(), any());
+    }
 }
