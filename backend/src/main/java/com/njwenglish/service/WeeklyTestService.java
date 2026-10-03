@@ -242,13 +242,17 @@ public class WeeklyTestService {
         Optional<WeeklyTest> found = weeklyTestRepository
             .findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
                 classRoom.getId(), WeeklyTestType.CLINIC, year, month, week);
-        if (found.isPresent() && !matchesTotals(found.get(), internalTotal, externalTotal)) {
+        if (found.isEmpty()) {
+            // 같은 주차를 동시에 낸 학생이 먼저 만들었을 수 있다 — 충돌하면 넘어가고 다시 읽는다
+            weeklyTestRepository.insertClinicHeaderIfAbsent(classRoom.getId(), year, month, week,
+                internalTotal, externalTotal);
+            found = weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+                classRoom.getId(), WeeklyTestType.CLINIC, year, month, week);
+        }
+        if (found.isEmpty() || !matchesTotals(found.get(), internalTotal, externalTotal)) {
             return;
         }
-
-        WeeklyTest header = found.orElseGet(() -> weeklyTestRepository.save(
-            WeeklyTest.create(classRoom, WeeklyTestType.CLINIC, year, month, week,
-                null, internalTotal, externalTotal)));
+        WeeklyTest header = found.get();
 
         if (weeklyTestScoreRepository
             .findByWeeklyTestIdAndStudentId(header.getId(), student.getId()).isPresent()) {

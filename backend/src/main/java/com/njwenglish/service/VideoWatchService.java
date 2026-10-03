@@ -59,13 +59,13 @@ public class VideoWatchService {
             return;
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
         int bucketCount = LessonVideoWatch.bucketsOf(request.durationSeconds());
+        // 보고는 15초마다·멈춤·끝에 나가서 겹친다. 만들기는 ON CONFLICT, 칠하기는 행 잠금이다
+        watchRepository.insertIfAbsent(lessonId, me.getId(), video.getUrl(), bucketCount);
         LessonVideoWatch watch = watchRepository
-            .findByLessonIdAndStudentIdAndVideoUrl(lessonId, me.getId(), video.getUrl())
-            .orElseGet(() -> watchRepository.save(
-                LessonVideoWatch.start(lesson, me, video.getUrl(), bucketCount, now)));
-        watch.markWatched(request.buckets(), bucketCount, now);
+            .findForUpdate(lessonId, me.getId(), video.getUrl())
+            .orElseThrow(() -> new IllegalStateException("방금 만든 시청 기록이 없다"));
+        watch.markWatched(request.buckets(), bucketCount, OffsetDateTime.now());
     }
 
     /** 한 학생의 수업 시청률. 영상이 없는 수업이면 null. */

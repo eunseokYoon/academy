@@ -135,13 +135,10 @@ class VideoWatchServiceTest {
             given(lessonRepository.findForStudent(30L, 91L)).willReturn(Optional.of(lesson));
         }
 
+        /** DB 행이 ON CONFLICT로 만들어졌다고 치고, 잠금 조회가 그 행을 돌려준다. */
         private void firstReport() {
-            given(watchRepository.findByLessonIdAndStudentIdAndVideoUrl(30L, 91L, URL_A))
-                .willReturn(Optional.empty());
-            given(watchRepository.save(any())).willAnswer(i -> {
-                saved = i.getArgument(0);
-                return saved;
-            });
+            saved = LessonVideoWatch.start(lesson, kim, URL_A, 10, OffsetDateTime.now());
+            given(watchRepository.findForUpdate(30L, 91L, URL_A)).willReturn(Optional.of(saved));
         }
 
         @Test
@@ -155,12 +152,40 @@ class VideoWatchServiceTest {
             assertThat(saved.percent()).isEqualTo(80);
         }
 
+        // 2026-09-30 리뷰: 「찾아서 없으면 save」는 첫 보고 둘이 겹치면 유니크 위반 500이 났고,
+        // 잠금 없이 읽고 칠해서 늦게 커밋한 보고가 앞 보고의 칸을 덮었다
+        @Test
+        @DisplayName("행 만들기는 ON CONFLICT, 칠하기는 잠근 행에 한다 — save 경로를 타지 않는다")
+        void 만들고_잠가서_칠한다() {
+            firstReport();
+
+            service.record(30L, new LessonWatchRequest(EMBED_A, 100.0, range(0, 3)));
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(watchRepository);
+            order.verify(watchRepository).insertIfAbsent(30L, 91L, URL_A, 10);
+            order.verify(watchRepository).findForUpdate(30L, 91L, URL_A);
+            verify(watchRepository, never()).save(any());
+            assertThat(saved.percent()).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("이미 칠해진 행에는 칸을 더한다 — 앞 보고의 칸이 지워지지 않는다")
+        void 앞_보고의_칸을_지키다() {
+            firstReport();
+            saved.markWatched(range(0, 4), 10, OffsetDateTime.now()); // 앞 보고가 커밋한 칸
+
+            service.record(30L, new LessonWatchRequest(EMBED_A, 100.0, range(4, 6)));
+
+            assertThat(saved.percent()).isEqualTo(60);
+        }
+
         @Test
         @DisplayName("지금 수업에 없는 영상의 보고는 버린다(수업이 고쳐졌다)")
         void 없는_영상은_버린다() {
             service.record(30L, new LessonWatchRequest(
                 "https://www.youtube.com/embed/zzzzzzzzzzz", 100.0, range(0, 10)));
-            verify(watchRepository, never()).save(any());
+            verify(watchRepository, never()).insertIfAbsent(any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyInt());
         }
     }
 

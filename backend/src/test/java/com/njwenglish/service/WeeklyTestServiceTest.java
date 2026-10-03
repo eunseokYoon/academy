@@ -311,19 +311,18 @@ class WeeklyTestServiceTest {
     @Test
     @DisplayName("클리닉 헤더가 없으면 온라인 테스트 문항 수로 만들고 칸을 채운다")
     void 헤더가_없으면_만들고_반영한다() {
+        // 없음 → ON CONFLICT DO NOTHING으로 넣고 → 다시 읽으면 있다
         given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
             3L, WeeklyTestType.CLINIC, (short) 2026, (short) 8, (short) 1))
-            .willReturn(Optional.empty());
-        given(weeklyTestRepository.save(any(WeeklyTest.class)))
-            .willAnswer(invocation -> {
-                WeeklyTest saved = invocation.getArgument(0);
-                ReflectionTestUtils.setField(saved, "id", 700L);
-                return saved;
-            });
+            .willReturn(Optional.empty(), Optional.of(clinicHeader(700L, (short) 15, (short) 15)));
         given(weeklyTestScoreRepository.findByWeeklyTestIdAndStudentId(700L, 88L))
             .willReturn(Optional.empty());
 
         reflect((short) 15, (short) 15);
+
+        verify(weeklyTestRepository).insertClinicHeaderIfAbsent(3L, (short) 2026, (short) 8,
+            (short) 1, (short) 15, (short) 15);
+        verify(weeklyTestRepository, never()).save(any());
 
         ArgumentCaptor<WeeklyTestScore> captor = ArgumentCaptor.forClass(WeeklyTestScore.class);
         verify(weeklyTestScoreRepository).save(captor.capture());
@@ -333,6 +332,39 @@ class WeeklyTestServiceTest {
         // CLINIC은 correctCount·result를 쓰지 않는다
         assertThat(cell.getCorrectCount()).isNull();
         assertThat(cell.getResult()).isNull();
+    }
+
+    // 2026-09-30 리뷰: 같은 주차를 두 학생이 거의 동시에 내면 둘 다 「헤더 없음」을 읽고 save해
+    // 한쪽이 uq_weekly_tests 위반으로 터졌고, 반영이 제출과 같은 트랜잭션이라 제출까지 롤백됐다
+    @Test
+    @DisplayName("동시에 낸 학생이 헤더를 먼저 만들었으면 그 헤더에 반영한다 — 제출이 터지지 않는다")
+    void 동시에_만든_헤더에_반영한다() {
+        WeeklyTest madeByOther = clinicHeader(700L, (short) 15, (short) 15);
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.CLINIC, (short) 2026, (short) 8, (short) 1))
+            .willReturn(Optional.empty(), Optional.of(madeByOther));
+        // 충돌이라 넣은 행이 없다
+        given(weeklyTestRepository.insertClinicHeaderIfAbsent(3L, (short) 2026, (short) 8,
+            (short) 1, (short) 15, (short) 15)).willReturn(0);
+        given(weeklyTestScoreRepository.findByWeeklyTestIdAndStudentId(700L, 88L))
+            .willReturn(Optional.empty());
+
+        reflect((short) 15, (short) 15);
+
+        verify(weeklyTestRepository, never()).save(any());
+        verify(weeklyTestScoreRepository).save(any(WeeklyTestScore.class));
+    }
+
+    @Test
+    @DisplayName("동시에 만든 헤더의 문항 수가 다르면 반영하지 않는다")
+    void 동시에_만든_헤더가_다르면_건너뛴다() {
+        given(weeklyTestRepository.findByClassRoomIdAndTestTypeAndYearAndMonthAndWeek(
+            3L, WeeklyTestType.CLINIC, (short) 2026, (short) 8, (short) 1))
+            .willReturn(Optional.empty(), Optional.of(clinicHeader(700L, (short) 10, (short) 10)));
+
+        reflect((short) 15, (short) 15);
+
+        verify(weeklyTestScoreRepository, never()).save(any());
     }
 
     @Test
