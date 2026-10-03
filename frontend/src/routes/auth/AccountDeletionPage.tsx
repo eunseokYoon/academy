@@ -4,16 +4,17 @@ import { LegalSection } from "./LegalLayout";
 import { OPERATOR, PRIVACY_OFFICER, PRIVACY_PHONE } from "./legalInfo";
 
 /**
- * 계정 삭제 안내(2026-10-03). 구글플레이가 앱 밖에서도 열리는 삭제 안내 URL을 요구한다 —
- * 스토어 설정의 「계정 삭제 URL」에 https://njwenglish.com/account-deletion 을 적는다.
+ * 계정·데이터 삭제 안내(2026-10-03). 구글플레이가 앱 밖에서도 열리는 삭제 안내 URL을 요구한다 —
+ * 데이터 보안의 「계정 삭제 URL」과 「데이터 삭제 URL」 둘 다에 https://njwenglish.com/account-deletion
+ * 을 적는다. 그래서 계정을 지우지 않고 일부 데이터만 지우는 방법(2026-10-04)도 여기 있다.
  * 로그인 없이 열린다(처리방침·약관과 같다).
  */
 export default function AccountDeletionPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-screen-sm bg-white p-4 pb-16">
-      <h1 className="text-xl font-semibold text-slate-900">계정 삭제 안내</h1>
+      <h1 className="text-xl font-semibold text-slate-900">계정·데이터 삭제 안내</h1>
       <p className="mt-2 text-sm text-slate-600">
-        {ACADEMY_NAME}({OPERATOR}) 학생·보호자 계정을 삭제하는 방법입니다.
+        {ACADEMY_NAME}({OPERATOR}) 학생·보호자 계정과 데이터를 삭제하는 방법입니다.
       </p>
 
       <LegalSection title="직접 삭제하기">
@@ -22,6 +23,16 @@ export default function AccountDeletionPage() {
         2. 학생은 「내 정보 · 성적」, 보호자는 「내 정보」 화면 맨 아래의 「계정 삭제」를 누릅니다.
         <br />
         3. 비밀번호를 한 번 더 입력하면 바로 삭제됩니다.
+      </LegalSection>
+
+      <LegalSection title="계정은 두고 일부 데이터만 삭제하기">
+        · 질문 게시판에 쓴 글·답글과 사진: 앱 또는 웹의 「질문」에서 해당 글을 열고 「삭제」를 누르면
+        바로 삭제됩니다.
+        <br />
+        · 제출 전 숙제 사진·영상: 숙제 화면에서 직접 삭제할 수 있습니다.
+        <br />
+        · 그 밖의 데이터(제출한 숙제, 출석·성적 기록, 수업 영상 시청 기록 등): 아래 문의처로 요청해 주시면
+        본인 확인 후 삭제해 드립니다.
       </LegalSection>
 
       <LegalSection title="로그인할 수 없는 경우">
