@@ -89,19 +89,19 @@ class _StudentLessonDetailPageState extends State<StudentLessonDetailPage>
   @override
   void onReappear() => widget.controller.load(widget.lessonId);
 
-  Widget _player(String embedUrl) =>
-      widget.playerBuilder?.call(embedUrl) ??
-      YoutubePlayer(
-        embedUrl: embedUrl,
-        openUrl: widget.openUrl,
-        // 시청 기록(2026-09-29). 선생님이 T-5 에서 이 시청률을 보고 온라인 출석을 고른다
-        onWatch: (duration, buckets) => widget.controller.reportWatch(
-          widget.lessonId,
-          embedUrl,
-          duration,
-          buckets,
-        ),
-      );
+  Widget _player(String embedUrl) {
+    // 마지막 보고는 이 화면이 닫힌 뒤에 도착한다 — `widget` 을 그때 읽지 않게 지금 잡아 둔다
+    final controller = widget.controller;
+    final lessonId = widget.lessonId;
+    return widget.playerBuilder?.call(embedUrl) ??
+        YoutubePlayer(
+          embedUrl: embedUrl,
+          openUrl: widget.openUrl,
+          // 시청 기록(2026-09-29). 선생님이 T-5 에서 이 시청률을 보고 온라인 출석을 고른다
+          onWatch: (duration, buckets) =>
+              controller.reportWatch(lessonId, embedUrl, duration, buckets),
+        );
+  }
 
   @override
   Widget build(BuildContext context) {

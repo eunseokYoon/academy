@@ -1,6 +1,7 @@
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter/foundation.dart';
 
+import '../api/api_exception.dart';
 import '../storage/cookie_store.dart';
 import '../storage/token_store.dart';
 import 'auth_repository.dart';
@@ -30,11 +31,20 @@ class AuthController extends ChangeNotifier {
   AuthSnapshot _snapshot = const AuthSnapshot.unknown();
   AuthSnapshot get snapshot => _snapshot;
 
+  /// 부팅 복원이 **연결 문제로** 실패했다. 토큰은 남겨 두고 상태는 `unknown` 그대로라
+  /// 스플래시가 이 문구와 「다시 시도」를 띄운다([bootstrap] 을 다시 부른다).
+  String? _bootError;
+  String? get bootError => _bootError;
+
   /// 앱이 뜰 때 한 번 부른다.
   ///
   /// **쿠키를 jar에 심는 것이 먼저다.** 순서가 어긋나면 첫 요청의 401 리프레시가
   /// 쿠키 없이 나가서 실패하고, 앱을 다시 열 때마다 재로그인을 하게 된다.
   Future<void> bootstrap() async {
+    if (_bootError != null) {
+      _bootError = null; // 다시 시도 — 스플래시를 로더로 되돌린다
+      notifyListeners();
+    }
     await _cookies.restore(_jar);
 
     final token = await _tokens.read();
@@ -54,11 +64,27 @@ class AuthController extends ChangeNotifier {
           name: me.name,
         ),
       );
+    } on ApiException catch (e) {
+      final status = e.statusCode;
+      if (status != null && status >= 400 && status < 500) {
+        // 서버가 거절했다 — 토큰이 죽었고 리프레시도 못 살렸다. 남겨두면 매 요청이 401이다.
+        await _clearLocal();
+        _set(const AuthSnapshot.loggedOut());
+        return;
+      }
+      _failBoot();
     } catch (_) {
-      // 토큰이 죽었고 리프레시도 못 살렸다. 남겨두면 매 요청이 401이다.
-      await _clearLocal();
-      _set(const AuthSnapshot.loggedOut());
+      _failBoot();
     }
+  }
+
+  /// 연결 실패·5xx. **로그인 정보를 지우지 않는다**(2026-09-30 리뷰) — 예전에는 어떤 실패든
+  /// 비워서 망이 없을 때 앱을 열면 매번 로그아웃됐고, 푸시 기기 토큰까지 지워졌다.
+  void _failBoot() {
+    // 리프레시 인터셉터가 이미 세션 만료로 처리했으면(loggedOut) 그대로 둔다
+    if (_snapshot.status == AuthStatus.loggedOut) return;
+    _bootError = '연결할 수 없습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.';
+    notifyListeners();
   }
 
   Future<void> login({

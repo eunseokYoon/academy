@@ -77,6 +77,32 @@ class YoutubePlayer extends StatefulWidget {
 class _YoutubePlayerState extends State<YoutubePlayer> {
   late final WebViewController _controller = _build();
 
+  /// 시청 보고를 받을 곳. **화면이 사라진 뒤에도 쓴다** — 떠날 때 보낸 마지막 보고는
+  /// [dispose] 뒤에 비동기로 도착한다(2026-09-30 리뷰: 예전에는 `!mounted` 에 걸려 매번
+  /// 버려졌다). 받는 쪽은 세션 수명 컨트롤러라 화면이 없어도 서버로 보낼 수 있다.
+  void Function(double, List<int>)? _onWatch;
+
+  /// 앱이 뒤로 가면 남은 칸을 보낸다 — 웹 `youtubeWatch.ts` 의 `visibilitychange` 와 같다.
+  /// 다시 안 돌아오면(앱이 종료되면) 그 칸이 마지막이다.
+  late final AppLifecycleListener _lifecycle = AppLifecycleListener(onHide: _flush);
+
+  @override
+  void initState() {
+    super.initState();
+    _onWatch = widget.onWatch;
+    _lifecycle; // 리스너를 지금 붙인다
+  }
+
+  @override
+  void didUpdateWidget(covariant YoutubePlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _onWatch = widget.onWatch;
+  }
+
+  void _flush() {
+    _controller.runJavaScript('window.flushWatch && flushWatch()').catchError((_) {});
+  }
+
   WebViewController _build() {
     final params = Platform.isIOS
         ? WebKitWebViewControllerCreationParams(
@@ -104,18 +130,18 @@ class _YoutubePlayerState extends State<YoutubePlayer> {
     return controller;
   }
 
+  /// `mounted` 를 보지 않는다 — [_onWatch] 주석을 봐라. 화면을 그리지 않으니 안전하다.
   void _onWatchMessage(JavaScriptMessage message) {
     final report = parseWatchReport(message.message);
-    if (report == null || !mounted) return;
-    widget.onWatch?.call(report.$1, report.$2);
+    if (report == null) return;
+    _onWatch?.call(report.$1, report.$2);
   }
 
   @override
   void dispose() {
     // 떠날 때 남은 칸을 보낸다. 웹뷰가 먼저 닫히면 마지막 15초 안쪽은 잃는다(받아들인 손실이다).
-    _controller
-        .runJavaScript('window.flushWatch && flushWatch()')
-        .catchError((_) {});
+    _flush();
+    _lifecycle.dispose();
     super.dispose();
   }
 

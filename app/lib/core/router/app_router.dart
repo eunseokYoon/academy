@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/full_screen_loader.dart';
+import '../../shared/widgets/home_layout.dart';
 import '../auth/auth_controller.dart';
 import 'auth_redirect.dart';
 
@@ -22,7 +23,15 @@ GoRouter buildRouter({
     routes: [
       GoRoute(
         path: AppRoutes.splash,
-        builder: (_, _) => const Scaffold(body: FullScreenLoader()),
+        // 부팅 복원이 연결 문제로 실패하면 로그인 정보를 남긴 채 여기서 다시 시도한다
+        builder: (_, _) => Scaffold(
+          body: ListenableBuilder(
+            listenable: auth,
+            builder: (_, _) => auth.bootError == null
+                ? const FullScreenLoader()
+                : HomeErrorView(message: auth.bootError, onRetry: auth.bootstrap),
+          ),
+        ),
       ),
       ...routes,
     ],

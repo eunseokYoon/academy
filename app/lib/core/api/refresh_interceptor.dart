@@ -71,8 +71,21 @@ class RefreshInterceptor extends QueuedInterceptor {
       await _tokens.write(token);
       // 리프레시가 쿠키를 회전시키면 Set-Cookie 가 온다. 새 값을 남겨야 한다.
       await _cookies.persist(_jar);
-    } catch (_) {
-      // 리프레시 토큰이 죽었다. 재로그인 외에 길이 없다.
+    } catch (e) {
+      // 서버에 닿지 못했거나 서버가 잠깐 죽었다(5xx). 리프레시 토큰이 죽은 게 아니다 —
+      // 비우면 지하철·비행기 모드에서 앱을 열 때마다 로그아웃된다(2026-09-30 리뷰).
+      // 원래의 401 대신 연결 오류를 넘겨야 부르는 쪽(부팅)이 「세션 만료」로 읽지 않는다.
+      if (_isTransient(e)) {
+        handler.next(
+          DioException(
+            requestOptions: err.requestOptions,
+            type: DioExceptionType.connectionError,
+            error: e,
+          ),
+        );
+        return;
+      }
+      // 리프레시 토큰이 죽었다(서버가 4xx로 거절). 재로그인 외에 길이 없다.
       await _tokens.clear();
       await _cookies.clear();
       await _jar.deleteAll();
@@ -89,6 +102,13 @@ class RefreshInterceptor extends QueuedInterceptor {
       // (백엔드가 INVALID_CREDENTIALS를 401로 준다) 강제 로그아웃된다.
       handler.next(err);
     }
+  }
+
+  /// 응답이 없거나(연결 실패·시간 초과) 5xx 면 일시적이다. 4xx·응답 파싱 실패는 진짜 거절이다.
+  static bool _isTransient(Object e) {
+    if (e is! DioException) return false;
+    final status = e.response?.statusCode;
+    return status == null || status >= 500;
   }
 
   Future<Response<dynamic>> _retry(RequestOptions options, String token) {
